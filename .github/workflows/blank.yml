@@ -1,0 +1,67 @@
+name: Build ImmortalWrt S905X3
+
+on:
+  workflow_dispatch:
+    inputs:
+      immortalwrt_version:
+        description: 'ImmortalWrt Version (e.g., 24.10.0)'
+        required: true
+        default: '24.10.0'
+      device_board:
+        description: 'Device Board'
+        required: true
+        default: 's905x3'
+      kernel_version:
+        description: 'Kernel Branch (ophub/kernel)'
+        required: true
+        default: '6.6.y'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build for ${{ github.event.inputs.device_board }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file
+
+      - name: Download ImmortalWrt ImageBuilder
+        run: |
+          VERSION=${{ github.event.inputs.immortalwrt_version }}
+          BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.xz"
+          echo "Downloading from $BUILDER_URL"
+          wget -q $BUILDER_URL -O imagebuilder.tar.xz
+          tar -xf imagebuilder.tar.xz
+          mv immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64 openwrt
+
+      - name: Build Rootfs (Basic Software Only)
+        run: |
+          cd openwrt
+          # 使用 ImageBuilder 生成基础固件，仅包含核心网络和 LuCI 界面
+          make image PROFILE=generic PACKAGES="luci"
+          
+      - name: Package Amlogic Firmware with ophub
+        uses: ophub/amlogic-s9xxx-openwrt@main
+        with:
+          # 指向刚才生成的 rootfs 压缩包
+          openwrt_path: openwrt/bin/targets/armsr/armv8/*-rootfs.tar.gz
+          # 指定设备为 S905X3
+          openwrt_board: ${{ github.event.inputs.device_board }}
+          # 指定 ophub 内核分支
+          openwrt_kernel: ${{ github.event.inputs.kernel_version }}
+          # 自动从 ophub/kernel 获取该分支的最新编译内核
+          auto_kernel: true
+          builder_name: ImmortalWrt
+
+      - name: Upload Firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
+          path: ${{ env.PACKAGED_OUTPUTPATH }}
