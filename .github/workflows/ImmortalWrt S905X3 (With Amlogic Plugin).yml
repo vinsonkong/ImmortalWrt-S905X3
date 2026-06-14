@@ -1,4 +1,4 @@
-name: Build ImmortalWrt S905X3 (With Amlogic Plugin)
+name: Build ImmortalWrt S905X3 (Amlogic + OpenTomcat)
 
 on:
   workflow_dispatch:
@@ -43,41 +43,41 @@ jobs:
           sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils python3 python3-distutils
 
       # ==========================================
-      # 阶段一：使用 SDK 编译 luci-app-amlogic 插件
+      # 阶段一：使用 SDK 编译插件和主题
       # ==========================================
-      - name: Download SDK and Compile Plugin
+      - name: Download SDK and Compile Packages
         run: |
           VERSION=${{ github.event.inputs.immortalwrt_version }}
-          # [修正] 使用实际存在的文件名，包含 gcc 和 musl 信息
+          # 使用你之前验证过的正确 SDK 文件名
           SDK_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-sdk-${VERSION}-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           
           echo "Downloading SDK from $SDK_URL"
           wget -q $SDK_URL -O sdk.tar.zst
-          
-          # 解压 .tar.zst 文件
-          # 注意：这里解压出的文件夹名可能还是通用的，但内容是正确的
           tar -I zstd -xf sdk.tar.zst
-          
-          # 为了保险起见，使用通配符或 mv 处理可能存在的命名差异
-          # 通常解压后是一个以版本命名的文件夹
           mv immortalwrt-sdk-${VERSION}-armsr-armv8* sdk
           
           cd sdk
-          # 更新 feeds 以获取插件可能依赖的 LuCI 库
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-          # 克隆 ophub 的 amlogic 插件源码
+          # 1. 克隆 Amlogic 插件
           git clone https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
           
-          # 生成默认配置并编译插件
-          make defconfig
-          make package/luci-app-amlogic/compile V=s
+          # 2. 克隆 OpenTomcat 主题 (使用 sirpdboy 维护的版本，兼容性较好)
+          git clone https://github.com/sirpdboy/luci-theme-opentomcat.git package/luci-theme-opentomcat
           
-          # 将编译好的 amlogic 相关 ipk 复制到上级目录备用
+          make defconfig
+          
+          # 3. 编译这两个包
+          make package/luci-app-amlogic/compile V=s
+          make package/luci-theme-opentomcat/compile V=s
+          
+          # 4. 将编译好的 ipk 复制到上级目录备用
           find bin/packages/ -name "*amlogic*.ipk" -exec cp {} ../ \;
-          echo "编译完成的插件包："
-          ls -lh ../*amlogic*.ipk
+          find bin/packages/ -name "*opentomcat*.ipk" -exec cp {} ../ \;
+          
+          echo "编译完成的本地软件包："
+          ls -lh ../*.ipk
 
       # ==========================================
       # 阶段二：使用 ImageBuilder 打包完整固件
@@ -92,14 +92,27 @@ jobs:
           
           cd openwrt
           # 1. 将 SDK 编译出的本地 ipk 放入 packages 目录
-          cp ../*amlogic*.ipk packages/
+          cp ../*.ipk packages/
           
-          # 2. 重建本地软件包索引，让 ImageBuilder 识别本地 ipk
+          # 2. 重建本地软件包索引
           make package/index
           
-          # 3. 构建镜像，包含 luci、本地 amlogic 插件以及必需的底层工具
+          # 3. 注入首次开机设置默认主题的脚本
+          mkdir -p files/etc/uci-defaults
+          cat << 'EOF' > files/etc/uci-defaults/98-set-default-theme
+          #!/bin/sh
+          # 将 LuCI 默认主题设置为 opentomcat
+          uci set luci.main.mediaurlbase='/luci-static/opentomcat'
+          uci commit luci
+          # 脚本执行后自毁
+          rm -f /etc/uci-defaults/98-set-default-theme
+          EOF
+          chmod +x files/etc/uci-defaults/98-set-default-theme
+
+          # 4. 构建镜像，包含所有预装包和 files 目录
           make image PROFILE=generic \
-            PACKAGES="luci luci-app-amlogic bash curl tar gzip perl fdisk losetup blkid parted" \
+            PACKAGES="luci luci-app-amlogic luci-theme-opentomcat bash curl tar gzip perl fdisk losetup blkid parted" \
+            FILES="files" \
             -j$(nproc)
           
       - name: Package Amlogic Firmware with ophub
