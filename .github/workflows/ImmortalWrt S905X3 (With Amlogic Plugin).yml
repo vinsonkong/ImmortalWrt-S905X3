@@ -64,7 +64,7 @@ jobs:
           git clone https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
           
           # 2. 克隆 OpenTomcat 主题 (使用 sirpdboy 维护的版本，兼容性较好)
-          git clone https://github.com/sirpdboy/luci-theme-opentomcat.git package/luci-theme-opentomcat
+          git clone https://github.com/Leo-Jo-My/luci-theme-opentomcat.git package/luci-theme-opentomcat
           
           make defconfig
           
