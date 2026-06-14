@@ -95,7 +95,7 @@ jobs:
           cp ../*.ipk packages/
           
           # 2. 重建本地软件包索引
-          make package/index
+          # make package/index
           
           # 3. 注入首次开机设置默认主题的脚本
           mkdir -p files/etc/uci-defaults
