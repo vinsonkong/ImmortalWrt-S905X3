@@ -108,3 +108,24 @@ jobs:
         with:
           name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
           path: ${{ env.PACKAGED_OUTPUTPATH }}
+      - name: Upload Firmware to Release
+        uses: softprops/action-gh-release@v2
+        # 只有在编译成功时才执行
+        if: success() 
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # 自动生成一个唯一的 Tag 名称
+          tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
+          # Release 的标题
+          name: ImmortalWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          # Release 的描述正文
+          body: |
+            自动编译的 ImmortalWrt 固件
+            - 版本: ${{ github.event.inputs.immortalwrt_version }}
+            - 设备: ${{ github.event.inputs.device_board }}
+            - 内核: ${{ github.event.inputs.kernel_version }}
+          # 上传 ophub 打包出来的固件文件
+          files: |
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
