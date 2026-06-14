@@ -48,11 +48,19 @@ jobs:
       - name: Download SDK and Compile Plugin
         run: |
           VERSION=${{ github.event.inputs.immortalwrt_version }}
-          SDK_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-sdk-${VERSION}-armsr-armv8.Linux-x86_64.tar.zst"
+          # [修正] 使用实际存在的文件名，包含 gcc 和 musl 信息
+          SDK_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-sdk-${VERSION}-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+          
           echo "Downloading SDK from $SDK_URL"
           wget -q $SDK_URL -O sdk.tar.zst
+          
+          # 解压 .tar.zst 文件
+          # 注意：这里解压出的文件夹名可能还是通用的，但内容是正确的
           tar -I zstd -xf sdk.tar.zst
-          mv immortalwrt-sdk-${VERSION}-armsr-armv8.Linux-x86_64 sdk
+          
+          # 为了保险起见，使用通配符或 mv 处理可能存在的命名差异
+          # 通常解压后是一个以版本命名的文件夹
+          mv immortalwrt-sdk-${VERSION}-armsr-armv8* sdk
           
           cd sdk
           # 更新 feeds 以获取插件可能依赖的 LuCI 库
