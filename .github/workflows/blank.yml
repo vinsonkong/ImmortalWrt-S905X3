@@ -3,10 +3,10 @@ name: Build ImmortalWrt S905X3
 on:
   workflow_dispatch:
     inputs:
-      immortalwrt_version:
+      immortalwirt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '24.10.0' # 已根据实际情况更新版本号
+        default: '24.10.0'
       device_board:
         description: 'Device Board'
         required: true
@@ -25,30 +25,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create Swap File (Prevent Memory Overflow)
+        run: |
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
       - name: Install dependencies
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file
+          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd
 
       - name: Download ImmortalWrt ImageBuilder
         run: |
-          VERSION=${{ github.event.inputs.immortalwrt_version }}
-          # 1. 修改下载链接后缀为 .tar.zst
+          VERSION=${{ github.event.inputs.immortalwirt_version }}
           BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.zst"
           echo "Downloading from $BUILDER_URL"
           wget -q $BUILDER_URL -O imagebuilder.tar.zst
-          # 2. 修改解压命令以支持 .zst 格式
           tar -I zstd -xf imagebuilder.tar.zst
           mv immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64 openwrt
 
       - name: Build Rootfs (Basic Software Only)
         run: |
           cd openwrt
-          # 仅包含基础软件和 LuCI 界面
-          make image PROFILE=generic PACKAGES="luci"
-          
+          # 增加 -j$(nproc) 以加速编译，并指定输出格式
+          make image PROFILE=generic PACKAGES="luci" -j$(nproc)
+
       - name: Package Amlogic Firmware with ophub
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
@@ -61,5 +66,5 @@ jobs:
       - name: Upload Firmware
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
+          name: ImmortalWrt-${{ github.event.inputs.immortalwirt_version }}-${{ github.event.inputs.device_board }}
           path: ${{ env.PACKAGED_OUTPUTPATH }}
