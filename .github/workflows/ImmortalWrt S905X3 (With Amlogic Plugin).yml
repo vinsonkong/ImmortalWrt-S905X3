@@ -89,12 +89,8 @@ jobs:
           cd openwrt
           # 1. 将 SDK 编译出的本地 ipk 放入 packages 目录
           cp ../*.ipk packages/
-          
-          # 2. 重建本地软件包索引
-          make package/index
-          
-
-          # 3. 构建镜像，包含所有预装包和 files 目录
+           
+          # 2. 构建镜像，包含所有预装包和 files 目录
           make image PROFILE=generic \
             PACKAGES="luci luci-app-amlogic bash curl tar gzip perl fdisk losetup blkid parted" \
             FILES="files" \
