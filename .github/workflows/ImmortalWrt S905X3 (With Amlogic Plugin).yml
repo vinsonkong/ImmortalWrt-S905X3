@@ -63,18 +63,14 @@ jobs:
           # 1. 克隆 Amlogic 插件
           git clone https://github.com/ophub/luci-app-amlogic.git package/luci-app-amlogic
           
-          # 2. 克隆 OpenTomcat 主题 (使用 sirpdboy 维护的版本，兼容性较好)
-          git clone https://github.com/Leo-Jo-My/luci-theme-opentomcat.git package/luci-theme-opentomcat
           
           make defconfig
           
           # 3. 编译这两个包
           make package/luci-app-amlogic/compile V=s
-          make package/luci-theme-opentomcat/compile V=s
           
           # 4. 将编译好的 ipk 复制到上级目录备用
           find bin/packages/ -name "*amlogic*.ipk" -exec cp {} ../ \;
-          find bin/packages/ -name "*opentomcat*.ipk" -exec cp {} ../ \;
           
           echo "编译完成的本地软件包："
           ls -lh ../*.ipk
@@ -95,21 +91,10 @@ jobs:
           cp ../*.ipk packages/
           
           # 2. 重建本地软件包索引
-          # make package/index
+          make package/index
           
-          # 3. 注入首次开机设置默认主题的脚本
-          mkdir -p files/etc/uci-defaults
-          cat << 'EOF' > files/etc/uci-defaults/98-set-default-theme
-          #!/bin/sh
-          # 将 LuCI 默认主题设置为 opentomcat
-          uci set luci.main.mediaurlbase='/luci-static/opentomcat'
-          uci commit luci
-          # 脚本执行后自毁
-          rm -f /etc/uci-defaults/98-set-default-theme
-          EOF
-          chmod +x files/etc/uci-defaults/98-set-default-theme
 
-          # 4. 构建镜像，包含所有预装包和 files 目录
+          # 3. 构建镜像，包含所有预装包和 files 目录
           make image PROFILE=generic \
             PACKAGES="luci luci-app-amlogic luci-theme-opentomcat bash curl tar gzip perl fdisk losetup blkid parted" \
             FILES="files" \
@@ -129,6 +114,7 @@ jobs:
         with:
           name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
           path: ${{ env.PACKAGED_OUTPUTPATH }}
+      
       - name: Upload Firmware to Release
         uses: softprops/action-gh-release@v2
         # 只有在编译成功时才执行
@@ -150,3 +136,4 @@ jobs:
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
+
