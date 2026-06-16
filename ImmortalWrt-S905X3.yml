@@ -8,6 +8,24 @@ on:
         description: 'ImmortalWrt Version'
         required: true
         default: '24.10.0'
+        type: choice
+        options:
+          - 23.05.0
+          - 23.05.1
+          - 23.05.2
+          - 23.05.3
+          - 23.05.4
+          - 23.05.5
+          - 23.05.6
+          - 23.05.7
+          - 24.10.0
+          - 24.10.1
+          - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
+          - 25.12.0
       device_board:
         description: 'Device Board'
         required: true
