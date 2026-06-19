@@ -26,6 +26,7 @@ EOF
     echo "✅ Target 默认包已精简！(文件: $TARGET_FILE)"
 else
     echo "ℹ️ armvirt 无独立 Target 定义文件，已由 .config 全权管理，跳过白名单清理。"
+    echo "⚠️ 请确保 .config 中已包含 kmod-virtio-net/blk/scsi，否则 Ophub 打包后可能无法启动！"
 fi
 
 
@@ -40,11 +41,6 @@ sed -i 's/ImmortalWrt/X96Max/g' package/base-files/files/bin/config_generate
 # 3. 设置默认时区为 Asia/Shanghai (北京时间)
 sed -i "s/'UTC'/'CST-8'\n   set system.@system[-1].zonename='Asia\/Shanghai'/g" package/base-files/files/bin/config_generate
 
-# ⭐ 已移除：替换默认主题为 Argon 的 sed 操作
-# 原因：.config 中已通过 CONFIG_PACKAGE_luci-theme-argon=y 显式启用，
-#       且 CONFIG_PACKAGE_luci-theme-bootstrap is not set 已禁用 Bootstrap，
-#       make defconfig 会自动处理主题优先级，无需手动修改 feeds Makefile。
-
 # 4. 注入 UCI 默认配置 (旁路由模式：关 DHCP、设网关 DNS、IPv6 穿透)
 echo "🔧 3. 注入 99-custom-settings (旁路由 UCI 配置)..."
 mkdir -p package/base-files/files/etc/uci-defaults
@@ -56,7 +52,11 @@ uci -q batch <<UCI_EOF
 # 网络配置 (旁路由核心)
 set network.lan.ipaddr='192.168.30.254'
 set network.lan.gateway='192.168.30.1'
-set network.lan.dns='223.5.5.5 8.8.8.8 114.114.114.114'
+# 使用 list 语法确保多 DNS 兼容性
+delete network.lan.dns
+add_list network.lan.dns='223.5.5.5'
+add_list network.lan.dns='8.8.8.8'
+add_list network.lan.dns='114.114.114.114'
 
 # IPv6 穿透配置
 set network.lan6=interface
@@ -79,8 +79,18 @@ set system.@system[0].zonename='Asia/Shanghai'
 set system.@system[0].timezone='CST-8'
 commit system
 
-# 防火墙配置 (允许 IPv6 穿透)
-add_list firewall.lan.network='lan6'
+# 防火墙配置 (允许 IPv6 穿透，兼容不同 ImmortalWrt 版本)
+# 先尝试将 lan6 加入 lan zone，若失败则创建独立 zone
+uci -q get firewall.lan >/dev/null && {
+    add_list firewall.lan.network='lan6'
+} || {
+    set firewall.lan6=zone
+    set firewall.lan6.name='lan6'
+    set firewall.lan6.network='lan6'
+    set firewall.lan6.input='ACCEPT'
+    set firewall.lan6.output='ACCEPT'
+    set firewall.lan6.forward='ACCEPT'
+}
 commit firewall
 UCI_EOF
 SCRIPT_EOF
