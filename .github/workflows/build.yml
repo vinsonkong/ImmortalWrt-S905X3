@@ -154,9 +154,9 @@ jobs:
           echo "CONFIG_TARGET_armvirt_64_Default=y" >> .config
           
           # 启用 Amlogic 盒子管理插件 (用于在系统内更新内核和固件)
-          echo "CONFIG_PACKAGE_luci-app-amlogic=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-amlogic-zh-cn=y" >> .config
           # 启用 Socat 端口转发插件
-          echo "CONFIG_PACKAGE_luci-app-socat=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-socat-zh-cn=y" >> .config
           
           make defconfig
 
