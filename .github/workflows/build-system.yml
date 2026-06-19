@@ -152,7 +152,9 @@ jobs:
           else
             echo "⚠️ 未找到 .config 文件，将使用 ImmortalWrt 默认配置！"
           fi
-          
+
+          # 强制将 x86_64 的 rootfs 分区大小设置为 1024MB
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
           # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
           make defconfig
           
