@@ -85,7 +85,7 @@ jobs:
           sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
           sudo -E apt-get -qq autoremove --purge
           sudo -E apt-get -qq clean
-
+      
       - name: Free up disk space (CRITICAL)
         run: |
           echo "=== Before cleanup ==="
@@ -105,7 +105,6 @@ jobs:
           git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
           echo "OPENWRT_PATH=$PWD/openwrt" >> $GITHUB_ENV
 
-      # 👇 步骤 1：精准克隆第三方插件 (不污染 feeds，极致省空间)
       - name: Clone specific plugins (No Feeds)
         run: |
           cd openwrt/package
@@ -124,11 +123,12 @@ jobs:
           echo "=== 当前 custom_plugins 目录下的插件 ==="
           ls -l
 
-      # 👇 步骤 2：更新官方 Feeds (为了获取 zerotier 和基础依赖)
       - name: Update & Install feeds
-        run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-      # 👇 步骤 3：在 feeds 更新后执行 DIY 脚本 (清理 Target 默认包 + 注入旁路由/IP/主题配置)
       - name: Run DIY script (Clean Target & Inject Configs)
         run: |
           cd openwrt
@@ -140,7 +140,6 @@ jobs:
             echo "⚠️ 未找到 diy.sh，跳过自定义配置注入。"
           fi
 
-      # 👇 步骤 4：加载仓库根目录的静态 .config 种子文件并展开依赖
       - name: Load custom configuration
         run: |
           cd openwrt
@@ -153,15 +152,16 @@ jobs:
             echo "⚠️ 未找到 .config 文件，将使用 ImmortalWrt 默认配置！"
           fi
 
-          # 强制将 x86_64 的 rootfs 分区大小设置为 1024MB
+          # 强制将 rootfs 分区大小设置为 1024MB (防止 Docker/Samba 撑爆空间)
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
+          
           # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
           make defconfig
           
           # 输出最终启用的包数量，方便排查
           echo "=== 最终生成的 .config 中启用的包数量 ==="
           grep "=y" .config | wc -l
-          # 软件包数
+          echo "=== 软件包数 ==="
           grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
 
           # 检查关键插件是否成功被选中
@@ -187,7 +187,8 @@ jobs:
         if: steps.compile.outputs.status == 'success'
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
-          openwrt_path: openwrt/bin/targets/armvirt/64/*rootfs.tar.gz
+          # ⭐ 修复：移除通配符，使用精确文件名匹配 armvirt rootfs
+          openwrt_path: openwrt/bin/targets/armvirt/64/*.tar.gz
           openwrt_board: ${{ github.event.inputs.device_board }}
           openwrt_kernel: ${{ github.event.inputs.kernel_version }}
           auto_kernel: true
