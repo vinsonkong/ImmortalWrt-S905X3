@@ -1,17 +1,19 @@
 #!/bin/bash
 
-# 1. 修改默认 IP 地址 (改为 192.168.2.1，避免与光猫冲突)
-sed -i 's/192.168.1.1/192.168.2.1/g' package/base-files/files/bin/config_generate
+# 1. 修改默认 IP 地址 (改为 192.168.2.1，避免与主路由/光猫冲突)
+sed -i 's/192.168.1.1/192.168.30.254/g' package/base-files/files/bin/config_generate
 
 # 2. 修改默认主机名
 sed -i 's/ImmortalWrt/X96Max/g' package/base-files/files/bin/config_generate
 
-# 3. 添加第三方软件源 (kenzok8 常用插件包，包含 PassWall, OpenClash 等)
-git clone --depth 1 https://github.com/kenzok8/openwrt-packages.git package/kenzok8
-git clone --depth 1 https://github.com/kenzok8/small.git package/small
+# 3. 设置默认时区为 Asia/Shanghai (北京时间)
+sed -i "s/'UTC'/'CST-8'\n   set system.@system[-1].zonename='Asia\/Shanghai'/g" package/base-files/files/bin/config_generate
 
-# 4. 添加 Docker 支持相关依赖 (如果 .config 中开启了 Docker)
-# 通常 feeds 中已包含，此处无需额外操作
+# 4. 替换默认主题为 Argon (ImmortalWrt 官方源自带)
+sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
+
+
+
 
 
 mkdir -p package/base-files/files/etc/uci-defaults
