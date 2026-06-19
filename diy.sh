@@ -2,24 +2,30 @@
 # =========================================================
 # diy.sh - 综合自定义脚本 (Target清理 + 基础配置注入)
 # 执行时机：必须在 Update & Install feeds 之后执行！
+# 适配架构：armvirt/64 (用于 ophub 打包 S905X3)
 # =========================================================
 
 echo "🚀 1. 开始执行 Target 层白名单清理..."
-TARGET_MAKEFILE="target/linux/armvirt/Makefile"
-if [ -f "$TARGET_MAKEFILE" ]; then
+# ⭐ 修正：armvirt 的定义文件是 target.mk 而非 Makefile
+TARGET_MK="target/linux/armvirt/target.mk"
+if [ -f "$TARGET_MK" ]; then
     # 剔除官方强塞的冗余包
-    sed -i '/^DEFAULT_PACKAGES +=/d' "$TARGET_MAKEFILE"
+    sed -i '/^DEFAULT_PACKAGES +=/d' "$TARGET_MK"
     
-    # 写入极简白名单 (包含 Argon 主题)
-    cat >> "$TARGET_MAKEFILE" <<EOF
+    # 写入极简白名单 (包含 armvirt 核心驱动 + Argon 主题)
+    cat >> "$TARGET_MK" <<EOF
 
-# === 自定义基础白名单 ===
+# === 自定义基础白名单 (armvirt/64) ===
 DEFAULT_PACKAGES += base-files busybox dropbear opkg
 DEFAULT_PACKAGES += dnsmasq-full firewall4 nftables kmod-nft-offload
 DEFAULT_PACKAGES += luci luci-base luci-compat luci-lib-ipkg
 DEFAULT_PACKAGES += luci-theme-argon luci-app-argon-config
+# ⭐ armvirt 核心依赖：确保 Ophub 打包时 rootfs 包含必要的虚拟设备驱动
+DEFAULT_PACKAGES += kmod-virtio-net kmod-virtio-blk kmod-virtio-scsi
 EOF
     echo "✅ Target 默认包已精简！"
+else
+    echo "⚠️ 未找到 $TARGET_MK，跳过 Target 白名单清理。"
 fi
 
 echo "🎨 2. 开始注入自定义基础配置..."
@@ -33,10 +39,12 @@ sed -i 's/ImmortalWrt/X96Max/g' package/base-files/files/bin/config_generate
 # 3. 设置默认时区为 Asia/Shanghai (北京时间)
 sed -i "s/'UTC'/'CST-8'\n   set system.@system[-1].zonename='Asia\/Shanghai'/g" package/base-files/files/bin/config_generate
 
-# 4. 替换默认主题为 Argon (防止 feeds 中没有 bootstrap 导致 sed 报错，加了 2>/dev/null)
-sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
+# ⭐ 已移除：替换默认主题为 Argon 的 sed 操作
+# 原因：.config 中已通过 CONFIG_PACKAGE_luci-theme-argon=y 显式启用，
+#       且 CONFIG_PACKAGE_luci-theme-bootstrap is not set 已禁用 Bootstrap，
+#       make defconfig 会自动处理主题优先级，无需手动修改 feeds Makefile。
 
-# 5. 注入 UCI 默认配置 (旁路由模式：关 DHCP、设网关 DNS、IPv6 穿透)
+# 4. 注入 UCI 默认配置 (旁路由模式：关 DHCP、设网关 DNS、IPv6 穿透)
 echo "🔧 3. 注入 99-custom-settings (旁路由 UCI 配置)..."
 mkdir -p package/base-files/files/etc/uci-defaults
 
