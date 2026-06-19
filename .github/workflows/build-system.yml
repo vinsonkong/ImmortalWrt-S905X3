@@ -159,7 +159,9 @@ jobs:
           # 输出最终启用的包数量，方便排查
           echo "=== 最终生成的 .config 中启用的包数量 ==="
           grep "=y" .config | wc -l
-          
+          # 软件包数
+          grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
+
           # 检查关键插件是否成功被选中
           echo "=== 检查关键插件状态 ==="
           grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
