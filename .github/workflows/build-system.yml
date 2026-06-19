@@ -91,8 +91,6 @@ jobs:
         run: |
           echo "=== Before cleanup ==="
           df -hT
-          
-          # 删除 Android SDK, .NET, Haskell, GHC 等无关大型组件
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /opt/ghc || true
@@ -100,37 +98,35 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
           sudo rm -rf /usr/local/.ghcup || true
           sudo rm -rf /opt/hostedtoolcache || true
-          
-          # 清理 Docker 镜像 (可额外释放数GB空间)
           docker rmi $(docker images -q) || true
-          
-          # 清理 apt 缓存和临时文件
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
-          
           echo "=== After cleanup ==="
           df -hT
       
       - name: Clone ImmortalWrt source code
         run: |
           VERSION=${{ github.event.inputs.immortalwrt_version }}
-          # 尝试克隆 Tag (如 v23.05.4)，如果失败则克隆 Branch (如 openwrt-24.10)
           git clone --depth 1 -b v${VERSION} https://github.com/immortalwrt/immortalwrt.git openwrt || \
           git clone --depth 1 -b openwrt-${VERSION%.*} https://github.com/immortalwrt/immortalwrt.git openwrt || \
           git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
           echo "OPENWRT_PATH=$PWD/openwrt" >> $GITHUB_ENV
 
-      - name: Load custom feeds & DIY script
+      # 👇 步骤 1：仅添加自定义 Feeds 源
+      - name: Add custom feeds
         run: |
           cd openwrt
-          
-          # 1. 添加 Amlogic 盒子管理插件源 (ophub)
           echo "src-git amlogic https://github.com/ophub/luci-app-amlogic.git" >> feeds.conf.default
-          
-          # 2. 添加 Socat 插件源 (kenzok8)
           echo "src-git kenzok8 https://github.com/kenzok8/openwrt-packages.git" >> feeds.conf.default
-          
-          # 3. 执行自定义 DIY 脚本 (如果存在)
+
+      # 👇 步骤 2：更新并安装 Feeds (生成 feeds/ 目录)
+      - name: Update & Install feeds
+        run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
+
+      # 👇 步骤 3：执行 DIY 脚本 (此时修改 feeds/ 下的文件不会再报错)
+      - name: Run DIY script
+        run: |
+          cd openwrt
           if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
             mv "../${{ env.DIY_SCRIPT }}" "${{ env.DIY_SCRIPT }}"
             chmod +x ${{ env.DIY_SCRIPT }}
@@ -139,24 +135,20 @@ jobs:
             echo "No diy.sh found, skipping."
           fi
 
-      - name: Update feeds
-        run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
-
       - name: Load custom configuration
         run: |
           [ -e files ] && mv files openwrt/files
           [ -e ${{ env.CONFIG_FILE }} ] && mv ${{ env.CONFIG_FILE }} openwrt/.config
           cd openwrt
           
-          # 强制指定为 ARM64 架构 (ophub 打包 Amlogic 盒子必须使用 armvirt rootfs)
+          # 强制指定为 ARM64 架构
           echo "CONFIG_TARGET_armvirt=y" >> .config
           echo "CONFIG_TARGET_armvirt_64=y" >> .config
           echo "CONFIG_TARGET_armvirt_64_Default=y" >> .config
           
-          # 启用 Amlogic 盒子管理插件 (用于在系统内更新内核和固件)
-          echo "CONFIG_PACKAGE_luci-app-amlogic-zh-cn=y" >> .config
-          # 启用 Socat 端口转发插件
-          echo "CONFIG_PACKAGE_luci-app-socat-zh-cn=y" >> .config
+          # 启用所需插件
+          echo "CONFIG_PACKAGE_luci-app-amlogic=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-socat=y" >> .config
           
           make defconfig
 
@@ -172,7 +164,6 @@ jobs:
         run: |
           cd openwrt
           echo -e "$(nproc) thread compile"
-          # 优先多线程编译，若因空间或偶发错误失败，则降级为单线程并输出详细日志(V=s)
           make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
 
@@ -202,11 +193,11 @@ jobs:
           tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
           name: ImmortalWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            自动编译的 ImmortalWrt 固件 (纯净官方源版)
+            自动编译的 ImmortalWrt 固件
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
             - 设备: ${{ github.event.inputs.device_board }}
             - 内核: ${{ github.event.inputs.kernel_version }}
-            - 包含插件: luci-app-amlogic, luci-app-socat
+            - 插件: luci-app-amlogic, luci-app-socat
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
