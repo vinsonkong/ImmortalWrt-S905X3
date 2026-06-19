@@ -64,14 +64,10 @@ jobs:
       - name: Create Swap File (Prevent Memory Overflow)
         run: |
           if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
-            echo "No active swap found. Creating 4G swap..."
             sudo fallocate -l 4G /mnt/swapfile
             sudo chmod 600 /mnt/swapfile
             sudo mkswap /mnt/swapfile
             sudo swapon /mnt/swapfile
-          else
-            echo "Swap already active:"
-            swapon --show
           fi
           free -h
 
@@ -88,14 +84,10 @@ jobs:
 
       - name: Free up disk space (CRITICAL)
         run: |
-          echo "=== Before cleanup ==="
-          df -hT
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
           docker rmi $(docker images -q) || true
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
-          echo "=== After cleanup ==="
-          df -hT
       
       - name: Clone ImmortalWrt source code
         run: |
@@ -105,8 +97,23 @@ jobs:
           git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
           echo "OPENWRT_PATH=$PWD/openwrt" >> $GITHUB_ENV
 
-      # 👇 步骤 1：执行 DIY 脚本 (在源码层清理 Target 默认全家桶)
-      - name: Run DIY script (Clean Target Packages)
+      - name: Clone specific plugins (No Feeds)
+        run: |
+          cd openwrt/package
+          mkdir -p custom_plugins
+          cd custom_plugins
+          git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git
+          git clone --depth 1 https://github.com/kenzok8/small-package.git temp_repo
+          [ -d "temp_repo/luci-app-socat" ] && mv temp_repo/luci-app-socat .
+          [ -d "temp_repo/socat" ] && mv temp_repo/socat .
+          rm -rf temp_repo
+
+      # 👇 必须先 Update feeds，生成 feeds/luci 目录，diy.sh 中的 sed 才不会报错
+      - name: Update & Install feeds
+        run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
+
+      # 👇 在 feeds 更新后执行 DIY 脚本
+      - name: Run DIY script (Clean Target & Inject Configs)
         run: |
           cd openwrt
           if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
@@ -115,46 +122,25 @@ jobs:
             ./${{ env.DIY_SCRIPT }}
           fi
 
-      # 👇 步骤 2：精准克隆第三方插件 (不污染 feeds，极致省空间)
-      - name: Clone specific plugins (No Feeds)
-        run: |
-          cd openwrt/package
-          mkdir -p custom_plugins
-          cd custom_plugins
-
-          echo "=== 1. 克隆 luci-app-amlogic (ophub 官方) ==="
-          git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git
-          
-          echo "=== 2. 提取 luci-app-socat (从 kenzok8 精准剥离) ==="
-          git clone --depth 1 https://github.com/kenzok8/small-package.git temp_repo
-          [ -d "temp_repo/luci-app-socat" ] && mv temp_repo/luci-app-socat .
-          [ -d "temp_repo/socat" ] && mv temp_repo/socat .
-          rm -rf temp_repo
-          
-          echo "=== 当前 custom_plugins 目录下的插件 ==="
-          ls -l
-
-      # 👇 步骤 3：更新官方 Feeds (为了获取 zerotier 和基础依赖)
-      - name: Update & Install feeds
-        run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
-
-      # 👇 步骤 4：配置层白名单 (生成极简 .config)
       - name: Load Minimal Configuration (Config Whitelist)
         run: |
           cd openwrt
-          
-          # 彻底清空默认配置，从零开始
           rm -f .config
           
-          # 写入架构配置
+          # 架构配置
           cat >> .config <<EOF
 CONFIG_TARGET_armvirt=y
 CONFIG_TARGET_armvirt_64=y
 CONFIG_TARGET_armvirt_64_Default=y
 EOF
 
-          # 写入自定义插件及中文语言包 (你的专属白名单)
+          # 自定义插件及主题配置
           cat >> .config <<EOF
+# --- 主题配置 (强制启用 Argon，禁用 Bootstrap) ---
+CONFIG_PACKAGE_luci-theme-argon=y
+CONFIG_PACKAGE_luci-app-argon-config=y
+# CONFIG_PACKAGE_luci-theme-bootstrap is not set
+
 # --- 第三方插件 (Amlogic & Socat) ---
 CONFIG_PACKAGE_luci-app-amlogic=y
 CONFIG_PACKAGE_luci-i18n-amlogic-zh-cn=y
@@ -167,11 +153,7 @@ CONFIG_PACKAGE_luci-app-zerotier=y
 CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y
 EOF
 
-          # 让系统根据 Target Makefile 和上述配置，自动计算最小依赖树
           make defconfig
-          
-          echo "=== 最终生成的 .config 中启用的包数量 ==="
-          grep "=y" .config | wc -l
 
       - name: Download package
         run: |
@@ -184,7 +166,6 @@ EOF
         id: compile
         run: |
           cd openwrt
-          echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
 
@@ -214,11 +195,13 @@ EOF
           tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
           name: ImmortalWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            自动编译的 ImmortalWrt 固件 (极简白名单版)
+            自动编译的 ImmortalWrt 固件 (旁路由极简版)
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
             - 设备: ${{ github.event.inputs.device_board }}
             - 内核: ${{ github.event.inputs.kernel_version }}
-            - 内置插件: Amlogic盒子管理, Socat, ZeroTier (均含中文)
+            - 默认 IP: 192.168.30.254 (旁路由模式，已关 DHCP)
+            - 主题: Argon
+            - 插件: Amlogic, Socat, ZeroTier
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
