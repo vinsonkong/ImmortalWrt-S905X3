@@ -6,27 +6,28 @@
 # =========================================================
 
 echo "🚀 1. 开始执行 Target 层白名单清理..."
-# ⭐ 修正：armvirt 的定义文件是 target.mk 而非 Makefile
-TARGET_MK="target/linux/armvirt/target.mk"
-if [ -f "$TARGET_MK" ]; then
-    # 剔除官方强塞的冗余包
-    sed -i '/^DEFAULT_PACKAGES +=/d' "$TARGET_MK"
-    
-    # 写入极简白名单 (包含 armvirt 核心驱动 + Argon 主题)
-    cat >> "$TARGET_MK" <<EOF
+TARGET_FILE=""
+if [ -f "target/linux/armvirt/target.mk" ]; then
+    TARGET_FILE="target/linux/armvirt/target.mk"
+elif [ -f "target/linux/armvirt/Makefile" ]; then
+    TARGET_FILE="target/linux/armvirt/Makefile"
+fi
 
+if [ -n "$TARGET_FILE" ]; then
+    sed -i '/^DEFAULT_PACKAGES +=/d' "$TARGET_FILE"
+    cat >> "$TARGET_FILE" <<EOF
 # === 自定义基础白名单 (armvirt/64) ===
 DEFAULT_PACKAGES += base-files busybox dropbear opkg
 DEFAULT_PACKAGES += dnsmasq-full firewall4 nftables kmod-nft-offload
 DEFAULT_PACKAGES += luci luci-base luci-compat luci-lib-ipkg
 DEFAULT_PACKAGES += luci-theme-argon luci-app-argon-config
-# ⭐ armvirt 核心依赖：确保 Ophub 打包时 rootfs 包含必要的虚拟设备驱动
 DEFAULT_PACKAGES += kmod-virtio-net kmod-virtio-blk kmod-virtio-scsi
 EOF
-    echo "✅ Target 默认包已精简！"
+    echo "✅ Target 默认包已精简！(文件: $TARGET_FILE)"
 else
-    echo "⚠️ 未找到 $TARGET_MK，跳过 Target 白名单清理。"
+    echo "ℹ️ armvirt 无独立 Target 定义文件，已由 .config 全权管理，跳过白名单清理。"
 fi
+
 
 echo "🎨 2. 开始注入自定义基础配置..."
 
