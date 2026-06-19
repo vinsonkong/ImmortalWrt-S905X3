@@ -1,4 +1,4 @@
-name: Build ImmortalWrt S905X3
+name: Build ImmortalWrt system S905X3
 
 on:
   workflow_dispatch:
@@ -87,13 +87,27 @@ jobs:
           sudo -E apt-get -qq clean
           df -hT
 
-       - name: Free up disk space (CRITICAL)
+      - name: Free up disk space (CRITICAL)
         run: |
           echo "=== Before cleanup ==="
           df -hT
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          
+          # 删除 Android SDK, .NET, Haskell, GHC 等无关大型组件
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo rm -rf /opt/hostedtoolcache || true
+          
+          # 清理 Docker 镜像 (可额外释放数GB空间)
+          docker rmi $(docker images -q) || true
+          
+          # 清理 apt 缓存和临时文件
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
+          
           echo "=== After cleanup ==="
           df -hT
       
@@ -121,7 +135,7 @@ jobs:
           [ -e files ] && mv files openwrt/files
           [ -e ${{ env.CONFIG_FILE }} ] && mv ${{ env.CONFIG_FILE }} openwrt/.config
           cd openwrt
-          # 强制指定为 ARM64 架构 (ophub 打包必须)
+          # 强制指定为 ARM64 架构 (ophub 打包 Amlogic 盒子必须使用 armvirt rootfs)
           echo "CONFIG_TARGET_armvirt=y" >> .config
           echo "CONFIG_TARGET_armvirt_64=y" >> .config
           echo "CONFIG_TARGET_armvirt_64_Default=y" >> .config
@@ -139,7 +153,8 @@ jobs:
         run: |
           cd openwrt
           echo -e "$(nproc) thread compile"
-          make -j$(nproc) || make -j1 || make -j1 V=s
+          # 优先多线程编译，若因空间或偶发错误失败，则降级为单线程并输出详细日志(V=s)
+          make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
 
       - name: Package Amlogic Firmware with ophub
