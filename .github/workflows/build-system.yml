@@ -64,10 +64,14 @@ jobs:
       - name: Create Swap File (Prevent Memory Overflow)
         run: |
           if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
+            echo "No active swap found. Creating 4G swap..."
             sudo fallocate -l 4G /mnt/swapfile
             sudo chmod 600 /mnt/swapfile
             sudo mkswap /mnt/swapfile
             sudo swapon /mnt/swapfile
+          else
+            echo "Swap already active:"
+            swapon --show
           fi
           free -h
 
@@ -84,10 +88,14 @@ jobs:
 
       - name: Free up disk space (CRITICAL)
         run: |
+          echo "=== Before cleanup ==="
+          df -hT
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
           docker rmi $(docker images -q) || true
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
+          echo "=== After cleanup ==="
+          df -hT
       
       - name: Clone ImmortalWrt source code
         run: |
@@ -97,22 +105,30 @@ jobs:
           git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
           echo "OPENWRT_PATH=$PWD/openwrt" >> $GITHUB_ENV
 
+      # 👇 步骤 1：精准克隆第三方插件 (不污染 feeds，极致省空间)
       - name: Clone specific plugins (No Feeds)
         run: |
           cd openwrt/package
           mkdir -p custom_plugins
           cd custom_plugins
+
+          echo "=== 1. 克隆 luci-app-amlogic (ophub 官方) ==="
           git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git
+          
+          echo "=== 2. 提取 luci-app-socat (从 kenzok8 精准剥离) ==="
           git clone --depth 1 https://github.com/kenzok8/small-package.git temp_repo
           [ -d "temp_repo/luci-app-socat" ] && mv temp_repo/luci-app-socat .
           [ -d "temp_repo/socat" ] && mv temp_repo/socat .
           rm -rf temp_repo
+          
+          echo "=== 当前 custom_plugins 目录下的插件 ==="
+          ls -l
 
-      # 👇 必须先 Update feeds，生成 feeds/luci 目录，diy.sh 中的 sed 才不会报错
+      # 👇 步骤 2：更新官方 Feeds (为了获取 zerotier 和基础依赖)
       - name: Update & Install feeds
         run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
 
-      # 👇 在 feeds 更新后执行 DIY 脚本
+      # 👇 步骤 3：在 feeds 更新后执行 DIY 脚本 (清理 Target 默认包 + 注入旁路由/IP/主题配置)
       - name: Run DIY script (Clean Target & Inject Configs)
         run: |
           cd openwrt
@@ -120,40 +136,33 @@ jobs:
             mv "../${{ env.DIY_SCRIPT }}" "${{ env.DIY_SCRIPT }}"
             chmod +x ${{ env.DIY_SCRIPT }}
             ./${{ env.DIY_SCRIPT }}
+          else
+            echo "⚠️ 未找到 diy.sh，跳过自定义配置注入。"
           fi
 
-      - name: Load Minimal Configuration (Config Whitelist)
+      # 👇 步骤 4：加载仓库根目录的静态 .config 种子文件并展开依赖
+      - name: Load custom configuration
         run: |
           cd openwrt
-          rm -f .config
           
-          # 架构配置
-          cat >> .config <<EOF
-CONFIG_TARGET_armvirt=y
-CONFIG_TARGET_armvirt_64=y
-CONFIG_TARGET_armvirt_64_Default=y
-EOF
-
-          # 自定义插件及主题配置
-          cat >> .config <<EOF
-# --- 主题配置 (强制启用 Argon，禁用 Bootstrap) ---
-CONFIG_PACKAGE_luci-theme-argon=y
-CONFIG_PACKAGE_luci-app-argon-config=y
-# CONFIG_PACKAGE_luci-theme-bootstrap is not set
-
-# --- 第三方插件 (Amlogic & Socat) ---
-CONFIG_PACKAGE_luci-app-amlogic=y
-CONFIG_PACKAGE_luci-i18n-amlogic-zh-cn=y
-CONFIG_PACKAGE_luci-app-socat=y
-CONFIG_PACKAGE_luci-i18n-socat-zh-cn=y
-CONFIG_PACKAGE_socat=y
-
-# --- 官方插件 (ZeroTier) ---
-CONFIG_PACKAGE_luci-app-zerotier=y
-CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y
-EOF
-
+          # 读取仓库根目录的 .config 种子文件
+          if [ -f "../${{ env.CONFIG_FILE }}" ]; then
+            echo "✅ 找到自定义 .config，正在应用..."
+            cp "../${{ env.CONFIG_FILE }}" .config
+          else
+            echo "⚠️ 未找到 .config 文件，将使用 ImmortalWrt 默认配置！"
+          fi
+          
+          # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
           make defconfig
+          
+          # 输出最终启用的包数量，方便排查
+          echo "=== 最终生成的 .config 中启用的包数量 ==="
+          grep "=y" .config | wc -l
+          
+          # 检查关键插件是否成功被选中
+          echo "=== 检查关键插件状态 ==="
+          grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
 
       - name: Download package
         run: |
@@ -166,6 +175,7 @@ EOF
         id: compile
         run: |
           cd openwrt
+          echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
 
