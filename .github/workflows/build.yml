@@ -87,6 +87,16 @@ jobs:
           sudo -E apt-get -qq clean
           df -hT
 
+       - name: Free up disk space (CRITICAL)
+        run: |
+          echo "=== Before cleanup ==="
+          df -hT
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/* /tmp/*
+          echo "=== After cleanup ==="
+          df -hT
+      
       - name: Clone ImmortalWrt source code
         run: |
           VERSION=${{ github.event.inputs.immortalwrt_version }}
