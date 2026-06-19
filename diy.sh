@@ -58,3 +58,39 @@ chmod +x package/base-files/files/etc/uci-defaults/99-custom-settings
 
 
 echo "DIY script execution completed!"
+
+
+#!/bin/bash
+# =========================================================
+# diy.sh - Target 层白名单清理脚本
+# 执行时机：Clone source code 之后，Update feeds 之前
+# =========================================================
+
+echo "🚀 开始执行 Target 层白名单清理，剔除 ImmortalWrt 默认全家桶..."
+
+# 1. 定位 armvirt (S905X3 使用的通用架构) 的 Makefile
+TARGET_MAKEFILE="target/linux/armvirt/Makefile"
+
+if [ -f "$TARGET_MAKEFILE" ]; then
+    # 2. 删除原有的 DEFAULT_PACKAGES 定义 (剔除官方强塞的冗余包，如各种无线驱动、多余 kmod 等)
+    sed -i '/^DEFAULT_PACKAGES +=/d' "$TARGET_MAKEFILE"
+    
+    # 3. 重新写入我们的“基础白名单” (只保留系统启动、基础网络和 LuCI 核心必须的包)
+    cat >> "$TARGET_MAKEFILE" <<EOF
+
+# === 自定义基础白名单 (Custom Minimal Packages) ===
+# 核心系统
+DEFAULT_PACKAGES += base-files busybox dropbear opkg
+# 基础网络与防火墙
+DEFAULT_PACKAGES += dnsmasq-full firewall4 nftables kmod-nft-offload
+# LuCI 核心基础
+DEFAULT_PACKAGES += luci luci-base luci-compat luci-lib-ipkg
+EOF
+    
+    echo "✅ Target 默认包已精简为极简白名单模式！"
+else
+    echo "⚠️ 未找到 $TARGET_MAKEFILE，跳过清理。"
+fi
+
+echo "🎉 DIY 脚本执行完毕！"
+
