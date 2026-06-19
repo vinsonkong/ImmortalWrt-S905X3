@@ -122,10 +122,22 @@ jobs:
 
       - name: Load custom feeds & DIY script
         run: |
-          [ -e ${{ env.DIY_SCRIPT }} ] && mv ${{ env.DIY_SCRIPT }} openwrt/${{ env.DIY_SCRIPT }}
           cd openwrt
-          chmod +x ${{ env.DIY_SCRIPT }}
-          ./${{ env.DIY_SCRIPT }}
+          
+          # 1. 添加 Amlogic 盒子管理插件源 (ophub)
+          echo "src-git amlogic https://github.com/ophub/luci-app-amlogic.git" >> feeds.conf.default
+          
+          # 2. 添加 Socat 插件源 (kenzok8)
+          echo "src-git kenzok8 https://github.com/kenzok8/openwrt-packages.git" >> feeds.conf.default
+          
+          # 3. 执行自定义 DIY 脚本 (如果存在)
+          if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
+            mv "../${{ env.DIY_SCRIPT }}" "${{ env.DIY_SCRIPT }}"
+            chmod +x ${{ env.DIY_SCRIPT }}
+            ./${{ env.DIY_SCRIPT }}
+          else
+            echo "No diy.sh found, skipping."
+          fi
 
       - name: Update feeds
         run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
@@ -135,10 +147,17 @@ jobs:
           [ -e files ] && mv files openwrt/files
           [ -e ${{ env.CONFIG_FILE }} ] && mv ${{ env.CONFIG_FILE }} openwrt/.config
           cd openwrt
+          
           # 强制指定为 ARM64 架构 (ophub 打包 Amlogic 盒子必须使用 armvirt rootfs)
           echo "CONFIG_TARGET_armvirt=y" >> .config
           echo "CONFIG_TARGET_armvirt_64=y" >> .config
           echo "CONFIG_TARGET_armvirt_64_Default=y" >> .config
+          
+          # 启用 Amlogic 盒子管理插件 (用于在系统内更新内核和固件)
+          echo "CONFIG_PACKAGE_luci-app-amlogic=y" >> .config
+          # 启用 Socat 端口转发插件
+          echo "CONFIG_PACKAGE_luci-app-socat=y" >> .config
+          
           make defconfig
 
       - name: Download package
@@ -187,6 +206,7 @@ jobs:
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
             - 设备: ${{ github.event.inputs.device_board }}
             - 内核: ${{ github.event.inputs.kernel_version }}
+            - 包含插件: luci-app-amlogic, luci-app-socat
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
