@@ -1,0 +1,177 @@
+name: Build ImmortalWrt S905X3
+
+on:
+  workflow_dispatch:
+    inputs:
+      immortalwrt_version:
+        description: 'ImmortalWrt Version'
+        required: true
+        default: '23.05.4'
+        type: choice
+        options:
+          - 23.05.0
+          - 23.05.1
+          - 23.05.2
+          - 23.05.3
+          - 23.05.4
+          - 23.05.5
+          - 23.05.6
+          - 23.05.7
+          - 24.10.0
+          - 24.10.1
+          - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
+          - 25.12.0
+      device_board:
+        description: 'Device Board'
+        required: true
+        default: 's905x3'
+      kernel_version:
+        description: 'Kernel Branch (ophub/kernel)'
+        required: true
+        default: '6.6.y'
+        type: choice
+        options:
+          - 5.10.y
+          - 5.15.y
+          - 6.1.y
+          - 6.6.y
+          - 6.12.y
+          - 6.18.y
+          - 5.10.y_5.15.y
+          - 6.1.y_6.6.y
+          - 6.12.y_6.18.y
+          - 6.1.y_6.12.y
+          - 6.1.y_6.18.y
+
+env:
+  CONFIG_FILE: .config
+  DIY_SCRIPT: diy.sh
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build for ${{ github.event.inputs.device_board }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Swap File (Prevent Memory Overflow)
+        run: |
+          if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
+            echo "No active swap found. Creating 4G swap..."
+            sudo fallocate -l 4G /mnt/swapfile
+            sudo chmod 600 /mnt/swapfile
+            sudo mkswap /mnt/swapfile
+            sudo swapon /mnt/swapfile
+          else
+            echo "Swap already active:"
+            swapon --show
+          fi
+          free -h
+
+      - name: Install dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo timedatectl set-timezone "$TZ"
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq full-upgrade -y
+          sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+          df -hT
+
+       - name: Free up disk space (CRITICAL)
+        run: |
+          echo "=== Before cleanup ==="
+          df -hT
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/* /tmp/*
+          echo "=== After cleanup ==="
+          df -hT
+      
+      - name: Clone ImmortalWrt source code
+        run: |
+          VERSION=${{ github.event.inputs.immortalwrt_version }}
+          # 尝试克隆 Tag (如 v23.05.4)，如果失败则克隆 Branch (如 openwrt-24.10)
+          git clone --depth 1 -b v${VERSION} https://github.com/immortalwrt/immortalwrt.git openwrt || \
+          git clone --depth 1 -b openwrt-${VERSION%.*} https://github.com/immortalwrt/immortalwrt.git openwrt || \
+          git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
+          echo "OPENWRT_PATH=$PWD/openwrt" >> $GITHUB_ENV
+
+      - name: Load custom feeds & DIY script
+        run: |
+          [ -e ${{ env.DIY_SCRIPT }} ] && mv ${{ env.DIY_SCRIPT }} openwrt/${{ env.DIY_SCRIPT }}
+          cd openwrt
+          chmod +x ${{ env.DIY_SCRIPT }}
+          ./${{ env.DIY_SCRIPT }}
+
+      - name: Update feeds
+        run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
+
+      - name: Load custom configuration
+        run: |
+          [ -e files ] && mv files openwrt/files
+          [ -e ${{ env.CONFIG_FILE }} ] && mv ${{ env.CONFIG_FILE }} openwrt/.config
+          cd openwrt
+          # 强制指定为 ARM64 架构 (ophub 打包必须)
+          echo "CONFIG_TARGET_armvirt=y" >> .config
+          echo "CONFIG_TARGET_armvirt_64=y" >> .config
+          echo "CONFIG_TARGET_armvirt_64_Default=y" >> .config
+          make defconfig
+
+      - name: Download package
+        run: |
+          cd openwrt
+          make download -j8
+          find dl -size -1024c -exec ls -l {} \;
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Compile the firmware
+        id: compile
+        run: |
+          cd openwrt
+          echo -e "$(nproc) thread compile"
+          make -j$(nproc) || make -j1 || make -j1 V=s
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Package Amlogic Firmware with ophub
+        if: steps.compile.outputs.status == 'success'
+        uses: ophub/amlogic-s9xxx-openwrt@main
+        with:
+          openwrt_path: openwrt/bin/targets/armvirt/64/*rootfs.tar.gz
+          openwrt_board: ${{ github.event.inputs.device_board }}
+          openwrt_kernel: ${{ github.event.inputs.kernel_version }}
+          auto_kernel: true
+          builder_name: ImmortalWrt
+
+      - name: Upload Firmware to Artifact
+        uses: actions/upload-artifact@v4
+        if: steps.compile.outputs.status == 'success'
+        with:
+          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
+          path: ${{ env.PACKAGED_OUTPUTPATH }}
+      
+      - name: Upload Firmware to Release
+        uses: softprops/action-gh-release@v2
+        if: success() 
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: ImmortalWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          body: |
+            自动编译的 ImmortalWrt 固件 (纯净官方源版)
+            - 版本: ${{ github.event.inputs.immortalwrt_version }}
+            - 设备: ${{ github.event.inputs.device_board }}
+            - 内核: ${{ github.event.inputs.kernel_version }}
+          files: |
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
