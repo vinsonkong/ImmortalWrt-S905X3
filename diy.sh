@@ -7,7 +7,13 @@
 
 echo "🚀 1. 开始执行 Target 层白名单清理..."
 TARGET_FILE=""
-if [ -f "target/linux/armvirt/target.mk" ]; then
+
+# 兼容 24.10 的 armsr 和旧版的 armvirt
+if [ -f "target/linux/armsr/armv8/target.mk" ]; then
+    TARGET_FILE="target/linux/armsr/armv8/target.mk"
+elif [ -f "target/linux/armsr/target.mk" ]; then
+    TARGET_FILE="target/linux/armsr/target.mk"
+elif [ -f "target/linux/armvirt/target.mk" ]; then
     TARGET_FILE="target/linux/armvirt/target.mk"
 elif [ -f "target/linux/armvirt/Makefile" ]; then
     TARGET_FILE="target/linux/armvirt/Makefile"
@@ -16,7 +22,7 @@ fi
 if [ -n "$TARGET_FILE" ]; then
     sed -i '/^DEFAULT_PACKAGES +=/d' "$TARGET_FILE"
     cat >> "$TARGET_FILE" <<EOF
-# === 自定义基础白名单 (armvirt/64) ===
+# === 自定义基础白名单 ===
 DEFAULT_PACKAGES += base-files busybox dropbear opkg
 DEFAULT_PACKAGES += dnsmasq-full firewall4 nftables kmod-nft-offload
 DEFAULT_PACKAGES += luci luci-base luci-compat luci-lib-ipkg
@@ -25,8 +31,7 @@ DEFAULT_PACKAGES += kmod-virtio-net kmod-virtio-blk kmod-virtio-scsi
 EOF
     echo "✅ Target 默认包已精简！(文件: $TARGET_FILE)"
 else
-    echo "ℹ️ armvirt 无独立 Target 定义文件，已由 .config 全权管理，跳过白名单清理。"
-    echo "⚠️ 请确保 .config 中已包含 kmod-virtio-net/blk/scsi，否则 Ophub 打包后可能无法启动！"
+    echo "ℹ️ 未找到 Target 定义文件，已由 .config 全权管理，跳过白名单清理。"
 fi
 
 
