@@ -1,4 +1,4 @@
-name: Build ImmortalWrt 24.10 system S905X3
+name: Build ImmortalWrt system S905X3
 
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ on:
       kernel_version:
         description: 'Kernel Branch (ophub/kernel)'
         required: true
-        default: '6.18.y'
+        default: '6.6.y'
         type: choice
         options:
           - 5.10.y
@@ -40,14 +40,14 @@ on:
           - 6.1.y_6.18.y
 
 env:
-  CONFIG_FILE: .config
-  DIY_SCRIPT: diy.sh
+  CONFIG_FILE: .config24
+  DIY_SCRIPT: diy24.sh
   TZ: Asia/Shanghai
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build for {{ github.event.inputs.device_board }}
+    name: Build for ${{ github.event.inputs.device_board }}
     
     steps:
       - name: Checkout
@@ -55,7 +55,7 @@ jobs:
 
       - name: Create Swap File (Prevent Memory Overflow)
         run: |
-          if [ "(swapon --show=NAME --noheadings)" = "" ]; then
+          if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
             echo "No active swap found. Creating 4G swap..."
             sudo fallocate -l 4G /mnt/swapfile
             sudo chmod 600 /mnt/swapfile
@@ -71,7 +71,7 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo timedatectl set-timezone "TZ"
+          sudo timedatectl set-timezone "$TZ"
           sudo -E apt-get -qq update
           sudo -E apt-get -qq full-upgrade -y
           sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
@@ -82,8 +82,8 @@ jobs:
         run: |
           echo "=== Before cleanup ==="
           df -hT
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
-          docker rmi (docker images -q) || true
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
+          docker rmi $(docker images -q) || true
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
           echo "=== After cleanup ==="
@@ -91,11 +91,11 @@ jobs:
       
       - name: Clone ImmortalWrt source code
         run: |
-          VERSION={{ github.event.inputs.immortalwrt_version }}
-          git clone --depth 1 -b v{VERSION} https://github.com/immortalwrt/immortalwrt.git openwrt || \
-          git clone --depth 1 -b openwrt-{VERSION%.*} https://github.com/immortalwrt/immortalwrt.git openwrt || \
+          VERSION=${{ github.event.inputs.immortalwrt_version }}
+          git clone --depth 1 -b v${VERSION} https://github.com/immortalwrt/immortalwrt.git openwrt || \
+          git clone --depth 1 -b openwrt-${VERSION%.*} https://github.com/immortalwrt/immortalwrt.git openwrt || \
           git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
-          echo "OPENWRT_PATH=PWD/openwrt" >> GITHUB_ENV
+          echo "OPENWRT_PATH=$PWD/openwrt" >> $GITHUB_ENV
 
       - name: Clone specific plugins (No Feeds)
         run: |
@@ -124,10 +124,10 @@ jobs:
       - name: Run DIY script (Clean Target & Inject Configs)
         run: |
           cd openwrt
-          if [ -f "../{{ env.DIY_SCRIPT }}" ]; then
-            mv "../{{ env.DIY_SCRIPT }}" "{{ env.DIY_SCRIPT }}"
-            chmod +x {{ env.DIY_SCRIPT }}
-            ./{{ env.DIY_SCRIPT }}
+          if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
+            mv "../${{ env.DIY_SCRIPT }}" "${{ env.DIY_SCRIPT }}"
+            chmod +x ${{ env.DIY_SCRIPT }}
+            ./${{ env.DIY_SCRIPT }}
           else
             echo "⚠️ 未找到 diy.sh，跳过自定义配置注入。"
           fi
@@ -137,21 +137,16 @@ jobs:
           cd openwrt
           
           # 读取仓库根目录的 .config 种子文件
-          if [ -f "../{{ env.CONFIG_FILE }}" ]; then
+          if [ -f "../${{ env.CONFIG_FILE }}" ]; then
             echo "✅ 找到自定义 .config，正在应用..."
-            cp "../{{ env.CONFIG_FILE }}" .config
+            cp "../${{ env.CONFIG_FILE }}" .config
           else
             echo "⚠️ 未找到 .config 文件，将使用 ImmortalWrt 默认配置！"
           fi
 
           # 强制将 rootfs 分区大小设置为 1024MB (防止 Docker/Samba 撑爆空间)
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
-
-          # ⭐ 强制追加关键配置（防止被 defconfig 覆盖）
-          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
-          echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
-          echo "CONFIG_TARGET_ROOTFS_CPIOGZ=y" >> .config
-    
+          
           # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
           make defconfig
           
@@ -159,7 +154,7 @@ jobs:
           echo "=== 最终生成的 .config 中启用的包数量 ==="
           grep "=y" .config | wc -l
           echo "=== 软件包数 ==="
-          grep "^CONFIG_PACKAGE_.*=y" .config | wc -l
+          grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
 
           # 检查关键插件是否成功被选中
           echo "=== 检查关键插件状态 ==="
@@ -169,24 +164,25 @@ jobs:
         run: |
           cd openwrt
           make download -j8
-          find dl -size -1024c -exec ls -l {} ;
-          find dl -size -1024c -exec rm -f {} ;
+          find dl -size -1024c -exec ls -l {} \;
+          find dl -size -1024c -exec rm -f {} \;
 
       - name: Compile the firmware
         id: compile
         run: |
           cd openwrt
-          echo -e "(nproc) thread compile"
-          make -j(nproc) || make -j1 V=s
-          echo "status=success" >> GITHUB_OUTPUT
+          echo -e "$(nproc) thread compile"
+          make -j$(nproc) || make -j1 V=s
+          echo "status=success" >> $GITHUB_OUTPUT
 
       - name: Package Amlogic Firmware with ophub
         if: steps.compile.outputs.status == 'success'
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
+          # ⭐ 修复
           openwrt_path: openwrt/bin/targets/armsr/armv8/*rootfs.tar.gz
-          openwrt_board: {{ github.event.inputs.device_board }}
-          openwrt_kernel: {{ github.event.inputs.kernel_version }}
+          openwrt_board: ${{ github.event.inputs.device_board }}
+          openwrt_kernel: ${{ github.event.inputs.kernel_version }}
           auto_kernel: true
           builder_name: ImmortalWrt
 
@@ -194,25 +190,25 @@ jobs:
         uses: actions/upload-artifact@v4
         if: steps.compile.outputs.status == 'success'
         with:
-          name: ImmortalWrt-{{ github.event.inputs.immortalwrt_version }}-{{ github.event.inputs.device_board }}
-          path: {{ env.PACKAGED_OUTPUTPATH }}
+          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
+          path: ${{ env.PACKAGED_OUTPUTPATH }}
       
       - name: Upload Firmware to Release
         uses: softprops/action-gh-release@v2
         if: success() 
         env:
-          GITHUB_TOKEN: {{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ImmortalWrt-{{ github.event.inputs.immortalwrt_version }}-build{{ github.run_number }}
-          name: ImmortalWrt S905X3 {{ github.event.inputs.immortalwrt_version }} (Build {{ github.run_number }})
+          tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: ImmortalWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
             自动编译的 ImmortalWrt 固件 (旁路由极简版)
-            - 版本: {{ github.event.inputs.immortalwrt_version }}
-            - 设备: {{ github.event.inputs.device_board }}
-            - 内核: {{ github.event.inputs.kernel_version }}
+            - 版本: ${{ github.event.inputs.immortalwrt_version }}
+            - 设备: ${{ github.event.inputs.device_board }}
+            - 内核: ${{ github.event.inputs.kernel_version }}
             - 默认 IP: 192.168.30.254 (旁路由模式，已关 DHCP)
             - 主题: Argon
             - 插件: Amlogic, Socat, ZeroTier
           files: |
-            {{ env.PACKAGED_OUTPUTPATH }}/*.img
-            {{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
