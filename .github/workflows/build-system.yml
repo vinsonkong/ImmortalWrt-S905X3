@@ -154,7 +154,12 @@ jobs:
 
           # 强制将 rootfs 分区大小设置为 1024MB (防止 Docker/Samba 撑爆空间)
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
-          
+
+          # ⭐ 强制追加关键配置（防止被 defconfig 覆盖）
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
+          echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_CPIOGZ=y" >> .config
+    
           # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
           make defconfig
           
