@@ -56,12 +56,12 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     name: Build for ${{ github.event.inputs.device_board }}
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Swap File (Prevent Memory Overflow)
+      - name: Create Swap File
         run: |
           if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
             sudo fallocate -l 4G /mnt/swapfile
@@ -81,14 +81,14 @@ jobs:
           sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
           sudo -E apt-get -qq autoremove --purge
           sudo -E apt-get -qq clean
-      
-      - name: Free up disk space (CRITICAL)
+
+      - name: Free up disk space
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
           docker rmi $(docker images -q) || true
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
-      
+
       - name: Clone ImmortalWrt source code
         run: |
           VERSION=${{ github.event.inputs.immortalwrt_version }}
@@ -97,7 +97,7 @@ jobs:
           git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
           echo "OPENWRT_PATH=$PWD/openwrt" >> $GITHUB_ENV
 
-      - name: Clone specific plugins (No Feeds)
+      - name: Clone specific plugins
         run: |
           cd openwrt/package
           mkdir -p custom_plugins
@@ -108,7 +108,7 @@ jobs:
           [ -d "temp_repo/socat" ] && mv temp_repo/socat .
           rm -rf temp_repo
 
-      - name: Update & Install feeds
+      - name: Update and Install feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
@@ -123,69 +123,63 @@ jobs:
             ./${{ env.DIY_SCRIPT }}
           fi
 
-      - name: Generate Architecture Config (Dynamic)
+      - name: Generate Architecture Config
         run: |
           cd openwrt
           VERSION="${{ github.event.inputs.immortalwrt_version }}"
-          
-          # 基础架构配置 (ARM64)
-          cat >> .config <<EOF
+          cat >> .config <<ARCH_EOF
 CONFIG_ARCH_64BIT=y
 CONFIG_aarch64=y
 CONFIG_CPU_TYPE="cortex-a55"
-EOF
-
-          # ⭐ 核心：根据版本动态注入 Target (24.10+ 使用 armsr，23.05 使用 armvirt)
+ARCH_EOF
           if [[ "$VERSION" == 24.* ]] || [[ "$VERSION" == 25.* ]]; then
-            echo "✅ 检测到 24.10+ 版本，使用 armsr/armv8 架构"
-            cat >> .config <<EOF
+            echo "Detected 24.10+ version, using armsr/armv8"
+            cat >> .config <<TARGET_EOF
 CONFIG_TARGET_armsr=y
 CONFIG_TARGET_armsr_armv8=y
-EOF
+TARGET_EOF
           else
-            echo "✅ 检测到 23.05 版本，使用 armvirt/64 架构"
-            cat >> .config <<EOF
+            echo "Detected 23.05 version, using armvirt/64"
+            cat >> .config <<TARGET_EOF
 CONFIG_TARGET_armvirt=y
 CONFIG_TARGET_armvirt_64=y
-EOF
+TARGET_EOF
           fi
 
-      - name: Load custom configuration & defconfig
+      - name: Load custom configuration and defconfig
         run: |
           cd openwrt
           if [ -f "../${{ env.CONFIG_FILE }}" ]; then
             cat "../${{ env.CONFIG_FILE }}" >> .config
           fi
-    
           make defconfig
-          
-          echo "=== 检查关键插件状态 ==="
-          grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
+          echo "=== Check key plugins ==="
+          grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "Warning: Some key plugins not selected!"
 
-      - name: Download package
+      - name: Download packages
         run: |
           cd openwrt
           make download -j8
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
-      - name: Compile the firmware
+      - name: Compile firmware
         id: compile
         run: |
           cd openwrt
           make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
 
-      - name: Find rootfs path (Dynamic)
+      - name: Find rootfs path
         id: find_rootfs
         run: |
           ROOTFS_PATH=$(find openwrt/bin/targets -name "*rootfs.tar.gz" | head -n 1)
           if [ -z "$ROOTFS_PATH" ]; then
-            echo "❌ 未找到 rootfs.tar.gz，编译可能失败！"
+            echo "Error: rootfs.tar.gz not found!"
             exit 1
           fi
           echo "ROOTFS_FILE=$ROOTFS_PATH" >> $GITHUB_ENV
-          echo "✅ 找到 rootfs: $ROOTFS_PATH"
+          echo "Found rootfs: $ROOTFS_PATH"
 
       - name: Package Amlogic Firmware with ophub
         if: steps.compile.outputs.status == 'success'
@@ -199,17 +193,17 @@ EOF
 
       - name: Upload Firmware to Release
         uses: softprops/action-gh-release@v2
-        if: success() 
+        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
           name: ImmortalWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            自动编译的 ImmortalWrt 固件 (旁路由极简版)
-            - 版本: ${{ github.event.inputs.immortalwrt_version }}
-            - 设备: ${{ github.event.inputs.device_board }}
-            - 内核: ${{ github.event.inputs.kernel_version }}
+            Auto-built ImmortalWrt firmware
+            - Version: ${{ github.event.inputs.immortalwrt_version }}
+            - Device: ${{ github.event.inputs.device_board }}
+            - Kernel: ${{ github.event.inputs.kernel_version }}
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
