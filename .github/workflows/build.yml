@@ -1,4 +1,4 @@
-name: Build ImmortalWrt system S905X3
+name: Build ImmortalWrt 24.10 system S905X3
 
 on:
   workflow_dispatch:
