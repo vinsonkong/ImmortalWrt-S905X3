@@ -6,7 +6,7 @@ on:
       immortalwrt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '23.05.4'
+        default: '24.10.6'
         type: choice
         options:
           - 23.05.0
