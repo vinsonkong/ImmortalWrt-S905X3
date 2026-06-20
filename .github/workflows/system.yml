@@ -128,6 +128,8 @@ jobs:
             mv "../${{ env.DIY_SCRIPT }}" "${{ env.DIY_SCRIPT }}"
             chmod +x ${{ env.DIY_SCRIPT }}
             ./${{ env.DIY_SCRIPT }}
+          else
+            echo "⚠️ 未找到 diy.sh，跳过自定义配置注入。"
           fi
 
       - name: Generate Architecture Config
@@ -157,6 +159,12 @@ jobs:
             cat "../${{ env.CONFIG_FILE }}" >> .config
           fi
           make defconfig
+          
+          echo "=== 最终生成的 .config 中启用的包数量 ==="
+          grep "=y" .config | wc -l
+          echo "=== 软件包数 ==="
+          grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
+
           echo "=== 关键插件状态诊断 ==="
           for pkg in luci-app-amlogic luci-app-socat luci-app-zerotier luci-theme-argon; do
             STATUS=$(grep "^CONFIG_PACKAGE_${pkg}=" .config || echo "NOT_FOUND")
