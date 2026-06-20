@@ -48,7 +48,7 @@ on:
           - 6.1.y_6.18.y
 
 env:
-  CONFIG_FILE: .config
+  CONFIG_FILE: seed.config
   DIY_SCRIPT: diy.sh
   TZ: Asia/Shanghai
 
@@ -156,10 +156,6 @@ EOF
           if [ -f "../${{ env.CONFIG_FILE }}" ]; then
             cat "../${{ env.CONFIG_FILE }}" >> .config
           fi
-          
-          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
-          echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
-          echo "CONFIG_TARGET_ROOTFS_CPIOGZ=y" >> .config
     
           make defconfig
           
@@ -183,7 +179,6 @@ EOF
       - name: Find rootfs path (Dynamic)
         id: find_rootfs
         run: |
-          # ⭐ 智能查找 rootfs，完美兼容 armvirt/64 和 armsr/armv8
           ROOTFS_PATH=$(find openwrt/bin/targets -name "*rootfs.tar.gz" | head -n 1)
           if [ -z "$ROOTFS_PATH" ]; then
             echo "❌ 未找到 rootfs.tar.gz，编译可能失败！"
@@ -196,7 +191,6 @@ EOF
         if: steps.compile.outputs.status == 'success'
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
-          # ⭐ 使用动态获取的路径
           openwrt_path: ${{ env.ROOTFS_FILE }}
           openwrt_board: ${{ github.event.inputs.device_board }}
           openwrt_kernel: ${{ github.event.inputs.kernel_version }}
