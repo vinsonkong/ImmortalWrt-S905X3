@@ -1,6 +1,6 @@
 #!/bin/bash
 # =========================================================
-# diy.sh - 综合自定义脚本 (兼容 23.05 & 24.10)
+# diy.sh - 综合自定义脚本 
 # =========================================================
 
 echo "🚀 1. 开始执行 Target 层白名单清理..."
@@ -48,7 +48,7 @@ mkdir -p package/base-files/files/etc/uci-defaults
 cat <<'SCRIPT_EOF' > package/base-files/files/etc/uci-defaults/99-custom-settings
 #!/bin/sh
 # =========================================================
-# 旁路由初始化脚本 (兼容 23.05 ifname 与 24.10 device 模型)
+# 旁路由初始化脚本 
 # =========================================================
 
 # --- 1. 网络配置 (旁路由核心) ---
@@ -66,7 +66,6 @@ uci -q delete network.lan.dns
 uci -q add_list network.lan.dns='223.5.5.5'
 uci -q add_list network.lan.dns='114.114.114.114'
 uci -q add_list network.lan.dns='8.8.8.8'
-
 uci -q set network.lan.delegate='0'
 
 # --- 2. IPv6 穿透配置 ---
@@ -95,22 +94,11 @@ uci -q set system.@system[0].zonename='Asia/Shanghai'
 uci -q set system.@system[0].timezone='CST-8'
 uci commit system
 
-# --- 5. 防火墙配置 (允许 IPv6 穿透) ---
-ZONE_IDX=$(uci show firewall | grep -E "name='lan'$" | cut -d'.' -f2 | cut -d'=' -f1 | head -n 1)
-if [ -n "$ZONE_IDX" ]; then
-    uci -q delete firewall.${ZONE_IDX}.network
-    uci add_list firewall.${ZONE_IDX}.network='lan'
-    uci add_list firewall.${ZONE_IDX}.network='lan6'
-    uci commit firewall
-fi
-
-# --- 6. 应用配置 ---
-/etc/init.d/network restart
-/etc/init.d/firewall restart
-
-exit 0
+# --- 5. 时区软链接 ---
+ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 SCRIPT_EOF
 
+# 给脚本添加执行权限
 chmod +x package/base-files/files/etc/uci-defaults/99-custom-settings
 
-echo "🎉 DIY 脚本全部执行完毕！"
+echo " diy.sh 执行完毕"
