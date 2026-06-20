@@ -157,6 +157,8 @@ jobs:
           cd openwrt
           if [ -f "../${{ env.CONFIG_FILE }}" ]; then
             cat "../${{ env.CONFIG_FILE }}" >> .config
+          else
+            echo "⚠️ Warning: ${{ env.CONFIG_FILE }} not found!"
           fi
           make defconfig
           
