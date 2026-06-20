@@ -127,23 +127,20 @@ jobs:
         run: |
           cd openwrt
           VERSION="${{ github.event.inputs.immortalwrt_version }}"
-          cat >> .config <<ARCH_EOF
-CONFIG_ARCH_64BIT=y
-CONFIG_aarch64=y
-CONFIG_CPU_TYPE="cortex-a55"
-ARCH_EOF
+          
+          # 使用 echo 替代 <<EOF，彻底避免 YAML 缩进冲突
+          echo "CONFIG_ARCH_64BIT=y" >> .config
+          echo "CONFIG_aarch64=y" >> .config
+          echo 'CONFIG_CPU_TYPE="cortex-a55"' >> .config
+          
           if [[ "$VERSION" == 24.* ]] || [[ "$VERSION" == 25.* ]]; then
             echo "Detected 24.10+ version, using armsr/armv8"
-            cat >> .config <<TARGET_EOF
-CONFIG_TARGET_armsr=y
-CONFIG_TARGET_armsr_armv8=y
-TARGET_EOF
+            echo "CONFIG_TARGET_armsr=y" >> .config
+            echo "CONFIG_TARGET_armsr_armv8=y" >> .config
           else
             echo "Detected 23.05 version, using armvirt/64"
-            cat >> .config <<TARGET_EOF
-CONFIG_TARGET_armvirt=y
-CONFIG_TARGET_armvirt_64=y
-TARGET_EOF
+            echo "CONFIG_TARGET_armvirt=y" >> .config
+            echo "CONFIG_TARGET_armvirt_64=y" >> .config
           fi
 
       - name: Load custom configuration and defconfig
