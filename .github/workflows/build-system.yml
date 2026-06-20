@@ -192,8 +192,7 @@ jobs:
         if: steps.compile.outputs.status == 'success'
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
-          # ⭐ 修复：移除通配符，使用精确文件名匹配 armvirt rootfs
-          openwrt_path: openwrt/bin/targets/armvirt/64/*.tar.gz
+          openwrt_path: openwrt/bin/targets/armsr/armv8/*rootfs.tar.gz
           openwrt_board: ${{ github.event.inputs.device_board }}
           openwrt_kernel: ${{ github.event.inputs.kernel_version }}
           auto_kernel: true
