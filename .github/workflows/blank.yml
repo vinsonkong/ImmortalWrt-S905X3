@@ -1,0 +1,221 @@
+name: Build ImmortalWrt system S905X3
+
+on:
+  workflow_dispatch:
+    inputs:
+      immortalwrt_version:
+        description: 'ImmortalWrt Version'
+        required: true
+        default: '24.10.6'
+        type: choice
+        options:
+          - 23.05.0
+          - 23.05.1
+          - 23.05.2
+          - 23.05.3
+          - 23.05.4
+          - 23.05.5
+          - 23.05.6
+          - 23.05.7
+          - 24.10.0
+          - 24.10.1
+          - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
+          - 25.12.0
+      device_board:
+        description: 'Device Board'
+        required: true
+        default: 's905x3'
+      kernel_version:
+        description: 'Kernel Branch (ophub/kernel)'
+        required: true
+        default: '6.18.y'
+        type: choice
+        options:
+          - 5.10.y
+          - 5.15.y
+          - 6.1.y
+          - 6.6.y
+          - 6.12.y
+          - 6.18.y
+          - 5.10.y_5.15.y
+          - 6.1.y_6.6.y
+          - 6.12.y_6.18.y
+          - 6.1.y_6.12.y
+          - 6.1.y_6.18.y
+
+env:
+  CONFIG_FILE: .config
+  DIY_SCRIPT: diy.sh
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build for ${{ github.event.inputs.device_board }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Swap File (Prevent Memory Overflow)
+        run: |
+          if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
+            sudo fallocate -l 4G /mnt/swapfile
+            sudo chmod 600 /mnt/swapfile
+            sudo mkswap /mnt/swapfile
+            sudo swapon /mnt/swapfile
+          fi
+          free -h
+
+      - name: Install dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo timedatectl set-timezone "$TZ"
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq full-upgrade -y
+          sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+      
+      - name: Free up disk space (CRITICAL)
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
+          docker rmi $(docker images -q) || true
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/* /tmp/*
+      
+      - name: Clone ImmortalWrt source code
+        run: |
+          VERSION=${{ github.event.inputs.immortalwrt_version }}
+          git clone --depth 1 -b v${VERSION} https://github.com/immortalwrt/immortalwrt.git openwrt || \
+          git clone --depth 1 -b openwrt-${VERSION%.*} https://github.com/immortalwrt/immortalwrt.git openwrt || \
+          git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
+          echo "OPENWRT_PATH=$PWD/openwrt" >> $GITHUB_ENV
+
+      - name: Clone specific plugins (No Feeds)
+        run: |
+          cd openwrt/package
+          mkdir -p custom_plugins
+          cd custom_plugins
+          git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git
+          git clone --depth 1 https://github.com/kenzok8/small-package.git temp_repo
+          [ -d "temp_repo/luci-app-socat" ] && mv temp_repo/luci-app-socat .
+          [ -d "temp_repo/socat" ] && mv temp_repo/socat .
+          rm -rf temp_repo
+
+      - name: Update & Install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Run DIY script
+        run: |
+          cd openwrt
+          if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
+            mv "../${{ env.DIY_SCRIPT }}" "${{ env.DIY_SCRIPT }}"
+            chmod +x ${{ env.DIY_SCRIPT }}
+            ./${{ env.DIY_SCRIPT }}
+          fi
+
+      - name: Generate Architecture Config (Dynamic)
+        run: |
+          cd openwrt
+          VERSION="${{ github.event.inputs.immortalwrt_version }}"
+          
+          # 基础架构配置 (ARM64)
+          cat >> .config <<EOF
+CONFIG_ARCH_64BIT=y
+CONFIG_aarch64=y
+CONFIG_CPU_TYPE="cortex-a55"
+EOF
+
+          # ⭐ 核心：根据版本动态注入 Target (24.10+ 使用 armsr，23.05 使用 armvirt)
+          if [[ "$VERSION" == 24.* ]] || [[ "$VERSION" == 25.* ]]; then
+            echo "✅ 检测到 24.10+ 版本，使用 armsr/armv8 架构"
+            cat >> .config <<EOF
+CONFIG_TARGET_armsr=y
+CONFIG_TARGET_armsr_armv8=y
+EOF
+          else
+            echo "✅ 检测到 23.05 版本，使用 armvirt/64 架构"
+            cat >> .config <<EOF
+CONFIG_TARGET_armvirt=y
+CONFIG_TARGET_armvirt_64=y
+EOF
+          fi
+
+      - name: Load custom configuration & defconfig
+        run: |
+          cd openwrt
+          if [ -f "../${{ env.CONFIG_FILE }}" ]; then
+            cat "../${{ env.CONFIG_FILE }}" >> .config
+          fi
+          
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
+          echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_CPIOGZ=y" >> .config
+    
+          make defconfig
+          
+          echo "=== 检查关键插件状态 ==="
+          grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
+
+      - name: Download package
+        run: |
+          cd openwrt
+          make download -j8
+          find dl -size -1024c -exec ls -l {} \;
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Compile the firmware
+        id: compile
+        run: |
+          cd openwrt
+          make -j$(nproc) || make -j1 V=s
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Find rootfs path (Dynamic)
+        id: find_rootfs
+        run: |
+          # ⭐ 智能查找 rootfs，完美兼容 armvirt/64 和 armsr/armv8
+          ROOTFS_PATH=$(find openwrt/bin/targets -name "*rootfs.tar.gz" | head -n 1)
+          if [ -z "$ROOTFS_PATH" ]; then
+            echo "❌ 未找到 rootfs.tar.gz，编译可能失败！"
+            exit 1
+          fi
+          echo "ROOTFS_FILE=$ROOTFS_PATH" >> $GITHUB_ENV
+          echo "✅ 找到 rootfs: $ROOTFS_PATH"
+
+      - name: Package Amlogic Firmware with ophub
+        if: steps.compile.outputs.status == 'success'
+        uses: ophub/amlogic-s9xxx-openwrt@main
+        with:
+          # ⭐ 使用动态获取的路径
+          openwrt_path: ${{ env.ROOTFS_FILE }}
+          openwrt_board: ${{ github.event.inputs.device_board }}
+          openwrt_kernel: ${{ github.event.inputs.kernel_version }}
+          auto_kernel: true
+          builder_name: ImmortalWrt
+
+      - name: Upload Firmware to Release
+        uses: softprops/action-gh-release@v2
+        if: success() 
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: ImmortalWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          body: |
+            自动编译的 ImmortalWrt 固件 (旁路由极简版)
+            - 版本: ${{ github.event.inputs.immortalwrt_version }}
+            - 设备: ${{ github.event.inputs.device_board }}
+            - 内核: ${{ github.event.inputs.kernel_version }}
+          files: |
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
