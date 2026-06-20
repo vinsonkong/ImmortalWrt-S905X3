@@ -41,7 +41,7 @@ on:
 
 env:
   CONFIG_FILE: .config24
-  DIY_SCRIPT: diy24.sh
+  DIY_SCRIPT: diy.sh
   TZ: Asia/Shanghai
 
 jobs:
