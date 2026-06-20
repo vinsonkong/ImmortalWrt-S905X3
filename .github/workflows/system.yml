@@ -102,11 +102,18 @@ jobs:
           cd openwrt/package
           mkdir -p custom_plugins
           cd custom_plugins
+          
+          echo "=== 1. 克隆 luci-app-amlogic (ophub 官方) ==="
           git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git
+          
+          echo "=== 2. 提取 luci-app-socat (从 kenzok8 精准剥离) ==="
           git clone --depth 1 https://github.com/kenzok8/small-package.git temp_repo
           [ -d "temp_repo/luci-app-socat" ] && mv temp_repo/luci-app-socat .
           [ -d "temp_repo/socat" ] && mv temp_repo/socat .
           rm -rf temp_repo
+          
+          echo "=== 当前 custom_plugins 目录下的插件 ==="
+          ls -l
 
       - name: Update and Install feeds
         run: |
