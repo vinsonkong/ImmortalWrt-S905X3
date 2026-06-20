@@ -24,7 +24,7 @@ on:
       kernel_version:
         description: 'Kernel Branch (ophub/kernel)'
         required: true
-        default: '6.6.y'
+        default: '6.18.y'
         type: choice
         options:
           - 5.10.y
