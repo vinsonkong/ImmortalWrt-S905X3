@@ -1,76 +1,67 @@
-=========================================================
-ImmortalWrt 24.10 极简旁路由种子配置 (Seed Config)
-架构: ARM64 (armsr/armv8) - 用于 ophub 打包 S905X3
-⚠️ 这是 seed config，使用后必须执行 make defconfig
-=========================================================
 
---- 核心目标平台 (ImmortalWrt 24.10 固定使用 armsr) ---
+#--- 核心目标平台 (ImmortalWrt 24.10 固定使用 armsr) ---
 CONFIG_TARGET_armsr=y
 CONFIG_TARGET_armsr_armv8=y
-CONFIG_TARGET_armsr_armv7 is not set
+# CONFIG_TARGET_armsr_armv7 is not set
 
---- 强制禁用其他架构 (防止 defconfig 回退) ---
-CONFIG_TARGET_x86 is not set
-CONFIG_TARGET_x86_64 is not set
-CONFIG_TARGET_armvirt is not set
-CONFIG_TARGET_armvirt_64 is not set
+#--- 强制禁用其他架构 (防止 defconfig 回退) ---
+# CONFIG_TARGET_x86 is not set
+# CONFIG_TARGET_x86_64 is not set
+# CONFIG_TARGET_armvirt is not set
+# CONFIG_TARGET_armvirt_64 is not set
 
---- 根文件系统输出格式 (ophub 打包必需) ---
+
+# --- 根文件系统输出格式 (ophub 打包必需) ---
 CONFIG_TARGET_ROOTFS_TARGZ=y
 CONFIG_TARGET_ROOTFS_CPIOGZ=y
 CONFIG_TARGET_ROOTFS_PARTSIZE=1024
-CONFIG_TARGET_ROOTFS_EXT4FS is not set
-CONFIG_TARGET_ROOTFS_SQUASHFS is not set
-CONFIG_TARGET_ROOTFS_INITRAMFS is not set
+# CONFIG_TARGET_ROOTFS_EXT4FS is not set
+# CONFIG_TARGET_ROOTFS_SQUASHFS is not set
+# CONFIG_TARGET_ROOTFS_INITRAMFS is not set
 
---- 基础架构确认 ---
-CONFIG_ARCH_64BIT=y
-CONFIG_aarch64=y
-CONFIG_CPU_TYPE="cortex-a55"
-
---- 主题配置 ---
+# --- 主题配置 ---
 CONFIG_PACKAGE_luci-theme-argon=y
 CONFIG_PACKAGE_luci-app-argon-config=y
-CONFIG_PACKAGE_luci-theme-bootstrap is not set
+# CONFIG_PACKAGE_luci-theme-bootstrap is not set
 
---- Amlogic & 第三方插件 ---
+# --- Amlogic & 第三方插件 ---
 CONFIG_PACKAGE_luci-app-amlogic=y
 CONFIG_PACKAGE_luci-i18n-amlogic-zh-cn=y
 CONFIG_PACKAGE_luci-app-socat=y
 CONFIG_PACKAGE_luci-i18n-socat-zh-cn=y
 CONFIG_PACKAGE_socat=y
 
---- 官方 Feeds 插件 ---
+# --- 官方 Feeds 插件 ---
 CONFIG_PACKAGE_luci-app-zerotier=y
 CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y
 
-================= 基础 UI =================
+# ================= 基础 UI =================
 CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-base=y
 CONFIG_PACKAGE_luci-compat=y
 
-================= 系统与监控工具 =================
+# ================= 系统与监控工具 =================
 CONFIG_PACKAGE_luci-app-ttyd=y
 CONFIG_PACKAGE_luci-app-statistics=y
 CONFIG_PACKAGE_luci-app-nlbwmon=y
 CONFIG_PACKAGE_htop=y
 CONFIG_PACKAGE_iperf3=y
 
-================= 网络与共享服务 =================
-CONFIG_PACKAGE_luci-app-upnp is not set
-CONFIG_PACKAGE_luci-app-ddns is not set
+# ================= 网络与共享服务 =================
+# CONFIG_PACKAGE_luci-app-upnp is not set
+# CONFIG_PACKAGE_luci-app-ddns is not set
 CONFIG_PACKAGE_luci-app-wol=y
 CONFIG_PACKAGE_luci-app-samba4=y
 CONFIG_PACKAGE_luci-app-firewall=y
 
-================= 存储与下载工具 =================
+# ================= 存储与下载工具 =================
 CONFIG_PACKAGE_luci-app-dockerman=y
 CONFIG_PACKAGE_dockerd=y
 CONFIG_PACKAGE_luci-app-aria2=y
 CONFIG_PACKAGE_aria2=y
 CONFIG_PACKAGE_luci-app-commands=y
 
-================= USB 与文件系统支持 =================
+# ================= USB 与文件系统支持 =================
 CONFIG_PACKAGE_kmod-usb-storage=y
 CONFIG_PACKAGE_kmod-usb-storage-uas=y
 CONFIG_PACKAGE_kmod-fs-ext4=y
@@ -78,13 +69,13 @@ CONFIG_PACKAGE_kmod-fs-ntfs=y
 CONFIG_PACKAGE_ntfs-3g=y
 CONFIG_PACKAGE_block-mount=y
 
-================= 基础网络组件 =================
+# ================= 基础网络组件 =================
 CONFIG_IPV6=y
 CONFIG_PACKAGE_ipv6helper=y
 CONFIG_PACKAGE_curl=y
 CONFIG_PACKAGE_wget=y
 
---- 无线网络支持 (仅保留通用框架) ---
+# --- 无线网络支持 (仅保留通用框架) ---
 CONFIG_PACKAGE_kmod-cfg80211=y
 CONFIG_PACKAGE_kmod-mac80211=y
 CONFIG_PACKAGE_wpad-openssl=y
@@ -92,13 +83,13 @@ CONFIG_PACKAGE_iw=y
 CONFIG_PACKAGE_wireless-tools=y
 CONFIG_PACKAGE_hostapd-common=y
 
-================= 额外插件 =================
+# ================= 额外插件 =================
 CONFIG_PACKAGE_luci-app-ddns-go=y
 CONFIG_PACKAGE_luci-app-hd-idle=y
 CONFIG_PACKAGE_luci-app-p910nd=y
 CONFIG_PACKAGE_luci-app-package-manager=y
 
-================= 中文语言包 =================
+# ================= 中文语言包 =================
 CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-ddns-go-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-dockerman-zh-cn=y
@@ -111,7 +102,7 @@ CONFIG_PACKAGE_luci-i18n-filebrowser-go-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-nfs-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-aria2-zh-cn=y
 
-================= Other Configuration =================
+# ================= Other Configuration =================
 CONFIG_BUSYBOX_DEFAULT_FALLOCATE=y
 CONFIG_PACKAGE_kmod-virtio-net=y
 CONFIG_PACKAGE_kmod-virtio-blk=y
