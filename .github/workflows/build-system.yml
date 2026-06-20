@@ -9,6 +9,14 @@ on:
         default: '24.10.6'
         type: choice
         options:
+          - 23.05.0
+          - 23.05.1
+          - 23.05.2
+          - 23.05.3
+          - 23.05.4
+          - 23.05.5
+          - 23.05.6
+          - 23.05.7
           - 24.10.0
           - 24.10.1
           - 24.10.2
@@ -56,14 +64,10 @@ jobs:
       - name: Create Swap File (Prevent Memory Overflow)
         run: |
           if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
-            echo "No active swap found. Creating 4G swap..."
             sudo fallocate -l 4G /mnt/swapfile
             sudo chmod 600 /mnt/swapfile
             sudo mkswap /mnt/swapfile
             sudo swapon /mnt/swapfile
-          else
-            echo "Swap already active:"
-            swapon --show
           fi
           free -h
 
@@ -80,14 +84,10 @@ jobs:
       
       - name: Free up disk space (CRITICAL)
         run: |
-          echo "=== Before cleanup ==="
-          df -hT
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
           docker rmi $(docker images -q) || true
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
-          echo "=== After cleanup ==="
-          df -hT
       
       - name: Clone ImmortalWrt source code
         run: |
@@ -102,18 +102,11 @@ jobs:
           cd openwrt/package
           mkdir -p custom_plugins
           cd custom_plugins
-
-          echo "=== 1. 克隆 luci-app-amlogic (ophub 官方) ==="
           git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git
-          
-          echo "=== 2. 提取 luci-app-socat (从 kenzok8 精准剥离) ==="
           git clone --depth 1 https://github.com/kenzok8/small-package.git temp_repo
           [ -d "temp_repo/luci-app-socat" ] && mv temp_repo/luci-app-socat .
           [ -d "temp_repo/socat" ] && mv temp_repo/socat .
           rm -rf temp_repo
-          
-          echo "=== 当前 custom_plugins 目录下的插件 ==="
-          ls -l
 
       - name: Update & Install feeds
         run: |
@@ -121,47 +114,55 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Run DIY script (Clean Target & Inject Configs)
+      - name: Run DIY script
         run: |
           cd openwrt
           if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
             mv "../${{ env.DIY_SCRIPT }}" "${{ env.DIY_SCRIPT }}"
             chmod +x ${{ env.DIY_SCRIPT }}
             ./${{ env.DIY_SCRIPT }}
-          else
-            echo "⚠️ 未找到 diy.sh，跳过自定义配置注入。"
           fi
 
-      - name: Load custom configuration
+      - name: Generate Architecture Config (Dynamic)
         run: |
           cd openwrt
+          VERSION="${{ github.event.inputs.immortalwrt_version }}"
           
-          # 读取仓库根目录的 .config 种子文件
-          if [ -f "../${{ env.CONFIG_FILE }}" ]; then
-            echo "✅ 找到自定义 .config，正在应用..."
-            cp "../${{ env.CONFIG_FILE }}" .config
+          # 基础架构配置 (ARM64)
+          cat >> .config <<EOF
+CONFIG_ARCH_64BIT=y
+CONFIG_aarch64=y
+CONFIG_CPU_TYPE="cortex-a55"
+EOF
+
+          # ⭐ 核心：根据版本动态注入 Target (24.10+ 使用 armsr，23.05 使用 armvirt)
+          if [[ "$VERSION" == 24.* ]] || [[ "$VERSION" == 25.* ]]; then
+            echo "✅ 检测到 24.10+ 版本，使用 armsr/armv8 架构"
+            cat >> .config <<EOF
+CONFIG_TARGET_armsr=y
+CONFIG_TARGET_armsr_armv8=y
+EOF
           else
-            echo "⚠️ 未找到 .config 文件，将使用 ImmortalWrt 默认配置！"
+            echo "✅ 检测到 23.05 版本，使用 armvirt/64 架构"
+            cat >> .config <<EOF
+CONFIG_TARGET_armvirt=y
+CONFIG_TARGET_armvirt_64=y
+EOF
           fi
 
-          # 强制将 rootfs 分区大小设置为 1024MB (防止 Docker/Samba 撑爆空间)
-          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
-
-          # ⭐ 强制追加关键配置（防止被 defconfig 覆盖）
+      - name: Load custom configuration & defconfig
+        run: |
+          cd openwrt
+          if [ -f "../${{ env.CONFIG_FILE }}" ]; then
+            cat "../${{ env.CONFIG_FILE }}" >> .config
+          fi
+          
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
           echo "CONFIG_TARGET_ROOTFS_TARGZ=y" >> .config
           echo "CONFIG_TARGET_ROOTFS_CPIOGZ=y" >> .config
     
-          # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
           make defconfig
           
-          # 输出最终启用的包数量，方便排查
-          echo "=== 最终生成的 .config 中启用的包数量 ==="
-          grep "=y" .config | wc -l
-          echo "=== 软件包数 ==="
-          grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
-
-          # 检查关键插件是否成功被选中
           echo "=== 检查关键插件状态 ==="
           grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
 
@@ -176,27 +177,32 @@ jobs:
         id: compile
         run: |
           cd openwrt
-          echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Find rootfs path (Dynamic)
+        id: find_rootfs
+        run: |
+          # ⭐ 智能查找 rootfs，完美兼容 armvirt/64 和 armsr/armv8
+          ROOTFS_PATH=$(find openwrt/bin/targets -name "*rootfs.tar.gz" | head -n 1)
+          if [ -z "$ROOTFS_PATH" ]; then
+            echo "❌ 未找到 rootfs.tar.gz，编译可能失败！"
+            exit 1
+          fi
+          echo "ROOTFS_FILE=$ROOTFS_PATH" >> $GITHUB_ENV
+          echo "✅ 找到 rootfs: $ROOTFS_PATH"
 
       - name: Package Amlogic Firmware with ophub
         if: steps.compile.outputs.status == 'success'
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
-          openwrt_path: openwrt/bin/targets/armsr/armv8/*rootfs.tar.gz
+          # ⭐ 使用动态获取的路径
+          openwrt_path: ${{ env.ROOTFS_FILE }}
           openwrt_board: ${{ github.event.inputs.device_board }}
           openwrt_kernel: ${{ github.event.inputs.kernel_version }}
           auto_kernel: true
           builder_name: ImmortalWrt
 
-      - name: Upload Firmware to Artifact
-        uses: actions/upload-artifact@v4
-        if: steps.compile.outputs.status == 'success'
-        with:
-          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
-          path: ${{ env.PACKAGED_OUTPUTPATH }}
-      
       - name: Upload Firmware to Release
         uses: softprops/action-gh-release@v2
         if: success() 
@@ -210,9 +216,6 @@ jobs:
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
             - 设备: ${{ github.event.inputs.device_board }}
             - 内核: ${{ github.event.inputs.kernel_version }}
-            - 默认 IP: 192.168.30.254 (旁路由模式，已关 DHCP)
-            - 主题: Argon
-            - 插件: Amlogic, Socat, ZeroTier
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
