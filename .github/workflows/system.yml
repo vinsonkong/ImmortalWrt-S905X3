@@ -150,6 +150,11 @@ jobs:
             cat "../${{ env.CONFIG_FILE }}" >> .config
           fi
           make defconfig
+          echo "=== 关键插件状态诊断 ==="
+          for pkg in luci-app-amlogic luci-app-socat luci-app-zerotier luci-theme-argon; do
+            STATUS=$(grep "^CONFIG_PACKAGE_${pkg}=" .config || echo "NOT_FOUND")
+            echo "  ${pkg}: ${STATUS}"
+          done
           echo "=== Check key plugins ==="
           grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "Warning: Some key plugins not selected!"
 
