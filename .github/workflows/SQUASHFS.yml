@@ -307,8 +307,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.run_id }}
-          name: ImmortalWrt ${{ github.event.inputs.immortalwrt_version }} for ${{ github.event.inputs.device_board }}
+          tag_name: ImmortalWrtSQUASHFS-${{ github.event.inputs.immortalwrt_version }}-${{ github.run_id }}
+          name: ImmortalWrtSQUASHFS ${{ github.event.inputs.immortalwrt_version }} for ${{ github.event.inputs.device_board }}
           body: |
             ### ImmortalWrt 固件信息
             - **版本**: ${{ github.event.inputs.immortalwrt_version }}
