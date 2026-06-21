@@ -1,4 +1,4 @@
-name: Build ImmortalWrt 24.10 S905X3
+name: Build IWrt 24.10 SQUASHFS S905X3
 
 on:
   workflow_dispatch:
