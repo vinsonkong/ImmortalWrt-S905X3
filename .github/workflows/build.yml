@@ -199,8 +199,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ImmortalWrt24.10-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
-          name: IWrt24.10 S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          tag_name: IWrt24.10-${{ github.event.inputs.immortalwrt_version }}
+          name: IWrt24.10 S905X3 ${{ github.event.inputs.immortalwrt_version }}
           body: |
             自动编译的 ImmortalWrt 固件 (旁路由极简版)
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
