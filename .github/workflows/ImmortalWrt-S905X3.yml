@@ -117,9 +117,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           # 自动生成一个唯一的 Tag 名称
-          tag_name: IWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
+          tag_name: IWrt-image-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
           # Release 的标题
-          name: IWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          name: IWrt-image S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           # Release 的描述正文
           body: |
             自动编译的 ImmortalWrt 固件
