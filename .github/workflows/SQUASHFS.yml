@@ -1,4 +1,4 @@
-name: Build IWrt 24.10 SQUASHFS S905X3
+name: Build IWrt SQUASHFS 24.10 S905X3
 
 on:
   workflow_dispatch:
@@ -132,51 +132,43 @@ jobs:
             echo "⚠️ 未找到 diy.sh，跳过自定义配置注入。"
           fi
 
-      - name: Load custom configuration & Enable SquashFS
+      - name: Load custom configuration & Force SquashFS
         run: |
           cd openwrt
           
-          # 读取仓库根目录的 .config 种子文件
+          # 1. 应用自定义 .config
           if [ -f "../${{ env.CONFIG_FILE }}" ]; then
             echo "✅ 找到自定义 .config，正在应用..."
             cp "../${{ env.CONFIG_FILE }}" .config
           else
-            echo "⚠️ 未找到 .config 文件，将使用 ImmortalWrt 默认配置！"
-            make defconfig
+            echo "⚠️ 未找到 .config 文件，将使用默认配置！"
           fi
 
-          # 强制将 rootfs 分区大小设置为 1024MB (对 ext4 有效，对 squashfs 仅作为参考上限)
+          # 2. 第一次 defconfig，让系统解析基础依赖
+          make defconfig
+
+          # 3. ⭐ 核心：强制覆盖文件系统配置（防止 armsr 默认值回退到 ext4）
+          echo "=== 强制注入 SquashFS 配置 ==="
+          # 彻底干掉 ext4
+          sed -i 's/^CONFIG_TARGET_ROOTFS_EXT4FS=y/# CONFIG_TARGET_ROOTFS_EXT4FS is not set/' .config
+          # 强制开启 squashfs
+          sed -i 's/^# CONFIG_TARGET_ROOTFS_SQUASHFS is not set/CONFIG_TARGET_ROOTFS_SQUASHFS=y/' .config
+          
+          # 追加确保配置存在
+          echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
+          echo "CONFIG_SQUASHFS_XZ=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_SQUASHFS_BLOCK_SIZE=256" >> .config
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
           
-          # ================= 核心修改：强制启用 SquashFS 格式 =================
-          echo "=== 配置 SquashFS 文件系统 ==="
-          # 1. 启用 SquashFS
-          sed -i 's/^# CONFIG_TARGET_ROOTFS_SQUASHFS is not set/CONFIG_TARGET_ROOTFS_SQUASHFS=y/' .config
-          echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
-          
-          # 2. 禁用 Ext4 (避免生成多余的 ext4 镜像，节省编译时间和空间)
-          sed -i 's/^CONFIG_TARGET_ROOTFS_EXT4FS=y/# CONFIG_TARGET_ROOTFS_EXT4FS is not set/' .config
-          
-          # 3. 设置 SquashFS 压缩算法为 XZ (压缩率最高，非常适合电视盒子)
-          sed -i 's/^# CONFIG_SQUASHFS_XZ is not set/CONFIG_SQUASHFS_XZ=y/' .config
-          echo "CONFIG_SQUASHFS_XZ=y" >> .config
-          
-          # 4. 设置 SquashFS Block size (256k 是 emmc 设备的推荐值)
-          echo "CONFIG_TARGET_ROOTFS_SQUASHFS_BLOCK_SIZE=256" >> .config
-          # ====================================================================
-
-          # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
+          # 4. 第二次 defconfig，确保强制注入的配置生效且不破坏依赖
           make defconfig
-          
-          # 输出最终启用的包数量，方便排查
-          echo "=== 最终生成的 .config 中启用的包数量 ==="
-          grep "=y" .config | wc -l
-          echo "=== 软件包数 ==="
-          grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
 
-          # 检查关键插件和文件系统是否成功被选中
-          echo "=== 检查关键配置状态 ==="
-          grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon|CONFIG_TARGET_ROOTFS_SQUASHFS|CONFIG_SQUASHFS_XZ" .config | grep "=y" || echo "⚠️ 警告：部分关键配置未被成功选中！"
+          # 5. 验证最终配置
+          echo "=== 验证最终文件系统配置 ==="
+          grep -E "CONFIG_TARGET_ROOTFS_EXT4FS|CONFIG_TARGET_ROOTFS_SQUASHFS|CONFIG_SQUASHFS_XZ" .config
+          
+          echo "=== 检查关键插件状态 ==="
+          grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
 
       - name: Download package
         run: |
@@ -202,6 +194,105 @@ jobs:
           openwrt_kernel: ${{ github.event.inputs.kernel_version }}
           auto_kernel: true
           builder_name: ImmortalWrt
+
+      - name: Verify SquashFS Format (Quality Gate)
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          echo "=========================================="
+          echo "=== 🕵️ 开始验证固件文件系统格式 (Quality Gate) ==="
+          echo "=========================================="
+          
+          # 1. 查找 ophub 输出的固件文件
+          IMG_GZ_FILE=$(ls ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz 2>/dev/null | head -n 1)
+          IMG_FILE=$(ls ${{ env.PACKAGED_OUTPUTPATH }}/*.img 2>/dev/null | head -n 1)
+          IS_EXTRACTED=false
+          
+          # 如果只有 .img.gz，则解压出一份 .img 用于检测
+          if [ -n "$IMG_GZ_FILE" ] && [ -z "$IMG_FILE" ]; then
+            echo "发现压缩包: $IMG_GZ_FILE，正在解压以供检测..."
+            gunzip -k "$IMG_GZ_FILE"
+            IMG_FILE="${IMG_GZ_FILE%.gz}"
+            IS_EXTRACTED=true
+          fi
+
+          if [ -z "$IMG_FILE" ] || [ ! -f "$IMG_FILE" ]; then
+            echo "❌ 致命错误：未找到生成的 .img 固件文件！"
+            exit 1
+          fi
+
+          echo "🎯 目标固件文件: $IMG_FILE"
+          ls -lh "$IMG_FILE"
+          
+          # 辅助检测：检查文件名标识
+          if [[ "$IMG_FILE" == *"squashfs"* ]]; then
+            echo "✅ 文件名特征: 包含 'squashfs' 标识。"
+          elif [[ "$IMG_FILE" == *"ext4"* ]]; then
+            echo "❌ 文件名特征: 包含 'ext4' 标识！"
+          fi
+
+          # 2. 核心检测：使用 losetup 挂载镜像并读取分区表
+          echo ""
+          echo "--- 🔍 正在映射虚拟磁盘并分析分区 ---"
+          LOOP_DEV=$(sudo losetup -fP --show "$IMG_FILE")
+          echo "映射到循环设备: $LOOP_DEV"
+          
+          echo ""
+          echo "--- 📊 分区文件系统详情 (lsblk) ---"
+          lsblk -f "$LOOP_DEV"
+          echo "-----------------------------------"
+          
+          # 3. 判定 Rootfs 分区格式 (ophub 打包的 rootfs 通常在第 2 个分区，即 p2)
+          ROOTFS_PART="${LOOP_DEV}p2"
+          FINAL_STATUS="unknown"
+          
+          if [ -b "$ROOTFS_PART" ]; then
+            FS_TYPE=$(sudo blkid -s TYPE -o value "$ROOTFS_PART" 2>/dev/null)
+            echo "Rootfs 分区 ($ROOTFS_PART) 的文件系统类型为: [ $FS_TYPE ]"
+            
+            if [ "$FS_TYPE" = "squashfs" ]; then
+              echo "🎉 完美确认：Rootfs 分区确实是 SquashFS 格式！"
+              FINAL_STATUS="success"
+            elif [ "$FS_TYPE" = "ext4" ]; then
+              echo "⚠️ 警告：Rootfs 分区是 Ext4 格式！.config 注入可能失败或被覆盖。"
+              FINAL_STATUS="failed"
+            else
+              echo "⚠️ 未知文件系统类型: $FS_TYPE"
+            fi
+          else
+            echo "⚠️ 未找到预期的 p2 分区，尝试遍历所有分区..."
+            for part in ${LOOP_DEV}p*; do
+              if [ -b "$part" ]; then
+                FS_TYPE=$(sudo blkid -s TYPE -o value "$part" 2>/dev/null)
+                echo "分区 $part 格式: $FS_TYPE"
+                if [ "$FS_TYPE" = "squashfs" ]; then
+                  FINAL_STATUS="success"
+                fi
+              fi
+            done
+          fi
+          
+          # 4. 清理环境
+          sudo losetup -d "$LOOP_DEV"
+          echo "已卸载循环设备: $LOOP_DEV"
+          
+          # 清理临时解压的 .img 文件，避免被后续步骤重复上传
+          if [ "$IS_EXTRACTED" = true ] && [ -f "$IMG_FILE" ]; then
+            rm -f "$IMG_FILE"
+            echo "已清理临时解压的 .img 文件"
+          fi
+          
+          # 5. 门禁拦截
+          echo ""
+          echo "=========================================="
+          if [ "$FINAL_STATUS" = "success" ]; then
+            echo "✅ 质量门禁通过 (PASSED)：固件格式验证为 SquashFS！"
+            echo "=========================================="
+          else
+            echo "❌ 质量门禁拦截 (FAILED)：未检测到 SquashFS 格式！"
+            echo "请检查 .config 注入逻辑或 make defconfig 日志。"
+            echo "=========================================="
+            exit 1  # 触发 CI 失败，阻止上传错误固件
+          fi
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
