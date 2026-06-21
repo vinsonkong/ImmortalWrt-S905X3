@@ -132,7 +132,7 @@ jobs:
             echo "⚠️ 未找到 diy.sh，跳过自定义配置注入。"
           fi
 
-      - name: Load custom configuration & Force SquashFS
+      - name: Load custom configuration & FORCE SQUASHFS
         run: |
           cd openwrt
           
@@ -147,39 +147,30 @@ jobs:
           # 2. 第一次 defconfig，让系统解析基础依赖
           make defconfig
 
-          # 3. ⭐ 核心：强制覆盖文件系统配置（防止 armsr 默认值回退到 ext4）
-          echo "=== 强制注入 SquashFS 配置 ==="
-          # 彻底干掉 ext4
+          # 3. ⭐ 核心：彻底封杀 Ext4 和 BTRFS，强制 SquashFS
+          echo "=== 强制注入 SquashFS 并封杀 Ext4/BTRFS ==="
+          # 彻底干掉 ext4 和 btrfs
           sed -i 's/^CONFIG_TARGET_ROOTFS_EXT4FS=y/# CONFIG_TARGET_ROOTFS_EXT4FS is not set/' .config
+          sed -i 's/^CONFIG_TARGET_ROOTFS_BTRFS=y/# CONFIG_TARGET_ROOTFS_BTRFS is not set/' .config
           # 强制开启 squashfs
           sed -i 's/^# CONFIG_TARGET_ROOTFS_SQUASHFS is not set/CONFIG_TARGET_ROOTFS_SQUASHFS=y/' .config
           
-          # 追加确保配置存在
+          # 追加保底配置
           echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
           echo "CONFIG_SQUASHFS_XZ=y" >> .config
           echo "CONFIG_TARGET_ROOTFS_SQUASHFS_BLOCK_SIZE=256" >> .config
-          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
+          echo "# CONFIG_TARGET_ROOTFS_EXT4FS is not set" >> .config
+          echo "# CONFIG_TARGET_ROOTFS_BTRFS is not set" >> .config
           
-          # 4. 第二次 defconfig，确保强制注入的配置生效且不破坏依赖
+          # 4. 第二次 defconfig，确保强制注入的配置生效
           make defconfig
 
           # 5. 验证最终配置
           echo "=== 验证最终文件系统配置 ==="
-          grep -E "CONFIG_TARGET_ROOTFS_EXT4FS|CONFIG_TARGET_ROOTFS_SQUASHFS|CONFIG_SQUASHFS_XZ" .config
+          grep -E "ROOTFS_EXT4FS|ROOTFS_BTRFS|ROOTFS_SQUASHFS" .config
           
           echo "=== 检查关键插件状态 ==="
           grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
-
-          # 输出最终启用的包数量，方便排查
-          echo "=== 最终生成的 .config 中启用的包数量 ==="
-          grep "=y" .config | wc -l
-          echo "=== 软件包数 ==="
-          grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
-
-          # 检查关键插件是否成功被选中
-          echo "=== 检查关键插件状态 ==="
-          grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
-
 
       - name: Download package
         run: |
@@ -213,12 +204,10 @@ jobs:
           echo "=== 🕵️ 开始验证固件文件系统格式 (Quality Gate) ==="
           echo "=========================================="
           
-          # 1. 查找 ophub 输出的固件文件
           IMG_GZ_FILE=$(ls ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz 2>/dev/null | head -n 1)
           IMG_FILE=$(ls ${{ env.PACKAGED_OUTPUTPATH }}/*.img 2>/dev/null | head -n 1)
           IS_EXTRACTED=false
           
-          # 如果只有 .img.gz，则解压出一份 .img 用于检测
           if [ -n "$IMG_GZ_FILE" ] && [ -z "$IMG_FILE" ]; then
             echo "发现压缩包: $IMG_GZ_FILE，正在解压以供检测..."
             gunzip -k "$IMG_GZ_FILE"
@@ -234,14 +223,6 @@ jobs:
           echo "🎯 目标固件文件: $IMG_FILE"
           ls -lh "$IMG_FILE"
           
-          # 辅助检测：检查文件名标识
-          if [[ "$IMG_FILE" == *"squashfs"* ]]; then
-            echo "✅ 文件名特征: 包含 'squashfs' 标识。"
-          elif [[ "$IMG_FILE" == *"ext4"* ]]; then
-            echo "❌ 文件名特征: 包含 'ext4' 标识！"
-          fi
-
-          # 2. 核心检测：使用 losetup 挂载镜像并读取分区表
           echo ""
           echo "--- 🔍 正在映射虚拟磁盘并分析分区 ---"
           LOOP_DEV=$(sudo losetup -fP --show "$IMG_FILE")
@@ -252,7 +233,6 @@ jobs:
           lsblk -f "$LOOP_DEV"
           echo "-----------------------------------"
           
-          # 3. 判定 Rootfs 分区格式 (ophub 打包的 rootfs 通常在第 2 个分区，即 p2)
           ROOTFS_PART="${LOOP_DEV}p2"
           FINAL_STATUS="unknown"
           
@@ -261,13 +241,11 @@ jobs:
             echo "Rootfs 分区 ($ROOTFS_PART) 的文件系统类型为: [ $FS_TYPE ]"
             
             if [ "$FS_TYPE" = "squashfs" ]; then
-              echo "🎉 完美确认：Rootfs 分区确实是 SquashFS 格式！"
+              echo "🎉 完美确认：Rootfs 分区确实是 SquashFS 格式！LuCI 将显示恢复出厂按钮。"
               FINAL_STATUS="success"
-            elif [ "$FS_TYPE" = "ext4" ]; then
-              echo "⚠️ 警告：Rootfs 分区是 Ext4 格式！.config 注入可能失败或被覆盖。"
-              FINAL_STATUS="failed"
             else
-              echo "⚠️ 未知文件系统类型: $FS_TYPE"
+              echo "❌ 拦截：检测到 $FS_TYPE 格式！LuCI 将没有恢复出厂按钮。"
+              FINAL_STATUS="failed"
             fi
           else
             echo "⚠️ 未找到预期的 p2 分区，尝试遍历所有分区..."
@@ -282,17 +260,14 @@ jobs:
             done
           fi
           
-          # 4. 清理环境
           sudo losetup -d "$LOOP_DEV"
           echo "已卸载循环设备: $LOOP_DEV"
           
-          # 清理临时解压的 .img 文件，避免被后续步骤重复上传
           if [ "$IS_EXTRACTED" = true ] && [ -f "$IMG_FILE" ]; then
             rm -f "$IMG_FILE"
             echo "已清理临时解压的 .img 文件"
           fi
           
-          # 5. 门禁拦截
           echo ""
           echo "=========================================="
           if [ "$FINAL_STATUS" = "success" ]; then
@@ -300,9 +275,8 @@ jobs:
             echo "=========================================="
           else
             echo "❌ 质量门禁拦截 (FAILED)：未检测到 SquashFS 格式！"
-            echo "请检查 .config 注入逻辑或 make defconfig 日志。"
             echo "=========================================="
-            exit 1  # 触发 CI 失败，阻止上传错误固件
+            exit 1
           fi
 
       - name: Upload Firmware to Artifact
@@ -325,7 +299,7 @@ jobs:
             - **版本**: ${{ github.event.inputs.immortalwrt_version }}
             - **设备**: ${{ github.event.inputs.device_board }} (X96 Max)
             - **内核**: ${{ github.event.inputs.kernel_version }}
-            - **文件系统**: SquashFS (支持 LuCI 恢复出厂设置)
+            - **文件系统**: SquashFS (原生支持 LuCI 恢复出厂设置)
             - **构建 ID**: ${{ github.run_id }}
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
