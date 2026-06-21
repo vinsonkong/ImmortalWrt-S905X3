@@ -40,7 +40,7 @@ on:
           - 6.1.y_6.18.y
 
 env:
-  CONFIG_FILE: .config24
+  CONFIG_FILE: .configtest
   DIY_SCRIPT: diy.sh
   TZ: Asia/Shanghai
 
