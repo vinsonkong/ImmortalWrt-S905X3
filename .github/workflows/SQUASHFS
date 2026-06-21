@@ -1,0 +1,230 @@
+name: Build ImmortalWrt 24.10 S905X3
+
+on:
+  workflow_dispatch:
+    inputs:
+      immortalwrt_version:
+        description: 'ImmortalWrt Version'
+        required: true
+        default: '24.10.6'
+        type: choice
+        options:
+          - 24.10.0
+          - 24.10.1
+          - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
+          - 25.12.0
+      device_board:
+        description: 'Device Board'
+        required: true
+        default: 's905x3'
+      kernel_version:
+        description: 'Kernel Branch (ophub/kernel)'
+        required: true
+        default: '6.18.y'
+        type: choice
+        options:
+          - 5.10.y
+          - 5.15.y
+          - 6.1.y
+          - 6.6.y
+          - 6.12.y
+          - 6.18.y
+          - 5.10.y_5.15.y
+          - 6.1.y_6.6.y
+          - 6.12.y_6.18.y
+          - 6.1.y_6.12.y
+          - 6.1.y_6.18.y
+
+env:
+  CONFIG_FILE: .config24
+  DIY_SCRIPT: diy.sh
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build for ${{ github.event.inputs.device_board }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Swap File (Prevent Memory Overflow)
+        run: |
+          if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
+            echo "No active swap found. Creating 4G swap..."
+            sudo fallocate -l 4G /mnt/swapfile
+            sudo chmod 600 /mnt/swapfile
+            sudo mkswap /mnt/swapfile
+            sudo swapon /mnt/swapfile
+          else
+            echo "Swap already active:"
+            swapon --show
+          fi
+          free -h
+
+      - name: Install dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo timedatectl set-timezone "$TZ"
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq full-upgrade -y
+          sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+      
+      - name: Free up disk space (CRITICAL)
+        run: |
+          echo "=== Before cleanup ==="
+          df -hT
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
+          docker rmi $(docker images -q) || true
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/* /tmp/*
+          echo "=== After cleanup ==="
+          df -hT
+      
+      - name: Clone ImmortalWrt source code
+        run: |
+          VERSION=${{ github.event.inputs.immortalwrt_version }}
+          git clone --depth 1 -b v${VERSION} https://github.com/immortalwrt/immortalwrt.git openwrt || \
+          git clone --depth 1 -b openwrt-${VERSION%.*} https://github.com/immortalwrt/immortalwrt.git openwrt || \
+          git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
+          echo "OPENWRT_PATH=$PWD/openwrt" >> $GITHUB_ENV
+
+      - name: Clone specific plugins (No Feeds)
+        run: |
+          cd openwrt/package
+          mkdir -p custom_plugins
+          cd custom_plugins
+
+          echo "=== 1. 克隆 luci-app-amlogic (ophub 官方) ==="
+          git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git
+          
+          echo "=== 2. 提取 luci-app-socat (从 kenzok8 精准剥离) ==="
+          git clone --depth 1 https://github.com/kenzok8/small-package.git temp_repo
+          [ -d "temp_repo/luci-app-socat" ] && mv temp_repo/luci-app-socat .
+          [ -d "temp_repo/socat" ] && mv temp_repo/socat .
+          rm -rf temp_repo
+          
+          echo "=== 当前 custom_plugins 目录下的插件 ==="
+          ls -l
+
+      - name: Update & Install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Run DIY script (Clean Target & Inject Configs)
+        run: |
+          cd openwrt
+          if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
+            mv "../${{ env.DIY_SCRIPT }}" "${{ env.DIY_SCRIPT }}"
+            chmod +x ${{ env.DIY_SCRIPT }}
+            ./${{ env.DIY_SCRIPT }}
+          else
+            echo "⚠️ 未找到 diy.sh，跳过自定义配置注入。"
+          fi
+
+      - name: Load custom configuration & Enable SquashFS
+        run: |
+          cd openwrt
+          
+          # 读取仓库根目录的 .config 种子文件
+          if [ -f "../${{ env.CONFIG_FILE }}" ]; then
+            echo "✅ 找到自定义 .config，正在应用..."
+            cp "../${{ env.CONFIG_FILE }}" .config
+          else
+            echo "⚠️ 未找到 .config 文件，将使用 ImmortalWrt 默认配置！"
+            make defconfig
+          fi
+
+          # 强制将 rootfs 分区大小设置为 1024MB (对 ext4 有效，对 squashfs 仅作为参考上限)
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
+          
+          # ================= 核心修改：强制启用 SquashFS 格式 =================
+          echo "=== 配置 SquashFS 文件系统 ==="
+          # 1. 启用 SquashFS
+          sed -i 's/^# CONFIG_TARGET_ROOTFS_SQUASHFS is not set/CONFIG_TARGET_ROOTFS_SQUASHFS=y/' .config
+          echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
+          
+          # 2. 禁用 Ext4 (避免生成多余的 ext4 镜像，节省编译时间和空间)
+          sed -i 's/^CONFIG_TARGET_ROOTFS_EXT4FS=y/# CONFIG_TARGET_ROOTFS_EXT4FS is not set/' .config
+          
+          # 3. 设置 SquashFS 压缩算法为 XZ (压缩率最高，非常适合电视盒子)
+          sed -i 's/^# CONFIG_SQUASHFS_XZ is not set/CONFIG_SQUASHFS_XZ=y/' .config
+          echo "CONFIG_SQUASHFS_XZ=y" >> .config
+          
+          # 4. 设置 SquashFS Block size (256k 是 emmc 设备的推荐值)
+          echo "CONFIG_TARGET_ROOTFS_SQUASHFS_BLOCK_SIZE=256" >> .config
+          # ====================================================================
+
+          # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
+          make defconfig
+          
+          # 输出最终启用的包数量，方便排查
+          echo "=== 最终生成的 .config 中启用的包数量 ==="
+          grep "=y" .config | wc -l
+          echo "=== 软件包数 ==="
+          grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
+
+          # 检查关键插件和文件系统是否成功被选中
+          echo "=== 检查关键配置状态 ==="
+          grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon|CONFIG_TARGET_ROOTFS_SQUASHFS|CONFIG_SQUASHFS_XZ" .config | grep "=y" || echo "⚠️ 警告：部分关键配置未被成功选中！"
+
+      - name: Download package
+        run: |
+          cd openwrt
+          make download -j8
+          find dl -size -1024c -exec ls -l {} \;
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Compile the firmware
+        id: compile
+        run: |
+          cd openwrt
+          echo -e "$(nproc) thread compile"
+          make -j$(nproc) || make -j1 V=s
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Package Amlogic Firmware with ophub
+        if: steps.compile.outputs.status == 'success'
+        uses: ophub/amlogic-s9xxx-openwrt@main
+        with:
+          openwrt_path: openwrt/bin/targets/armsr/armv8/*rootfs.tar.gz
+          openwrt_board: ${{ github.event.inputs.device_board }}
+          openwrt_kernel: ${{ github.event.inputs.kernel_version }}
+          auto_kernel: true
+          builder_name: ImmortalWrt
+
+      - name: Upload Firmware to Artifact
+        uses: actions/upload-artifact@v4
+        if: steps.compile.outputs.status == 'success'
+        with:
+          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
+          path: ${{ env.PACKAGED_OUTPUTPATH }}
+      
+      - name: Upload Firmware to Release
+        uses: softprops/action-gh-release@v2
+        if: steps.compile.outputs.status == 'success' && github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.run_id }}
+          name: ImmortalWrt ${{ github.event.inputs.immortalwrt_version }} for ${{ github.event.inputs.device_board }}
+          body: |
+            ### ImmortalWrt 固件信息
+            - **版本**: ${{ github.event.inputs.immortalwrt_version }}
+            - **设备**: ${{ github.event.inputs.device_board }} (X96 Max)
+            - **内核**: ${{ github.event.inputs.kernel_version }}
+            - **文件系统**: SquashFS (支持 LuCI 恢复出厂设置)
+            - **构建 ID**: ${{ github.run_id }}
+          files: |
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
