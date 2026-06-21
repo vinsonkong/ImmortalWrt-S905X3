@@ -101,4 +101,36 @@ SCRIPT_EOF
 # 给脚本添加执行权限
 chmod +x package/base-files/files/etc/uci-defaults/99-custom-settings
 
+echo "=== 🔥 注入 Ext4/Btrfs 下的恢复出厂设置脚本 (Hack LuCI) ==="
+# 创建 firstboot 脚本，LuCI 检测到它存在就会显示“恢复出厂”按钮
+mkdir -p package/base-files/files/sbin
+cat << 'EOF' > package/base-files/files/sbin/firstboot
+#!/bin/sh
+# 专为 Ext4/Btrfs 固件定制的恢复出厂脚本
+echo "Performing factory reset on Ext4/Btrfs..."
+
+# 1. 清理用户配置
+rm -rf /etc/config/*
+rm -rf /etc/dropbear
+rm -rf /etc/ssh
+rm -rf /etc/shadow*
+rm -rf /etc/passwd*
+
+# 2. 清理 overlay (如果存在)
+if [ -d "/overlay" ]; then
+    rm -rf /overlay/upper/*
+    rm -rf /overlay/work/*
+fi
+
+# 3. 重启设备
+echo "System will reboot now..."
+reboot
+EOF
+
+# 赋予执行权限
+chmod +x package/base-files/files/sbin/firstboot
+echo "✅ /sbin/firstboot 注入成功！LuCI 将显示恢复出厂按钮。"
+
+
+
 echo " diy.sh 执行完毕"
