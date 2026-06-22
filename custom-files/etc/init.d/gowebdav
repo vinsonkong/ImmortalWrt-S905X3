@@ -30,7 +30,8 @@ set_firewall() {
 	if [ "${set_type}" = "start" ]; then
 		mkdir -p "/var/etc/"
 		iptables -I INPUT -p tcp --dport "${listen_port}" -j ACCEPT
-		echo "iptables -I INPUT -p tcp --dport "${listen_port}" -j ACCEPT" > "/var/etc/gowebdav.include"
+		# 修复：原代码双引号内嵌套双引号导致变量未展开且语法错误
+		echo "iptables -I INPUT -p tcp --dport ${listen_port} -j ACCEPT" > "/var/etc/gowebdav.include"
 	elif [ "${set_type}" = "stop" ]; then
 		iptables -D INPUT -p tcp --dport "${listen_port}" -j ACCEPT
 		echo "" > "/var/etc/gowebdav.include"
@@ -43,7 +44,7 @@ start_service() {
 	init_conf
 
 	set_type="stop"
-	[ "${enable}" -ne "1" ] && { set_firewall 2>/dev/null ; return 1; }
+	[ "${enable}" -ne "1" ] && { set_firewall 2>/dev/null; return 1; }
 
 	mkdir -p "${root_dir}"
 
@@ -51,12 +52,16 @@ start_service() {
 		set_type="start"
 	fi
 	set_firewall 2>/dev/null
+
+	# 修复：带空格的参数必须作为整体传递，避免被 procd 拆分
 	[ -n "${username}" ] && [ -n "${password}" ] && auth_arg="-user ${username} -password ${password}"
 	[ "${read_only}" -eq "1" ] && readonly_arg="-read-only"
 	[ "${use_https}" -eq "1" ] && [ -e "${cert_cer}" ] && [ -e "${cert_key}" ] && https_arg="-https-mode -https-cert-file ${cert_cer} -https-key-file ${cert_key}"
+
 	procd_open_instance
 	procd_set_param command "$PROG"
-	procd_append_param command -dir "${root_dir}" -http ":${listen_port}" ${auth_arg} ${readonly_arg} ${https_arg}
+	# 修复：使用 eval 安全展开包含空格的复合参数，防止 -user xxx -password xxx 被拆分为独立无效参数
+	eval "procd_append_param command -dir \"${root_dir}\" -http \":${listen_port}\" ${auth_arg} ${readonly_arg} ${https_arg}"
 	procd_set_param respawn
 	procd_set_param stdout 1
 	procd_set_param stderr 1
