@@ -5,8 +5,8 @@ START=99
 STOP=10
 
 NAME=navidrome
-BIN=/mnt/mmcblk2p4/tools/navidrome/bin/navidrome
-CONF=/mnt/mmcblk2p4/tools/navidrome/config/navidrome.toml
+BIN=/usr/bin/navidrome
+CONF=/etc/config/navidrome.toml
 USER=root
 
 # 启动服务
