@@ -1,0 +1,18 @@
+
+config zerotier 'global'
+	option fw_allow_input '1'
+	option local_conf_path '/etc/zerotier.conf'
+	option config_path '/etc/zerotier'
+	option secret ''
+	option enabled '1'
+
+config network 'earth'
+	option id '9f77fc393e652048'
+	option allow_global '1'
+	option allow_default '1'
+	option allow_dns '1'
+	option fw_allow_input '1'
+	option fw_allow_forward '1'
+	option fw_allow_masq '1'
+	list fw_forward_ifaces 'br-lan'
+
