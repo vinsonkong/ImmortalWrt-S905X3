@@ -5,7 +5,7 @@ baseurl = ""               # 若通过反向代理访问，填写路径如 "/nav
 
 # ====== 数据与媒体路径 ========
 musicfolder = "/mnt/mmcblk2p4/music"
-datafolder = "/mnt/mmcblk2p4/tools/navidrome/data"
+datafolder = "/etc/navidrome"
 cachefolder = "/tmp/navidrome"
 
 # ===== 扫描与元数据 ==========
