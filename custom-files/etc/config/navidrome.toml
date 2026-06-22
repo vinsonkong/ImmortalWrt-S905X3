@@ -1,0 +1,47 @@
+# ======= 基础网络配置 ========
+address = "0.0.0.0"        # 监听所有网络接口
+port = 39335
+baseurl = ""               # 若通过反向代理访问，填写路径如 "/navidrome"
+
+# ====== 数据与媒体路径 ========
+musicfolder = "/mnt/mmcblk2p4/music"
+datafolder = "/mnt/mmcblk2p4/tools/navidrome/data"
+cachefolder = "/tmp/navidrome"
+
+# ===== 扫描与元数据 ==========
+scanner.enabled = true
+scanner.schedule = "@every 24h"    # 每日扫描一次，避免频繁读取存储
+scanner.watcherwait = "10s"        # 文件变更后等待10秒再扫描
+scanner.purgemissing = "always"    # 自动清理丢失文件，保持数据库整洁
+
+# ====== 性能与缓存 ============
+transcodingcachesize = "1000MiB"     # 转码缓存，OpenWrt 设备建议不超过 100MiB
+imagecachesize = "200MiB"           # 封面图缓存，降低内存占用
+ffmpegpath = "/usr/bin/ffmpeg"     # 确保 ffmpeg 已安装并可执行
+
+# ====== 认证与安全 ============
+auth.enabled = true                # 强烈建议启用用户认证
+users = [
+  { username = "vinsonkong", password = "14371250kong" }
+]
+
+# ====== 日志与调试 ==========
+loglevel = "info"                  # 生产环境建议使用 info，调试可设为 debug
+logformat = "text"                 # OpenWrt 日志系统兼容 text 格式
+
+# ===== 高级选项 ==========
+enablenowplaying = true            # 启用当前播放信息
+enablewebsockets = true            # 支持实时更新
+DefaultLanguage = "zh-Hans"
+ItemsPerPage = 50
+EnableSharing = true
+
+
+
+
+
+
+
+
+
+
