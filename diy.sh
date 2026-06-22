@@ -1,7 +1,4 @@
 #!/bin/bash
-# =========================================================
-# diy.sh - 综合自定义脚本 
-# =========================================================
 
 echo "🚀 1. 开始执行 Target 层白名单清理..."
 TARGET_FILE=""
@@ -26,7 +23,7 @@ if [ -n "$TARGET_FILE" ]; then
 DEFAULT_PACKAGES += base-files busybox dropbear opkg
 DEFAULT_PACKAGES += dnsmasq-full firewall4 nftables kmod-nft-offload
 DEFAULT_PACKAGES += luci luci-base luci-compat luci-lib-ipkg
-DEFAULT_PACKAGES += luci-theme-argon luci-app-argon-config
+DEFAULT_PACKAGES += luci-theme-argon
 DEFAULT_PACKAGES += kmod-virtio-net kmod-virtio-blk kmod-virtio-scsi
 EOF
     echo "✅ Target 默认包已精简并注入！(文件: $TARGET_FILE)"
@@ -42,7 +39,7 @@ sed -i 's/ImmortalWrt/X96Max/g' package/base-files/files/bin/config_generate
 sed -i "s/'UTC'/'CST-8'\n   set system.@system[-1].zonename='Asia\/Shanghai'/g" package/base-files/files/bin/config_generate
 
 
-echo "🔧 3. 注入 99-custom-settings (旁路由 UCI 默认配置)..."
+echo "🔧 3. 注入 99-custom-settings ..."
 mkdir -p package/base-files/files/etc/uci-defaults
 
 cat <<'SCRIPT_EOF' > package/base-files/files/etc/uci-defaults/99-custom-settings
@@ -96,6 +93,64 @@ uci commit system
 
 # --- 5. 时区软链接 ---
 ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+
+# --- 6. 重置 uhttpd 配置
+uci -q delete uhttpd
+
+uci -q batch << 'UCIBATCH'
+# === main 实例 (LuCI 主站) ===
+set uhttpd.main=uhttpd
+add_list uhttpd.main.listen_http='0.0.0.0:80'
+add_list uhttpd.main.listen_http='[::]:80'
+add_list uhttpd.main.listen_https=''
+set uhttpd.main.redirect_https='0'
+set uhttpd.main.home='/www'
+set uhttpd.main.rfc1918_filter='1'
+set uhttpd.main.max_connections='100'
+set uhttpd.main.cert='/etc/uhttpd.crt'
+set uhttpd.main.key='/etc/uhttpd.key'
+set uhttpd.main.cgi_prefix='/cgi-bin'
+add_list uhttpd.main.lua_prefix='/cgi-bin/luci=/usr/lib/lua/luci/sgi/uhttpd.lua'
+set uhttpd.main.network_timeout='30'
+set uhttpd.main.http_keepalive='20'
+set uhttpd.main.tcp_keepalive='1'
+set uhttpd.main.ubus_prefix='/ubus'
+add_list uhttpd.main.index_page='cgi-bin/luci'
+set uhttpd.main.max_requests='50'
+set uhttpd.main.script_timeout='3600'
+
+# === web 实例  ===
+set uhttpd.web=uhttpd
+add_list uhttpd.web.listen_http='0.0.0.0:39380'
+add_list uhttpd.web.listen_http='[::]:39380'
+set uhttpd.web.redirect_https='0'
+set uhttpd.web.home='/mnt/mmcblk2p4/webguide'
+add_list uhttpd.web.interpreter='.php=/usr/bin/php-cgi'
+set uhttpd.web.script_timeout='60'
+set uhttpd.web.index_page='index.php index.html'
+
+# === 自签证书默认参数 ===
+set uhttpd.defaults=cert
+set uhttpd.defaults.days='730'
+set uhttpd.defaults.key_type='ec'
+set uhttpd.defaults.bits='2048'
+set uhttpd.defaults.ec_curve='P-256'
+set uhttpd.defaults.country='ZZ'
+set uhttpd.defaults.state='Somewhere'
+set uhttpd.defaults.location='Unknown'
+set uhttpd.defaults.commonname='OpenWrt'
+commit uhttpd
+UCIBATCH
+
+#  重启 uhttpd 使配置立即生效
+/etc/init.d/uhttpd restart 2>/dev/null
+
+#  修改zerotier配置
+uci -q set zerotier.earth.id='9f77fc393e652048'
+
+
+
 SCRIPT_EOF
 
 # 给脚本添加执行权限
