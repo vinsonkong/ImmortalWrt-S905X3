@@ -1,0 +1,20 @@
+
+config share
+	option enabled '1'
+	option path '/mnt/mmcblk2p4'
+	option clients '*'
+	option options 'rw,sync,no_root_squash,insecure,no_subtree_check'
+
+config share
+	option enabled '0'
+	option path '/mnt/sda1'
+	option clients '*'
+	option options 'rw,sync,no_root_squash,insecure,no_subtree_check'
+
+config mount
+	option enabled '0'
+	option source '192.168.30.10:/mnt/mmcblk2p4'
+	option target '/mnt/nfs/x96max'
+	option options 'rw,nolock'
+	option delay '10'
+
