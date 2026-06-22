@@ -1,0 +1,60 @@
+instance_name = "default"
+instance_id = "f9f05421-7c5b-47d6-a67d-4d58d49f51d8"
+ipv4 = "10.0.30.100/24"
+dhcp = false
+listeners = [
+    "tcp://0.0.0.0:11010",
+    "udp://0.0.0.0:11010",
+    "wg://0.0.0.0:11011",
+    "ws://0.0.0.0:11011/",
+    "wss://0.0.0.0:11012/",   
+]
+rpc_portal = "0.0.0.0:0"
+tcp_whitelist = []
+udp_whitelist = []
+
+[network_identity]
+network_name = "vinsonkong"
+network_secret = "14371250kong"
+
+
+[[peer]]
+uri = "tcp://ah.nkbpal.cn:11010"
+
+[[peer]]
+uri = "tcp://et1.fuis.top:11010"
+
+[[peer]]
+uri = "tcp://39.108.52.138:11010"
+
+[[peer]]
+uri = "tcp://c.oee.icu:60006"
+
+[[peer]]
+uri = "tcp://ramon2009.dpdns.org:11010"
+
+[[peer]]
+uri = "tcp://8.148.29.206:11010"
+
+
+
+[flags]
+default_protocol = "tcp"
+dev_name = "easytier"
+enable_encryption = true
+enable_ipv6 = true
+mtu = 1380
+latency_first = false
+enable_exit_node = false
+no_tun = false
+use_smoltcp = false
+foreign_network_whitelist = "*"
+disable_p2p = false
+relay_all_peer_rpc = false
+disable_udp_hole_punching = false
+
+
+[file_logger]
+level = "info"
+file = "easytier-default"
+dir = "/tmp"
