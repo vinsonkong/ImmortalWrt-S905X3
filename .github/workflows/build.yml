@@ -1,4 +1,4 @@
-name: Build ImmortalWrt 24.10  S905X3
+name: Build ImmortalWrt 24.10 S905X3
 
 on:
   workflow_dispatch:
@@ -48,7 +48,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     name: Build for ${{ github.event.inputs.device_board }}
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,7 +77,7 @@ jobs:
           sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
           sudo -E apt-get -qq autoremove --purge
           sudo -E apt-get -qq clean
-      
+
       - name: Free up disk space (CRITICAL)
         run: |
           echo "=== Before cleanup ==="
@@ -88,7 +88,7 @@ jobs:
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
           echo "=== After cleanup ==="
           df -hT
-      
+
       - name: Clone ImmortalWrt source code
         run: |
           VERSION=${{ github.event.inputs.immortalwrt_version }}
@@ -105,13 +105,13 @@ jobs:
 
           echo "=== 1. 克隆 luci-app-amlogic (ophub 官方) ==="
           git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git
-          
+
           echo "=== 2. 提取 luci-app-socat (从 kenzok8 精准剥离) ==="
           git clone --depth 1 https://github.com/kenzok8/small-package.git temp_repo
           [ -d "temp_repo/luci-app-socat" ] && mv temp_repo/luci-app-socat .
           [ -d "temp_repo/socat" ] && mv temp_repo/socat .
           rm -rf temp_repo
-          
+
           echo "=== 当前 custom_plugins 目录下的插件 ==="
           ls -l
 
@@ -120,6 +120,28 @@ jobs:
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+
+      # ========== 新增：注入自定义二进制文件 (miniserve & gowebdav) ==========
+      - name: Inject Custom Binaries (files method)
+        run: |
+          echo "📦 检查并注入 custom-files ..."
+          CUSTOM_FILES_DIR="./custom-files"
+          OPENWRT_FILES_DIR="./openwrt/files"
+
+          if [ -d "$CUSTOM_FILES_DIR" ]; then
+            echo "✅ 找到 custom-files，正在复制到 OpenWrt files 目录..."
+            mkdir -p "$OPENWRT_FILES_DIR"
+            cp -r "$CUSTOM_FILES_DIR"/* "$OPENWRT_FILES_DIR/"
+
+            # 强制添加执行权限 (关键步骤，防止因 Git 权限丢失导致二进制/init.d 无法运行)
+            find "$OPENWRT_FILES_DIR/usr/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
+            find "$OPENWRT_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
+
+            echo "✅ 注入完成。已注入的文件列表："
+            find "$OPENWRT_FILES_DIR" -type f | sort
+          else
+            echo "⚠️ 警告：未找到 $CUSTOM_FILES_DIR 目录，跳过自定义二进制文件注入。"
+          fi
 
       - name: Run DIY script (Clean Target & Inject Configs)
         run: |
@@ -135,7 +157,7 @@ jobs:
       - name: Load custom configuration
         run: |
           cd openwrt
-          
+
           # 读取仓库根目录的 .config 种子文件
           if [ -f "../${{ env.CONFIG_FILE }}" ]; then
             echo "✅ 找到自定义 .config，正在应用..."
@@ -146,10 +168,10 @@ jobs:
 
           # 强制将 rootfs 分区大小设置为 1024MB (防止 Docker/Samba 撑爆空间)
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
-          
+
           # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
           make defconfig
-          
+
           # 输出最终启用的包数量，方便排查
           echo "=== 最终生成的 .config 中启用的包数量 ==="
           grep "=y" .config | wc -l
@@ -179,7 +201,6 @@ jobs:
         if: steps.compile.outputs.status == 'success'
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
-          # ⭐ 修复
           openwrt_path: openwrt/bin/targets/armsr/armv8/*rootfs.tar.gz
           openwrt_board: ${{ github.event.inputs.device_board }}
           openwrt_kernel: ${{ github.event.inputs.kernel_version }}
@@ -192,10 +213,10 @@ jobs:
         with:
           name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
           path: ${{ env.PACKAGED_OUTPUTPATH }}
-      
+
       - name: Upload Firmware to Release
         uses: softprops/action-gh-release@v2
-        if: success() 
+        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -208,7 +229,7 @@ jobs:
             - 内核: ${{ github.event.inputs.kernel_version }}
             - 默认 IP: 192.168.30.254 (旁路由模式，已关 DHCP)
             - 主题: Argon
-            - 插件: Amlogic, Socat, ZeroTier
+            - 插件: Amlogic, Socat, ZeroTier, miniserve, gowebdav
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
