@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 1. 开始执行 Target 层白名单清理..."
+echo "🚀 1. 开始执行 Target 层白名单清理.."
 TARGET_FILE=""
 
 # 兼容 24.10 的 armsr 和 23.05 的 armvirt
@@ -148,7 +148,42 @@ UCIBATCH
 
 #  修改zerotier配置
 uci -q set zerotier.earth.id='9f77fc393e652048'
+uci -q commit zerotier
 
+
+# ==== 注入 Dropbear SSH 公钥 ==========
+
+SSH_PUBKEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDg995BH9wmXnqi+voUaQT0oSYi+guKytDzJBMe0psHZDC1APuG5T1dfRdQzK2STWx3gq/b9cG8H9wm6KtSiQsTjQkvfVyuLSe4u9f0BChBEbUcfpvjt51Lnkobyo5Ppnj9l3v8TMehdVMcMluNciF8HxTJwrtuPiKcfLeqqUvzSU0wUdvkdq+rirusEhK45mzBZBmCDUq6fECxdEcKKCFmOUHM6CWdXJnAWk1ehchy+EGxMri5fG6uMJh4Y43vjVBYavN0aqW37ASkUe9LXuokYm0W2gBVzoZuCHBw09roPEeZvJYhSjdVrfmYXbi1qoyaHMjT0zSTSt6ov/WFfI+n x96max ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE4un4qvoUbhkmaOvIEvRWZ5qlSrrqzRpUb8BsKn65bn x96max+"
+
+DROPBEAR_DIR="/etc/dropbear"
+AUTH_KEYS="${DROPBEAR_DIR}/authorized_keys"
+
+# 1. 确保目录存在且权限正确
+mkdir -p "$DROPBEAR_DIR"
+chmod 700 "$DROPBEAR_DIR"
+
+# 2. 创建或追加公钥 (避免覆盖已有密钥)
+if ! grep -qF "$SSH_PUBKEY" "$AUTH_KEYS" 2>/dev/null; then
+    echo "$SSH_PUBKEY" >> "$AUTH_KEYS"
+    echo "✅ SSH 公钥已注入"
+else
+    echo "ℹ️ SSH 公钥已存在，跳过注入"
+fi
+
+# 3. 强制修正权限 (Dropbear 对权限极其敏感)
+chmod 600 "$AUTH_KEYS"
+chown root:root "$AUTH_KEYS"
+chmod 700 "$DROPBEAR_DIR"
+chown root:root "$DROPBEAR_DIR"
+
+# 4. 确保 Dropbear 配置允许公钥认证
+uci -q set dropbear.@dropbear[0].PasswordAuth='on'
+uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
+uci -q set dropbear.@dropbear[0].RootLogin='1'
+uci -q commit dropbear
+
+# 5. 重载 Dropbear 使配置生效
+/etc/init.d/dropbear reload 2>/dev/null
 
 
 SCRIPT_EOF
@@ -156,35 +191,8 @@ SCRIPT_EOF
 # 给脚本添加执行权限
 chmod +x package/base-files/files/etc/uci-defaults/99-custom-settings
 
-echo "=== 🔥 注入 Ext4/Btrfs 下的恢复出厂设置脚本 (Hack LuCI) ==="
-# 创建 firstboot 脚本，LuCI 检测到它存在就会显示“恢复出厂”按钮
-mkdir -p package/base-files/files/sbin
-cat << 'EOF' > package/base-files/files/sbin/firstboot
-#!/bin/sh
-# 专为 Ext4/Btrfs 固件定制的恢复出厂脚本
-echo "Performing factory reset on Ext4/Btrfs..."
-
-# 1. 清理用户配置
-rm -rf /etc/config/*
-rm -rf /etc/dropbear
-rm -rf /etc/ssh
-rm -rf /etc/shadow*
-rm -rf /etc/passwd*
-
-# 2. 清理 overlay (如果存在)
-if [ -d "/overlay" ]; then
-    rm -rf /overlay/upper/*
-    rm -rf /overlay/work/*
-fi
-
-# 3. 重启设备
-echo "System will reboot now..."
-reboot
-EOF
-
-# 赋予执行权限
-chmod +x package/base-files/files/sbin/firstboot
-echo "✅ /sbin/firstboot 注入成功！LuCI 将显示恢复出厂按钮。"
+#  自删除
+rm -f package/base-files/files/etc/uci-defaults/99-custom-settings
 
 
 
