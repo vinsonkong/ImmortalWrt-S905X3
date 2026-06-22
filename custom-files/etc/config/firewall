@@ -1,0 +1,245 @@
+
+config defaults
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	option flow_offloading '1'
+	option flow_offloading_hw '1'
+	option fullcone '1'
+	option synflood_protect '1'
+
+config zone
+	option name 'lan'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	list network 'lan'
+	list network 'lan6'
+
+config zone
+	option name 'wan'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	option masq '1'
+	option mtu_fix '1'
+
+config forwarding
+	option src 'lan'
+	option dest 'wan'
+
+config rule
+	option name 'Allow-DHCP-Renew'
+	option src 'wan'
+	option proto 'udp'
+	option dest_port '68'
+	option target 'ACCEPT'
+	option family 'ipv4'
+
+config rule
+	option name 'Allow-Ping'
+	option src 'wan'
+	option proto 'icmp'
+	option icmp_type 'echo-request'
+	option family 'ipv4'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-IGMP'
+	option src 'wan'
+	option proto 'igmp'
+	option family 'ipv4'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-DHCPv6'
+	option src 'wan'
+	option proto 'udp'
+	option dest_port '546'
+	option family 'ipv6'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-MLD'
+	option src 'wan'
+	option proto 'icmp'
+	option src_ip 'fe80::/10'
+	list icmp_type '130/0'
+	list icmp_type '131/0'
+	list icmp_type '132/0'
+	list icmp_type '143/0'
+	option family 'ipv6'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-ICMPv6-Input'
+	option src 'wan'
+	option proto 'icmp'
+	list icmp_type 'echo-request'
+	list icmp_type 'echo-reply'
+	list icmp_type 'destination-unreachable'
+	list icmp_type 'packet-too-big'
+	list icmp_type 'time-exceeded'
+	list icmp_type 'bad-header'
+	list icmp_type 'unknown-header-type'
+	list icmp_type 'router-solicitation'
+	list icmp_type 'neighbour-solicitation'
+	list icmp_type 'router-advertisement'
+	list icmp_type 'neighbour-advertisement'
+	option limit '1000/sec'
+	option family 'ipv6'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-ICMPv6-Forward'
+	option src 'wan'
+	option dest '*'
+	option proto 'icmp'
+	list icmp_type 'echo-request'
+	list icmp_type 'echo-reply'
+	list icmp_type 'destination-unreachable'
+	list icmp_type 'packet-too-big'
+	list icmp_type 'time-exceeded'
+	list icmp_type 'bad-header'
+	list icmp_type 'unknown-header-type'
+	option limit '1000/sec'
+	option family 'ipv6'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-IPSec-ESP'
+	option src 'wan'
+	option dest 'lan'
+	option proto 'esp'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Allow-ISAKMP'
+	option src 'wan'
+	option dest 'lan'
+	option dest_port '500'
+	option proto 'udp'
+	option target 'ACCEPT'
+
+config zone 'docker'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	option name 'docker'
+	list network 'docker'
+
+config include 'socat'
+	option type 'script'
+	option path '/var/etc/socat.include'
+	option reload '1'
+
+config forwarding
+	option src 'wan'
+	option dest 'lan'
+
+config include 'zerotier_input'
+	option type 'nftables'
+	option path '/var/run/zerotier-one/_fw4/input.nft'
+	option position 'chain-pre'
+	option chain 'input'
+
+config include 'zerotier_srcnat'
+	option type 'nftables'
+	option path '/var/run/zerotier-one/_fw4/srcnat.nft'
+	option position 'chain-pre'
+	option chain 'srcnat'
+
+config include 'zerotier_forward'
+	option type 'nftables'
+	option path '/var/run/zerotier-one/_fw4/forward.nft'
+	option position 'chain-pre'
+	option chain 'forward'
+
+config zone
+	option name 'zerotier'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	list network 'zerotier'
+
+config rule 'easytier_udp'
+	option name 'easytier_udp'
+	option target 'ACCEPT'
+	option src 'wan'
+	option proto 'all'
+	option dest_port '11010'
+	option enabled '1'
+
+config rule 'easytier_tcp_udp'
+	option name 'easytier_tcp_udp'
+	option target 'ACCEPT'
+	option src 'wan'
+	option proto 'all'
+	option dest_port '11010'
+	option enabled '1'
+
+config rule 'easytier_wss'
+	option name 'easytier_wss'
+	option target 'ACCEPT'
+	option src 'wan'
+	option proto 'all'
+	option dest_port '11012'
+	option enabled '1'
+
+config rule 'easytier_ws'
+	option name 'easytier_ws'
+	option target 'ACCEPT'
+	option src 'wan'
+	option proto 'all'
+	option dest_port '11011'
+	option enabled '1'
+
+config rule 'easytier_wg'
+	option name 'easytier_wg'
+	option target 'ACCEPT'
+	option src 'wan'
+	option proto 'all'
+	option dest_port '11011'
+	option enabled '1'
+
+config zone 'easytierzone'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	option masq '1'
+	option mtu_fix '1'
+	option name 'EasyTier'
+	option network 'EasyTier'
+
+config forwarding 'easytierfwlan'
+	option dest 'lan'
+	option src 'EasyTier'
+
+config forwarding 'easytierfwwan'
+	option dest 'wan'
+	option src 'EasyTier'
+
+config forwarding 'lanfweasytier'
+	option dest 'EasyTier'
+	option src 'lan'
+
+config forwarding 'wanfweasytier'
+	option dest 'EasyTier'
+	option src 'wan'
+
+config forwarding
+	option src 'zerotier'
+	option dest 'lan'
+
+config forwarding
+	option src 'zerotier'
+	option dest 'wan'
+
+config forwarding
+	option src 'lan'
+	option dest 'zerotier'
+
+config forwarding
+	option src 'wan'
+	option dest 'zerotier'
+
