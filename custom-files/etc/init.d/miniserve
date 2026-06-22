@@ -1,44 +1,78 @@
 #!/bin/sh /etc/rc.common
-# OpenWrt init script for miniserve webdav server
+# OpenWrt init script for miniserve webdav server (UCI driven)
 
 USE_PROCD=1
 START=99
 STOP=10
-user=root
 
-SERVICE_NAME="miniserve"
 SERVICE_DAEMON="/usr/bin/miniserve"
-SERVICE_ARGS="--auth vinsonkong:14371250kong --enable-webdav --hide-version-footer --upload-files --mkdir --qrcode --port 39333 /mnt"
-SERVICE_PID_FILE="/var/run/miniserve.pid"
+CONF="miniserve"
 
 start_service() {
-    procd_open_instance
-    procd_set_param command "$SERVICE_DAEMON"
-    
-    # 添加参数
-    for arg in $SERVICE_ARGS; do
-        procd_append_param command "$arg"
-    done
-    
-    procd_set_param env HOME=/root
-    procd_set_param respawn
-    procd_set_param pidfile "$SERVICE_PID_FILE"
-    procd_set_param stdout 0
-    procd_set_param stderr 0
-    procd_close_instance
+	local enable port root_dir username password
+	local enable_webdav upload_files mkdir qrcode hide_version_footer allow_wan
+	local args auth_arg
+
+	config_load "$CONF"
+	config_get_bool enable "config" "enable" 0
+	[ "$enable" -eq 0 ] && return 1
+
+	config_get port "config" "port" "39333"
+	config_get root_dir "config" "root_dir" "/mnt"
+	config_get username "config" "username" ""
+	config_get password "config" "password" ""
+	config_get_bool enable_webdav "config" "enable_webdav" 1
+	config_get_bool upload_files "config" "upload_files" 1
+	config_get_bool mkdir "config" "mkdir" 1
+	config_get_bool qrcode "config" "qrcode" 1
+	config_get_bool hide_version_footer "config" "hide_version_footer" 1
+	config_get_bool allow_wan "config" "allow_wan" 0
+
+	# 构建基础参数（使用引号保护含空格的路径）
+	args="--port ${port} \"${root_dir}\""
+
+	# 认证参数：仅当用户名和密码均非空时才启用
+	if [ -n "$username" ] && [ -n "$password" ]; then
+		auth_arg="--auth ${username}:${password}"
+		args="${args} ${auth_arg}"
+	fi
+
+	# 布尔开关参数
+	[ "$enable_webdav" -eq 1 ] && args="${args} --enable-webdav"
+	[ "$upload_files" -eq 1 ] && args="${args} --upload-files"
+	[ "$mkdir" -eq 1 ] && args="${args} --mkdir"
+	[ "$qrcode" -eq 1 ] && args="${args} --qrcode"
+	[ "$hide_version_footer" -eq 1 ] && args="${args} --hide-version-footer"
+
+	procd_open_instance
+	procd_set_param command "$SERVICE_DAEMON"
+	# eval 安全展开复合参数，确保带空格的路径和认证串不被拆分
+	eval "procd_append_param command $args"
+	procd_set_param env HOME=/root
+	procd_set_param respawn
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+
+	# WAN 口防火墙规则
+	if [ "$allow_wan" -eq 1 ]; then
+		mkdir -p /var/etc
+		iptables -I INPUT -p tcp --dport "${port}" -j ACCEPT 2>/dev/null
+		echo "iptables -I INPUT -p tcp --dport ${port} -j ACCEPT" > /var/etc/miniserve.include
+	else
+		echo "" > /var/etc/miniserve.include 2>/dev/null
+	fi
 }
 
 stop_service() {
-    [ -f "$SERVICE_PID_FILE" ] && {
-        local pid=$(cat "$SERVICE_PID_FILE" 2>/dev/null)
-        [ -n "$pid" ] && kill "$pid" 2>/dev/null
-        rm -f "$SERVICE_PID_FILE"
-    }
-    # 确保进程被终止
-    killall miniserve 2>/dev/null
+	# procd 自动处理进程终止，此处仅清理防火墙规则
+	local port
+	config_load "$CONF"
+	config_get port "config" "port" "39333"
+	iptables -D INPUT -p tcp --dport "${port}" -j ACCEPT 2>/dev/null
+	echo "" > /var/etc/miniserve.include 2>/dev/null
 }
 
-reload_service() {
-    stop
-    start
+service_triggers() {
+	procd_add_reload_trigger "$CONF"
 }
