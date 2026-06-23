@@ -80,7 +80,6 @@ jobs:
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
           VERSION=${{ github.event.inputs.immortalwrt_version }}
-          # 判断版本号前缀以确定压缩格式
           if [[ "$VERSION" == "23.05."* ]]; then
             BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.xz"
             echo "Downloading 23.05.x ImageBuilder (xz format): $BUILDER_URL"
@@ -92,14 +91,10 @@ jobs:
             wget -q $BUILDER_URL -O imagebuilder.tar.zst
             tar -I zstd -xf imagebuilder.tar.zst
           fi
-          
-          # 重命名解压后的目录（注意：23.05的目录名可能不带后缀，这里使用通配符确保兼容）
           mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 openwrt
 
-      # ========== 核心修改：注入自定义文件与本地软件包 ==========
       - name: Inject Custom Files & Packages
         run: |
-          # === 1. 注入本地自定义 .ipk 包 ===
           CUSTOM_PKG_DIR="./custom-packages"
           IB_PKG_DIR="./openwrt/packages"
           if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
@@ -108,10 +103,9 @@ jobs:
             cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
             echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
           else
-            echo "⚠️ 未找到 custom-packages 目录或为空，跳过大包注入"
+            echo "⚠️ 未找到 custom-packages 目录或为空，跳过包注入"
           fi
           
-          # === 2. 注入 custom-files 覆盖原文件 ===
           CUSTOM_FILES_DIR="./custom-files"
           IB_FILES_DIR="./openwrt/files"
           if [ -d "$CUSTOM_FILES_DIR" ]; then
@@ -120,18 +114,18 @@ jobs:
             cp -r "$CUSTOM_FILES_DIR"/* "$IB_FILES_DIR/"
             find "$IB_FILES_DIR/usr/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
             find "$IB_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
-            echo "✅ 文件注入完成，列表："
-            find "$IB_FILES_DIR" -type f | sort
             
-            # ⭐ Dropbear SSH 专属权限修复
-            echo "🔐 修复 Dropbear 权限..."
+            echo "🔐 修复 Dropbear 及配置文件权限..."
+            find "$IB_FILES_DIR/etc/config" -type f -exec chmod 600 {} \; 2>/dev/null || true
             [ -f "$IB_FILES_DIR/etc/config/dropbear" ] && chmod 600 "$IB_FILES_DIR/etc/config/dropbear"
             if [ -d "$IB_FILES_DIR/root/.ssh" ]; then
               chmod 700 "$IB_FILES_DIR/root/.ssh"
               find "$IB_FILES_DIR/root/.ssh" -type f -name "authorized_keys*" -exec chmod 600 {} \;
             fi
             find "$IB_FILES_DIR/etc/dropbear" -type f -name "dropbear_*_host_key" -exec chmod 600 {} \; 2>/dev/null || true
+            
             echo "✅ 文件注入及权限修复完成"
+            find "$IB_FILES_DIR" -type f | sort
           else
             echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
           fi
@@ -139,7 +133,6 @@ jobs:
       - name: Build Rootfs with Custom Config
         run: |
           cd openwrt
-          # 针对 23.05 版本，确保 feeds 是更新的，避免某些基础包找不到
           ./scripts/feeds update -a
           
           make image PROFILE=generic \
@@ -147,8 +140,8 @@ jobs:
             PACKAGES="\
               base-files busybox bash coreutils coreutils-base64 coreutils-nohup coreutils-truncate getopt gawk iconv jq jshn libjson-script pigz pv rename tar unzip whereis which xz xz-utils zstd gzip bzip2 bsdtar acpid attr chattr lsattr openssh-sftp-server git htop iperf3 coremark \
               block-mount blockd blkid dosfstools dumpe2fs e2freefrag e2fsprogs exfat-mkfs f2fs-tools f2fsck fdisk losetup lsblk lscpu mkf2fs mount-utils parted resize2fs tune2fs uuidgen btrfs-progs xfs-fsck xfs-mkfs ziptool mdadm ntfs-3g \
-              ipv6helper curl wget-ssl uclient-fetch openssl-util liblucihttp liblucihttp-lua ppp ppp-mod-pppoe comgt comgt-ncm uqmi usb-modeswitch wwan kmod-cfg80211 kmod-mac80211 kmod-brcmfmac kmod-brcmutil wpad-basic hostapd-common iw iwinfo wireless-tools \
-              kmod-virtio-net kmod-virtio-blk kmod-virtio-scsi kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer kmod-lp kmod-fs-ext4 kmod-fs-ntfs \
+              curl wget-ssl uclient-fetch openssl-util liblucihttp liblucihttp-lua ppp ppp-mod-pppoe comgt comgt-ncm uqmi usb-modeswitch wwan kmod-cfg80211 kmod-mac80211 kmod-brcmfmac kmod-brcmutil wpad-basic hostapd-common iw iwinfo wireless-tools \
+              kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer kmod-lp kmod-fs-ext4 kmod-fs-ntfs \
               docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
               uhttpd uhttpd-mod-ubus cgi-io ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-mysqli php8-mod-pdo-mysql php8-mod-session php8-mod-zip php8-mod-mbstring php8-mod-iconv \
               luci luci-base luci-compat luci-lib-base luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system luci-i18n-base-zh-cn luci-theme-argon \
