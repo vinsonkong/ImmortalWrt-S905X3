@@ -133,14 +133,13 @@ jobs:
           CONFIG_SQUASHFS_BLOCK_SIZE=262144
           EOF
           
-          # ⚠️ 注意：所有第三方插件直接使用包名，不带任何路径前缀
-          # kmod-drm-i915 已修正为标准的 kmod-i915
+        
           make image PROFILE=generic \
             FILES="files" \
             ROOTFS_PARTSIZE=1024 \
             PACKAGES="\
               base-files busybox bash curl wget-ssl uclient-fetch ca-bundle ppp ppp-mod-pppoe acpid \
-              i915-firmware-dmc intel-ucode thermald \
+              i915-firmware-dmc \
               kmod-igc kmod-r8125 kmod-e1000e kmod-9pnet kmod-9pvirtio \
               luci luci-base luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system \
               luci-i18n-base-zh-cn luci-theme-argon \
@@ -153,7 +152,7 @@ jobs:
               comgt comgt-ncm uqmi usb-modeswitch wwan kmod-usb-serial-option kmod-usb-net-rndis kmod-usb-net-cdc-ether \
               docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
               luci-app-zerotier luci-i18n-zerotier-zh-cn \
-              luci-app-easytier luci-i18n-easytier-zh-cn \
+              luci-app-easytier \
               luci-app-socat luci-i18n-socat-zh-cn socat \
               luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
               luci-app-wol luci-i18n-wol-zh-cn \
