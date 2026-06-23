@@ -1,0 +1,192 @@
+name: Build ImmortalWrt N5105
+
+on:
+  workflow_dispatch:
+    inputs:
+      immortalwrt_version:
+        description: 'ImmortalWrt Version'
+        required: true
+        default: '23.05.7'
+        type: choice
+        options:
+          - 23.05.4
+          - 23.05.5
+          - 23.05.6
+          - 23.05.7
+          - 24.10.0
+          - 24.10.1
+          - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build ImmortalWrt N5105 Full
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Swap File (Prevent Memory Overflow)
+        run: |
+          if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
+            echo "No active swap found. Creating 4G swap..."
+            sudo fallocate -l 4G /mnt/swapfile
+            sudo chmod 600 /mnt/swapfile
+            sudo mkswap /mnt/swapfile
+            sudo swapon /mnt/swapfile
+          else
+            echo "Swap already active:"
+            swapon --show
+          fi
+          free -h
+
+      - name: Install dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils
+
+      - name: Download & Extract ImmortalWrt ImageBuilder
+        run: |
+          VERSION=${{ github.event.inputs.immortalwrt_version }}
+          if [[ "$VERSION" == "23.05."* ]]; then
+            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/x86/64/immortalwrt-imagebuilder-${VERSION}-x86-64.Linux-x86_64.tar.xz"
+            echo "Downloading 23.05.x x86_64 ImageBuilder (xz format): $BUILDER_URL"
+            wget -q $BUILDER_URL -O imagebuilder.tar.xz
+            tar -xf imagebuilder.tar.xz
+          else
+            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/x86/64/immortalwrt-imagebuilder-${VERSION}-x86-64.Linux-x86_64.tar.zst"
+            echo "Downloading 24.10+ x86_64 ImageBuilder (zstd format): $BUILDER_URL"
+            wget -q $BUILDER_URL -O imagebuilder.tar.zst
+            tar -I zstd -xf imagebuilder.tar.zst
+          fi
+          mv immortalwrt-imagebuilder-*-x86-64.Linux-x86_64 openwrt
+
+      - name: Inject Custom Files & Packages
+        run: |
+          # 注入自定义 ipk 包
+          CUSTOM_PKG_DIR="./custom-packagesX86"
+          IB_PKG_DIR="./openwrt/packages"
+          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
+            echo "📦 注入自定义 ipk 包..."
+            mkdir -p "$IB_PKG_DIR"
+            cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
+            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
+          else
+            echo "⚠️ 未找到 custom-packages 目录或为空，跳过包注入"
+          fi
+          
+          # 注入自定义文件及 ASPM 修复脚本
+          CUSTOM_FILES_DIR="./custom-files"
+          IB_FILES_DIR="./openwrt/files"
+          mkdir -p "$IB_FILES_DIR/etc/uci-defaults"
+          
+          # ⭐ 自动生成 N5105 ASPM 断流修复脚本（无需手动创建）
+          cat > "$IB_FILES_DIR/etc/uci-defaults/99-disable-aspm.sh" << 'EOF'
+          #!/bin/sh
+          GRUB_ENV="/etc/config/grub"
+          KERNEL_PARAMS="pcie_aspm=off igc.EEE=0"
+          if [ -f "$GRUB_ENV" ]; then
+              if ! grep -q "pcie_aspm=off" "$GRUB_ENV"; then
+                  uci set grub.@global[0].cmdline_extra="$KERNEL_PARAMS"
+                  uci commit grub
+                  echo "✅ ASPM 已通过 UCI 禁用"
+              fi
+          fi
+          EOF
+          chmod +x "$IB_FILES_DIR/etc/uci-defaults/99-disable-aspm.sh"
+          
+          if [ -d "$CUSTOM_FILES_DIR" ]; then
+            echo "📦 注入 custom-files 到 ImageBuilder..."
+            cp -r "$CUSTOM_FILES_DIR"/* "$IB_FILES_DIR/"
+            find "$IB_FILES_DIR/usr/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
+            find "$IB_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
+            
+            echo "🔐 修复 Dropbear 及配置文件权限..."
+            find "$IB_FILES_DIR/etc/config" -type f -exec chmod 600 {} \; 2>/dev/null || true
+            [ -f "$IB_FILES_DIR/etc/config/dropbear" ] && chmod 600 "$IB_FILES_DIR/etc/config/dropbear"
+            if [ -d "$IB_FILES_DIR/root/.ssh" ]; then
+              chmod 700 "$IB_FILES_DIR/root/.ssh"
+              find "$IB_FILES_DIR/root/.ssh" -type f -name "authorized_keys*" -exec chmod 600 {} \;
+            fi
+            find "$IB_FILES_DIR/etc/dropbear" -type f -name "dropbear_*_host_key" -exec chmod 600 {} \; 2>/dev/null || true
+            echo "✅ 文件注入及权限修复完成"
+          else
+            echo "⚠️ 未找到 custom-files 目录，仅注入了 ASPM 修复脚本"
+          fi
+
+      - name: Build Rootfs with Custom Config
+        run: |
+          cd openwrt
+          
+          make image PROFILE=generic \
+            FILES="files" \
+            ROOTFS_PARTSIZE=1024 \
+            PACKAGES="\
+              base-files busybox bash curl wget-ssl uclient-fetch ca-bundle ppp ppp-mod-pppoe acpid \
+              kmod-i915 i915-firmware-dmc intel-ucode thermald \
+              kmod-igc kmod-r8125 kmod-e1000e kmod-virtio-net kmod-virtio-blk \
+              luci luci-base luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system \
+              luci-i18n-base-zh-cn luci-theme-argon \
+              block-mount fdisk losetup kmod-fs-ext4 openssh-sftp-server \
+              php8 php8-cgi php8-mod-curl php8-mod-mbstring php8-mod-openssl php8-mod-session php8-mod-zip \
+              nfs-kernel-server luci-i18n-nfs-zh-cn \
+              luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server kmod-fs-ksmbd kmod-fs-cifs cifsmount luci-i18n-cifs-mount-zh-cn \
+              luci-app-p910nd luci-i18n-p910nd-zh-cn kmod-usb-printer kmod-lp \
+              luci-app-hd-idle luci-i18n-hd-idle-zh-cn \
+              comgt comgt-ncm uqmi usb-modeswitch wwan kmod-usb-serial-option kmod-usb-net-rndis kmod-usb-net-cdc-ether \
+              docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
+              luci-app-zerotier luci-i18n-zerotier-zh-cn \
+              ./packages/luci-app-easytier.ipk \
+              ./packages/luci-app-socat.ipk ./packages/luci-i18n-socat-zh-cn.ipk socat \
+              luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
+              luci-app-wol luci-i18n-wol-zh-cn \
+              luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
+              luci-i18n-filebrowser-go-zh-cn \
+            " \
+            -j$(nproc)
+
+      - name: Upload Firmware to Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImmortalWrt-N5105-Full-${{ github.event.inputs.immortalwrt_version }}
+          path: openwrt/bin/targets/x86/64/*
+
+      - name: Upload Firmware to Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: IWrt-N5105-Full-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: IWrt N5105 Full ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          body: |
+            ImmortalWrt N5105 固件 (ImageBuilder)
+            - 版本: ${{ github.event.inputs.immortalwrt_version }}
+            - 架构: x86_64 (Intel Jasper Lake N5105)
+            
+            ### 🛠️ N5105 专属优化
+            - ✅ Intel UHD Graphics (i915) 驱动 + DMC 固件
+            - ✅ Intel CPU 微码更新 + thermald 智能温控
+            - ✅ 2.5G 网卡驱动: i225/i226 (igc), RTL8125 (r8125)
+            - ✅ ASPM 断流修复脚本 (首次启动自动生效)
+            - ✅ ROOTFS_PARTSIZE: 1024MB
+            
+            ### 📦 已集成核心功能
+            Docker / Samba4 / NFS / PHP8 / Aria2 / ZeroTier / EasyTier
+            DDNS-Go / WoL / USB打印(p910nd) / 硬盘休眠(hd-idle)
+            4G/5G USB上网卡 / Socat / FileBrowser(语言包)
+            
+            ### ⚠️ 使用说明
+            1. FileBrowser 仅提供 LuCI 汉化，后端需通过 Docker 部署
+            2. 若 4G/5G 模组无法识别，请根据 lsusb 结果补充对应 kmod-usb-serial-* 驱动
+            3. Perl 已从本固件中彻底移除，数据库等重型需求请使用 Docker
+          files: |
+            openwrt/bin/targets/x86/64/*.img.gz
+            openwrt/bin/targets/x86/64/*.vmdk
+            openwrt/bin/targets/x86/64/*.vhdx
