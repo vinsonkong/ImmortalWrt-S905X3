@@ -89,7 +89,19 @@ jobs:
       # ========== 核心修改：注入自定义文件与本地软件包 ==========
       - name: Inject Custom Files & Packages
         run: |
-          # === 1. 注入 custom-files 覆盖原文件 ===
+          # === 1. 注入本地自定义 .ipk 包 ===
+          CUSTOM_PKG_DIR="./custom-packages"
+          IB_PKG_DIR="./openwrt/packages"
+          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
+            echo "📦 注入自定义 ipk 包..."
+            mkdir -p "$IB_PKG_DIR"
+            cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
+            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
+          else
+            echo "⚠️ 未找到 custom-packages 目录或为空，跳过大包注入"
+          fi
+          
+          # === 2. 注入 custom-files 覆盖原文件 ===
           CUSTOM_FILES_DIR="./custom-files"
           IB_FILES_DIR="./openwrt/files"
           if [ -d "$CUSTOM_FILES_DIR" ]; then
@@ -104,17 +116,7 @@ jobs:
             echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
           fi
 
-          # === 2. 注入本地自定义 .ipk 包 ===
-          CUSTOM_PKG_DIR="./custom-packages"
-          IB_PKG_DIR="./openwrt/packages"
-          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
-            echo "📦 注入自定义 ipk 包..."
-            mkdir -p "$IB_PKG_DIR"
-            cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
-            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
-          else
-            echo "⚠️ 未找到 custom-packages 目录或为空，跳过大包注入"
-          fi
+          
 
       - name: Build Rootfs with Custom Config
         run: |
