@@ -133,7 +133,7 @@ jobs:
       - name: Build Rootfs with Custom Config
         run: |
           cd openwrt
-          ./scripts/feeds update -a
+          # ⚠️ ImageBuilder 没有 feeds 系统，已移除 ./scripts/feeds update -a
           
           make image PROFILE=generic \
             FILES="files" \
