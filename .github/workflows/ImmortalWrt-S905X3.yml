@@ -135,26 +135,19 @@ jobs:
         run: |
           cd openwrt
           make image PROFILE=generic FILES="files" PACKAGES="\
-            acpid attr base-files bash bc blkid block-mount blockd bsdtar btrfs-progs busybox bzip2 \
-            cgi-io chattr comgt comgt-ncm containerd coremark coreutils coreutils-base64 coreutils-nohup \
-            coreutils-truncate curl docker docker-compose dockerd dosfstools dumpe2fs e2freefrag e2fsprogs \
-            exfat-mkfs f2fs-tools f2fsck fdisk gawk getopt git gzip hostapd-common iconv iw iwinfo jq \
-            jshn kmod-brcmfmac kmod-brcmutil kmod-cfg80211 kmod-mac80211 libjson-script liblucihttp \
-            liblucihttp-lua losetup lsattr lsblk lscpu mkf2fs mount-utils openssl-util parted \
-            perl-http-date perlbase-file perlbase-getopt perlbase-time perlbase-unicode perlbase-utf8 \
-            pigz ppp ppp-mod-pppoe pv rename resize2fs runc tar tini ttyd tune2fs \
-            uclient-fetch uhttpd uhttpd-mod-ubus unzip uqmi usb-modeswitch uuidgen wget-ssl whereis \
-            which wpad-basic wwan xfs-fsck xfs-mkfs xz xz-utils ziptool zoneinfo-asia zoneinfo-core zstd \
+            base-files busybox bash coreutils coreutils-base64 coreutils-nohup coreutils-truncate getopt gawk iconv jq jshn libjson-script pigz pv rename tar unzip whereis which xz xz-utils zstd gzip bzip2 bsdtar acpid attr chattr lsattr openssh-sftp-server git htop iperf3 coremark \
+            block-mount blockd blkid dosfstools dumpe2fs e2freefrag e2fsprogs exfat-mkfs f2fs-tools f2fsck fdisk losetup lsblk lscpu mkf2fs mount-utils parted resize2fs tune2fs uuidgen btrfs-progs xfs-fsck xfs-mkfs ziptool mdadm ntfs-3g \
+            ipv6helper curl wget-ssl uclient-fetch openssl-util liblucihttp liblucihttp-lua ppp ppp-mod-pppoe comgt comgt-ncm uqmi usb-modeswitch wwan kmod-cfg80211 kmod-mac80211 kmod-brcmfmac kmod-brcmutil wpad-basic hostapd-common iw iwinfo wireless-tools \
+            kmod-virtio-net kmod-virtio-blk kmod-virtio-scsi kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer kmod-lp kmod-fs-ext4 kmod-fs-ntfs \
+            docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
+            uhttpd uhttpd-mod-ubus cgi-io ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-mysqli php8-mod-pdo-mysql php8-mod-session php8-mod-zip php8-mod-mbstring php8-mod-iconv \
+            luci luci-base luci-compat luci-lib-base luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system luci-i18n-base-zh-cn luci-theme-argon \
+            ./packages/luci-app-amlogic.ipk ./packages/luci-i18n-amlogic-zh-cn.ipk ./packages/luci-app-socat.ipk ./packages/luci-i18n-socat-zh-cn.ipk socat ./packages/luci-app-easytier.ipk luci-app-diskman luci-i18n-diskman-zh-cn luci-app-ddns-go luci-i18n-ddns-go-zh-cn luci-app-hd-idle luci-i18n-hd-idle-zh-cn luci-app-p910nd luci-i18n-p910nd-zh-cn luci-app-package-manager luci-i18n-package-manager-zh-cn luci-i18n-filebrowser-go-zh-cn \
+            luci-app-zerotier luci-i18n-zerotier-zh-cn luci-app-wol luci-i18n-wol-zh-cn luci-app-firewall luci-i18n-firewall-zh-cn luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
+            luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server kmod-fs-ksmbd luci-i18n-ksmbd-zh-cn kmod-fs-cifs cifsmount luci-i18n-cifs-mount-zh-cn nfs-kernel-server luci-i18n-nfs-zh-cn minidlna luci-i18n-minidlna-zh-cn \
+            zoneinfo-asia zoneinfo-core \
+            perl perl-http-date perlbase-base perlbase-bytes perlbase-charnames perlbase-class perlbase-config perlbase-cwd perlbase-dynaloader perlbase-errno perlbase-essential perlbase-fcntl perlbase-file perlbase-getopt perlbase-symbol perlbase-tie perlbase-time perlbase-unicode perlbase-utf8 \
             \
-            luci luci-base luci-compat luci-i18n-base-zh-cn luci-lib-base \
-            luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio luci-mod-admin-full luci-mod-network \
-            luci-mod-status luci-mod-system luci-proto-3g luci-proto-ipip luci-proto-ipv6 \
-            luci-proto-ncm luci-proto-openconnect luci-proto-ppp luci-proto-qmi luci-proto-relay \
-            \
-            luci-app-amlogic luci-i18n-amlogic-zh-cn \
-            luci-app-socat \
-            luci-app-zerotier \
-            luci-theme-argon \
           " -j$(nproc)
 
       - name: Package Amlogic Firmware with ophub
