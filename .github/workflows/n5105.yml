@@ -187,7 +187,7 @@ jobs:
               luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
               luci-app-wol luci-i18n-wol-zh-cn \
               luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
-              luci-app-filebrowser luci-i18n-filebrowser-zh-cn \
+              luci-app-filebrowser-go luci-i18n-filebrowser-go-zh-cn \
             " \
             -j$(nproc)
 
