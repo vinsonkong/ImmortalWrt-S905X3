@@ -128,7 +128,7 @@ jobs:
           git clone --depth 1 https://github.com/kenzok8/small packages/small
           
           echo "📥 正在克隆 EasyTier amlogic 仓库..."
-          git clone --depth 1 https://github.com/EasyTier/luci-app-easytier packages/easytier
+          git clone https://github.com/EasyTier/luci-app-easytier.git package/luci-app-easytier
           git clone --depth 1 https://github.com/ophub/luci-app-amlogic packages/amlogic
 
           
