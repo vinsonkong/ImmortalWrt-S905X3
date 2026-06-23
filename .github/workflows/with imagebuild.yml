@@ -1,4 +1,4 @@
-name: S905X3 with ImageBuilder
+name: S905X3 with ImageBuilder & Prebuilt IPs
 
 on:
   workflow_dispatch:
@@ -75,7 +75,7 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils
+          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils jq
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
@@ -118,22 +118,47 @@ jobs:
             echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
           fi
 
-      # ⭐ 合并步骤：统一拉取所有第三方插件源码（替代 custom-packages）
-      - name: Clone Third-Party Packages
+      # ⭐ 新增步骤：下载预编译插件 (Prebuilt Packages)
+      - name: Download Prebuilt Packages
         run: |
           cd openwrt
-          mkdir -p packages
-          
-          echo "📥 正在克隆 kenzok8/small 仓库..."
-          git clone --depth 1 https://github.com/kenzok8/small packages/small
-          
-          echo "📥 正在克隆 EasyTier amlogic 仓库..."
-          git clone https://github.com/EasyTier/luci-app-easytier.git package/luci-app-easytier
-          git clone --depth 1 https://github.com/ophub/luci-app-amlogic packages/amlogic
+          mkdir -p bin/packages/aarch64_cortex-a53/base
+          PKG_DIR="bin/packages/aarch64_cortex-a53/base"
 
+          # 1. 下载 luci-app-amlogic (ophub) - 自动获取最新 -js 版本
+          echo "📥 正在获取 luci-app-amlogic 最新版本..."
+          AMLOGIC_API="https://api.github.com/repos/ophub/luci-app-amlogic/releases/latest"
+          AMLOGIC_TAG=$(curl -s $AMLOGIC_API | jq -r '.tag_name')
+          # 提取版本号部分 (去除 'v' 前缀)
+          AMLOGIC_VER=$(echo $AMLOGIC_TAG | sed 's/v//')
           
-          echo "✅ 所有第三方插件仓库克隆完成"
-          ls -la packages/
+          # 构造文件名 (通常格式: luci-app-amlogic_vX.X.X-js_all.ipk)
+          AMLOGIC_FILE="luci-app-amlogic_v${AMLOGIC_VER}-js_all.ipk"
+          AMLOGIC_URL="https://github.com/ophub/luci-app-amlogic/releases/download/${AMLOGIC_TAG}/${AMLOGIC_FILE}"
+          
+          echo "⏬ 下载: $AMLOGIC_FILE"
+          wget -q $AMLOGIC_URL -O $PKG_DIR/$AMLOGIC_FILE || echo "❌ 下载 $AMLOGIC_FILE 失败，可能文件名格式有变，请检查。"
+
+          # 2. 下载 luci-app-easytier (EasyTier) - 自动获取最新版本
+          echo "📥 正在获取 luci-app-easytier 最新版本..."
+          EASYTIER_API="https://api.github.com/repos/EasyTier/luci-app-easytier/releases/latest"
+          EASYTIER_TAG=$(curl -s $EASYTIER_API | jq -r '.tag_name')
+          EASYTIER_VER=$(echo $EASYTIER_TAG | sed 's/v//')
+          
+          # 构造文件名 (通常格式: luci-app-easytier_v2.6.4_all.ipk)
+          EASYTIER_FILE="luci-app-easytier_v${EASYTIER_VER}_all.ipk"
+          EASYTIER_URL="https://github.com/EasyTier/luci-app-easytier/releases/download/${EASYTIER_TAG}/${EASYTIER_FILE}"
+          
+          echo "⏬ 下载: $EASYTIER_FILE"
+          wget -q $EASYTIER_URL -O $PKG_DIR/$EASYTIER_FILE || echo "❌ 下载 $EASYTIER_FILE 失败，可能文件名格式有变，请检查。"
+
+          # 3. 下载 kenzok8/small 的预编译包 (直接下载整合包解压，比克隆快)
+          # 注意：这里下载的是 small-package 的每日构建，包含大量插件
+          echo "📥 正在下载 kenzok8/small 预编译插件包..."
+          SMALL_URL="https://github.com/kenzok8/small-package/releases/latest/download/small-package.tar.gz"
+          wget -q $SMALL_URL -O /tmp/small-package.tar.gz
+          tar -xzf /tmp/small-package.tar.gz -C $PKG_DIR --strip-components=1 || echo "❌ 下载或解压 small-package 失败，将使用 ImageBuilder 默认源。"
+
           cd ..
 
       - name: Build Rootfs with Custom Config
@@ -158,14 +183,15 @@ jobs:
               comgt comgt-ncm uqmi usb-modeswitch wwan kmod-usb-serial-option kmod-usb-net-rndis kmod-usb-net-cdc-ether \
               docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
               luci-app-zerotier luci-i18n-zerotier-zh-cn \
-              luci-app-easytier.ipk \
-              luci-app-socat.ipk luci-i18n-socat-zh-cn.ipk socat \
+              luci-app-easytier \
+              luci-app-socat luci-i18n-socat-zh-cn socat \
               luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
               luci-app-wol luci-i18n-wol-zh-cn \
               luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
               luci-i18n-filebrowser-go-zh-cn \
-              luci-app-amlogic luci-i18n-amlogic-zh-cn \
-
+              luci-app-amlogic \
+              luci-i18n-amlogic-zh-cn \
+              kmod-tun \
             " \
             -j$(nproc)
 
@@ -199,9 +225,9 @@ jobs:
             - 内核: ${{ github.event.inputs.kernel_version }}
             
             ### 🔗 第三方插件来源
-            - luci-app-amlogic: ImmortalWrt 官方源
-            - luci-app-easytier: github.com/EasyTier/luci-app-easytier
-            - luci-app-socat 等: github.com/kenzok8/small
+            - luci-app-amlogic: github.com/ophub/luci-app-amlogic (Latest Release)
+            - luci-app-easytier: github.com/EasyTier/luci-app-easytier (Latest Release)
+            - 代理插件等: github.com/kenzok8/small-package (Prebuilt)
             
             ### 📁 自定义内容
             - custom-files: 已注入并覆盖系统同名文件
