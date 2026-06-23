@@ -251,8 +251,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: Wrt23-${{ github.event.inputs.immortalwrt_version }}
-          name: Wrt23 S905X3 ${{ github.event.inputs.immortalwrt_version }}
+          tag_name: Wrt24-${{ github.event.inputs.immortalwrt_version }}
+          name: Wrt24 S905X3 ${{ github.event.inputs.immortalwrt_version }}
           body: |
             自动编译的 ImmortalWrt 固件 (旁路由极简版)
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
