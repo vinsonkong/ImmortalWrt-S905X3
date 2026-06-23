@@ -69,16 +69,16 @@ jobs:
 
       - name: Inject Custom Files & Packages
         run: |
-          # 注入自定义 ipk 包
+          # 注入本地自定义 ipk 包（仅保留非 kenzok8 的私有包，如 easytier）
           CUSTOM_PKG_DIR="./custom-packagesX86"
           IB_PKG_DIR="./openwrt/packages"
           if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
-            echo "📦 注入自定义 ipk 包..."
+            echo "📦 注入本地自定义 ipk 包..."
             mkdir -p "$IB_PKG_DIR"
             cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
-            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
+            echo "✅ 本地包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
           else
-            echo "⚠️ 未找到 custom-packages 目录或为空，跳过包注入"
+            echo "⚠️ 未找到 custom-packages 目录或为空，跳过本地包注入"
           fi
           
           # 注入自定义文件及 ASPM 修复脚本
@@ -86,7 +86,6 @@ jobs:
           IB_FILES_DIR="./openwrt/files"
           mkdir -p "$IB_FILES_DIR/etc/uci-defaults"
           
-          # ⭐ 自动生成 N5105 ASPM 断流修复脚本（无需手动创建）
           cat > "$IB_FILES_DIR/etc/uci-defaults/99-disable-aspm.sh" << 'EOF'
           #!/bin/sh
           GRUB_ENV="/etc/config/grub"
@@ -120,6 +119,16 @@ jobs:
             echo "⚠️ 未找到 custom-files 目录，仅注入了 ASPM 修复脚本"
           fi
 
+      - name: Clone kenzok8 Packages
+        run: |
+          cd openwrt
+          mkdir -p packages
+          # ⭐ 在线拉取 kenzok8/small 仓库（包含 luci-app-socat 等）
+          # --depth 1 仅拉取最新提交，大幅节省 CI 时间与空间
+          git clone --depth 1 https://github.com/kenzok8/small packages/small
+          echo "✅ kenzok8/small 仓库克隆完成"
+          cd ..
+
       - name: Build Rootfs with SquashFS Config
         run: |
           cd openwrt
@@ -150,7 +159,7 @@ jobs:
               docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
               luci-app-zerotier luci-i18n-zerotier-zh-cn \
               ./packages/luci-app-easytier.ipk \
-              ./packages/luci-app-socat.ipk ./packages/luci-i18n-socat-zh-cn.ipk socat \
+              luci-app-socat luci-i18n-socat-zh-cn socat \
               luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
               luci-app-wol luci-i18n-wol-zh-cn \
               luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
@@ -188,12 +197,13 @@ jobs:
             ### 📦 已集成核心功能
             Docker / Samba4 / NFS / PHP8 / Aria2 / ZeroTier / EasyTier
             DDNS-Go / WoL / USB打印(p910nd) / 硬盘休眠(hd-idle)
-            4G/5G USB上网卡 / Socat / FileBrowser(语言包)
+            4G/5G USB上网卡 / Socat(kenzok8源) / FileBrowser(语言包)
             
             ### ⚠️ 使用说明
             1. 本固件为只读 SquashFS，系统升级保留配置，恢复出厂仅需重置 overlay
             2. FileBrowser 仅提供 LuCI 汉化，后端需通过 Docker 部署
             3. Perl 已从本固件中彻底移除，数据库等重型需求请使用 Docker
+            4. luci-app-socat 等插件来自 kenzok8/small 仓库，每次构建自动拉取最新版
           files: |
             openwrt/bin/targets/x86/64/*.img.gz
             openwrt/bin/targets/x86/64/*.vmdk
