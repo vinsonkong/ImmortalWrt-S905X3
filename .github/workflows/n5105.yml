@@ -67,23 +67,26 @@ jobs:
           fi
           mv immortalwrt-imagebuilder-*-x86-64.Linux-x86_64 openwrt
 
-      - name: Inject Custom Files & ASPM Fix
+      - name: Inject Custom Packages, Files & ASPM Fix
         run: |
+          IB_DIR="./openwrt"
+          
+          # 1. 注入 custom-packagesX86 中的预编译 ipk
           CUSTOM_PKG_DIR="./custom-packagesX86"
-          IB_PKG_DIR="./openwrt/packages"
-          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
-            echo "📦 注入自定义 ipk 包..."
-            mkdir -p "$IB_PKG_DIR"
+          IB_PKG_DIR="$IB_DIR/packages"
+          mkdir -p "$IB_PKG_DIR"
+          
+          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR/*.ipk 2>/dev/null)" ]; then
             cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
-            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
+            echo "📦 成功注入自定义 ipk 包: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
+            ls -lh "$IB_PKG_DIR"/*.ipk
           else
-            echo "⚠️ 未找到 custom-packages 目录或为空，跳过包注入"
+            echo "⚠️ 未找到 custom-packagesX86 目录或其中没有 .ipk 文件"
           fi
           
-          CUSTOM_FILES_DIR="./custom-files"
-          IB_FILES_DIR="./openwrt/files"
+          # 2. 生成 N5105 ASPM 断流修复脚本
+          IB_FILES_DIR="$IB_DIR/files"
           mkdir -p "$IB_FILES_DIR/etc/uci-defaults"
-          
           cat > "$IB_FILES_DIR/etc/uci-defaults/99-disable-aspm.sh" << 'EOF'
           #!/bin/sh
           GRUB_ENV="/etc/config/grub"
@@ -98,6 +101,8 @@ jobs:
           EOF
           chmod +x "$IB_FILES_DIR/etc/uci-defaults/99-disable-aspm.sh"
           
+          # 3. 注入 custom-files 并修复权限
+          CUSTOM_FILES_DIR="./custom-files"
           if [ -d "$CUSTOM_FILES_DIR" ]; then
             echo "📦 注入 custom-files 到 ImageBuilder..."
             cp -r "$CUSTOM_FILES_DIR"/* "$IB_FILES_DIR/"
@@ -117,59 +122,25 @@ jobs:
             echo "⚠️ 未找到 custom-files 目录，仅注入了 ASPM 修复脚本"
           fi
 
-      # ⭐ 新增：GitHub 网络连通性检测与重试
-      - name: Check GitHub Network Connectivity
-        run: |
-          echo "🔍 检测 GitHub 网络连接..."
-          for i in {1..5}; do
-            if curl -s --connect-timeout 10 -f https://github.com > /dev/null 2>&1; then
-              echo "✅ GitHub 网络连接正常"
-              exit 0
-            else
-              echo "⚠️ GitHub 连接失败，正在重试 ($i/5)..."
-              sleep 10
-            fi
-          done
-          echo "❌ 无法连接到 GitHub，请检查 Actions 运行器网络环境或稍后重试。"
-          exit 1
-
-      # ⭐ 替换为 sbwml + kiddin9 第三方源（含 Git 容错配置）
-      - name: Clone Third-Party Packages
-        run: |
-          cd openwrt
-          mkdir -p packages
-          
-          # 配置 Git 低速超时，避免无限挂起
-          git config --global http.lowSpeedLimit 1000
-          git config --global http.lowSpeedTime 60
-          git config --global http.postBuffer 524288000
-          
-          echo "📥 正在克隆 sbwml/openwrt_packages 仓库..."
-          git clone --depth 1 https://github.com/sbwml/openwrt_packages packages/sbwml
-          
-          # echo "📥 正在克隆 kiddin9/openwrt-packages 仓库..."
-          # git clone --depth 1 https://github.com/kiddin9/openwrt-packages packages/kiddin9
-          
-          echo "✅ 第三方插件仓库克隆完成"
-          ls -la packages/
-          cd ..
-
       - name: Build Rootfs with SquashFS Config
         run: |
           cd openwrt
           
+          # 显式强制启用 SquashFS + ZSTD 压缩
           cat >> .config << EOF
           CONFIG_TARGET_ROOTFS_SQUASHFS=y
           CONFIG_SQUASHFS_ZSTD=y
           CONFIG_SQUASHFS_BLOCK_SIZE=262144
           EOF
           
+          # ⚠️ 注意：所有第三方插件直接使用包名，不带任何路径前缀
+          # kmod-drm-i915 已修正为标准的 kmod-i915
           make image PROFILE=generic \
             FILES="files" \
             ROOTFS_PARTSIZE=1024 \
             PACKAGES="\
               base-files busybox bash curl wget-ssl uclient-fetch ca-bundle ppp ppp-mod-pppoe acpid \
-              kmod-drm-i915‌ i915-firmware-dmc \
+              i915-firmware-dmc intel-ucode thermald \
               kmod-igc kmod-r8125 kmod-e1000e kmod-9pnet kmod-9pvirtio \
               luci luci-base luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system \
               luci-i18n-base-zh-cn luci-theme-argon \
@@ -182,12 +153,12 @@ jobs:
               comgt comgt-ncm uqmi usb-modeswitch wwan kmod-usb-serial-option kmod-usb-net-rndis kmod-usb-net-cdc-ether \
               docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
               luci-app-zerotier luci-i18n-zerotier-zh-cn \
-              ./packages/luci-app-easytier ./packages/luci-i18n-easytier-zh-cn \
-              ./packages/luci-app-socat ./packages/luci-i18n-socat-zh-cn socat \
+              luci-app-easytier luci-i18n-easytier-zh-cn \
+              luci-app-socat luci-i18n-socat-zh-cn socat \
               luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
               luci-app-wol luci-i18n-wol-zh-cn \
               luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
-              ./packages/luci-app-filebrowser-go ./packages/luci-i18n-filebrowser-go-zh-cn \
+              luci-app-filebrowser-go luci-i18n-filebrowser-go-zh-cn \
             " \
             -j$(nproc)
 
@@ -218,14 +189,8 @@ jobs:
             - ✅ ASPM 断流修复脚本 (首次启动自动生效)
             - ✅ ROOTFS_PARTSIZE: 1024MB
             
-            ### 📦 已集成核心功能
-            Docker / Samba4 / NFS / PHP8 / Aria2 / ZeroTier / EasyTier
-            DDNS-Go / WoL / USB打印(p910nd) / 硬盘休眠(hd-idle)
-            4G/5G USB上网卡 / Socat / FileBrowser
-            
-            ### 🔗 第三方插件来源
-            - sbwml/openwrt_packages (EasyTier / FileBrowser 等)
-            - kiddin9/openwrt-packages (Socat / DDNS-Go 等)
+            ### 📦 插件来源
+            - 第三方插件均通过 `custom-packagesX86` 预编译 ipk 注入
             
             ### ⚠️ 使用说明
             1. 本固件为只读 SquashFS，系统升级保留配置，恢复出厂仅需重置 overlay
