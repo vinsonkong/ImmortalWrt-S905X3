@@ -70,7 +70,7 @@ jobs:
       - name: Inject Custom Files & Packages
         run: |
           # 注入自定义 ipk 包
-          CUSTOM_PKG_DIR="./custom-packages"
+          CUSTOM_PKG_DIR="./custom-packagesX86"
           IB_PKG_DIR="./openwrt/packages"
           if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
             echo "📦 注入自定义 ipk 包..."
