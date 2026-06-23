@@ -133,7 +133,10 @@ jobs:
       - name: Build Rootfs with Custom Config
         run: |
           cd openwrt
-          # ⚠️ ImageBuilder 没有 feeds 系统，已移除 ./scripts/feeds update -a
+          
+          # ⭐ 关键修复：强制刷新 opkg 软件源索引，确保能解析到官方源中最新的语言包及其依赖
+          echo "🔄 正在更新 opkg 软件源索引..."
+          make update
           
           make image PROFILE=generic \
             FILES="files" \
