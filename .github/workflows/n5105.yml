@@ -69,6 +69,17 @@ jobs:
 
       - name: Inject Custom Files & ASPM Fix
         run: |
+          CUSTOM_PKG_DIR="./custom-packages"
+          IB_PKG_DIR="./openwrt/packages"
+          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
+            echo "📦 注入自定义 ipk 包..."
+            mkdir -p "$IB_PKG_DIR"
+            cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
+            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
+          else
+            echo "⚠️ 未找到 custom-packages 目录或为空，跳过包注入"
+          fi
+          
           CUSTOM_FILES_DIR="./custom-files"
           IB_FILES_DIR="./openwrt/files"
           mkdir -p "$IB_FILES_DIR/etc/uci-defaults"
