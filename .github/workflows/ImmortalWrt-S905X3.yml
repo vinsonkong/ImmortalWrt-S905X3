@@ -1,5 +1,4 @@
-
-name: Build ImmortalWrt S905X3 with imagebuilder
+name: Build ImmortalWrt S905X3 with ImageBuilder
 
 on:
   workflow_dispatch:
@@ -52,7 +51,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     name: Build for ${{ github.event.inputs.device_board }}
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,7 +75,6 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          # 关键修改：添加了 qemu-utils (提供 qemu-img 工具)
           sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils
 
       - name: Download ImmortalWrt ImageBuilder
@@ -88,12 +86,47 @@ jobs:
           tar -I zstd -xf imagebuilder.tar.zst
           mv immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64 openwrt
 
-      - name: Build Rootfs (Basic Software Only)
+      # ========== 核心修改：注入自定义文件与本地软件包 ==========
+      - name: Inject Custom Files & Packages
+        run: |
+          # === 1. 注入 custom-files 覆盖原文件 ===
+          CUSTOM_FILES_DIR="./custom-files"
+          IB_FILES_DIR="./openwrt/files"
+          if [ -d "$CUSTOM_FILES_DIR" ]; then
+            echo "📦 注入 custom-files 到 ImageBuilder..."
+            mkdir -p "$IB_FILES_DIR"
+            cp -r "$CUSTOM_FILES_DIR"/* "$IB_FILES_DIR/"
+            find "$IB_FILES_DIR/usr/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
+            find "$IB_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
+            echo "✅ 文件注入完成，列表："
+            find "$IB_FILES_DIR" -type f | sort
+          else
+            echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
+          fi
+
+          # === 2. 注入本地自定义 .ipk 包 ===
+          CUSTOM_PKG_DIR="./custom-packages"
+          IB_PKG_DIR="./openwrt/packages"
+          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
+            echo "📦 注入自定义 ipk 包..."
+            mkdir -p "$IB_PKG_DIR"
+            cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
+            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
+          else
+            echo "⚠️ 未找到 custom-packages 目录或为空，跳过大包注入"
+          fi
+
+      - name: Build Rootfs with Custom Config
         run: |
           cd openwrt
-          # 构建镜像，现在有了 qemu-utils，qcow2 构建将顺利通过
-          make image PROFILE=generic PACKAGES="luci" -j$(nproc)
-          
+          make image PROFILE=generic FILES="files" PACKAGES="\
+            luci \
+            luci-app-amlogic \
+            luci-app-socat \
+            luci-app-zerotier \
+            luci-theme-argon \
+          " -j$(nproc)
+
       - name: Package Amlogic Firmware with ophub
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
@@ -103,30 +136,37 @@ jobs:
           auto_kernel: true
           builder_name: ImmortalWrt
 
-      - name: Upload Firmware
+      - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
           path: ${{ env.PACKAGED_OUTPUTPATH }}
-      
+
       - name: Upload Firmware to Release
         uses: softprops/action-gh-release@v2
-        # 只有在编译成功时才执行
-        if: success() 
+        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # 自动生成一个唯一的 Tag 名称
           tag_name: IWrt-image-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
-          # Release 的标题
           name: IWrt-image S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
-          # Release 的描述正文
           body: |
-            自动编译的 ImmortalWrt 固件
+            自动编译的 ImmortalWrt 固件 (ImageBuilder)
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
             - 设备: ${{ github.event.inputs.device_board }}
             - 内核: ${{ github.event.inputs.kernel_version }}
-          # 上传 ophub 打包出来的固件文件
+            
+            ### 📁 自定义内容
+            - custom-files: 已注入并覆盖系统同名文件
+            - custom-packages: 本地 .ipk 已预装
+            
+            ### ⚠️ kmods 安装说明
+            ImageBuilder 使用官方预编译内核，可直接从官方源安装匹配的内核模块：
+            ```bash
+            opkg update
+            opkg install kmod-tun kmod-usb-net-rtl8152
+            ```
+            无需自建 kmods 源，vermagic 与官方仓库完全一致。
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
