@@ -136,8 +136,8 @@ jobs:
           echo "📥 正在克隆 sbwml/openwrt_packages 仓库..."
           git clone --depth 1 https://github.com/sbwml/openwrt_packages packages/sbwml
           
-          echo "📥 正在克隆 kiddin9/openwrt-packages 仓库..."
-          git clone --depth 1 https://github.com/kiddin9/openwrt-packages packages/kiddin9
+          # echo "📥 正在克隆 kiddin9/openwrt-packages 仓库..."
+          # git clone --depth 1 https://github.com/kiddin9/openwrt-packages packages/kiddin9
           
           echo "✅ 第三方插件仓库克隆完成"
           ls -la packages/
