@@ -113,9 +113,6 @@ jobs:
           cd openwrt
           mkdir -p packages
           
-          echo "🧹 清理原有第三方源..."
-          rm -rf packages/small packages/easytier
-          
           echo "📥 正在克隆 sbwml/openwrt_packages 仓库..."
           git clone --depth 1 https://github.com/sbwml/openwrt_packages packages/sbwml
           
