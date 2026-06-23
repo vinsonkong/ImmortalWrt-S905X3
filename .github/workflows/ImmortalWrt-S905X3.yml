@@ -112,6 +112,19 @@ jobs:
             find "$IB_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
             echo "✅ 文件注入完成，列表："
             find "$IB_FILES_DIR" -type f | sort
+            # ⭐ Dropbear SSH 专属权限修复
+            echo "🔐 修复 Dropbear 权限..."
+            # dropbear 配置必须为 600
+            [ -f "$IB_FILES_DIR/etc/config/dropbear" ] && chmod 600 "$IB_FILES_DIR/etc/config/dropbear"
+            # authorized_keys 必须为 600，所属目录必须为 700
+            if [ -d "$IB_FILES_DIR/root/.ssh" ]; then
+              chmod 700 "$IB_FILES_DIR/root/.ssh"
+              find "$IB_FILES_DIR/root/.ssh" -type f -name "authorized_keys*" -exec chmod 600 {} \;
+            fi
+            # 主机密钥文件必须为 600
+            find "$IB_FILES_DIR/etc/dropbear" -type f -name "dropbear_*_host_key" -exec chmod 600 {} \; 2>/dev/null || true
+            
+            echo "✅ 文件注入及权限修复完成"
           else
             echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
           fi
