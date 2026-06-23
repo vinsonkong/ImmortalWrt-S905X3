@@ -1,0 +1,209 @@
+name: Build ImmortalWrt S905X3 with ImageBuilder
+
+on:
+  workflow_dispatch:
+    inputs:
+      immortalwrt_version:
+        description: 'ImmortalWrt Version'
+        required: true
+        default: '23.05.7'
+        type: choice
+        options:
+          - 23.05.0
+          - 23.05.1
+          - 23.05.2
+          - 23.05.3
+          - 23.05.4
+          - 23.05.5
+          - 23.05.6
+          - 23.05.7
+          - 24.10.0
+          - 24.10.1
+          - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
+          - 25.12.0
+      device_board:
+        description: 'Device Board'
+        required: true
+        default: 's905x3'
+      kernel_version:
+        description: 'Kernel Branch (ophub/kernel)'
+        required: true
+        default: '5.15.y'
+        type: choice
+        options:
+          - 5.10.y
+          - 5.15.y
+          - 6.1.y
+          - 6.6.y
+          - 6.12.y
+          - 6.18.y
+          - 5.10.y_5.15.y
+          - 6.1.y_6.6.y
+          - 6.12.y_6.18.y
+          - 6.1.y_6.12.y
+          - 6.1.y_6.18.y
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build for ${{ github.event.inputs.device_board }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Swap File (Prevent Memory Overflow)
+        run: |
+          if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
+            echo "No active swap found. Creating 4G swap..."
+            sudo fallocate -l 4G /mnt/swapfile
+            sudo chmod 600 /mnt/swapfile
+            sudo mkswap /mnt/swapfile
+            sudo swapon /mnt/swapfile
+          else
+            echo "Swap already active:"
+            swapon --show
+          fi
+          free -h
+
+      - name: Install dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils
+
+      - name: Download & Extract ImmortalWrt ImageBuilder
+        run: |
+          VERSION=${{ github.event.inputs.immortalwrt_version }}
+          if [[ "$VERSION" == "23.05."* ]]; then
+            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.xz"
+            echo "Downloading 23.05.x ImageBuilder (xz format): $BUILDER_URL"
+            wget -q $BUILDER_URL -O imagebuilder.tar.xz
+            tar -xf imagebuilder.tar.xz
+          else
+            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.zst"
+            echo "Downloading 24.10+ ImageBuilder (zstd format): $BUILDER_URL"
+            wget -q $BUILDER_URL -O imagebuilder.tar.zst
+            tar -I zstd -xf imagebuilder.tar.zst
+          fi
+          mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 openwrt
+
+      - name: Inject Custom Files
+        run: |
+          CUSTOM_FILES_DIR="./custom-files"
+          IB_FILES_DIR="./openwrt/files"
+          if [ -d "$CUSTOM_FILES_DIR" ]; then
+            echo "📦 注入 custom-files 到 ImageBuilder..."
+            mkdir -p "$IB_FILES_DIR"
+            cp -r "$CUSTOM_FILES_DIR"/* "$IB_FILES_DIR/"
+            find "$IB_FILES_DIR/usr/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
+            find "$IB_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
+            
+            echo "🔐 修复 Dropbear 及配置文件权限..."
+            find "$IB_FILES_DIR/etc/config" -type f -exec chmod 600 {} \; 2>/dev/null || true
+            [ -f "$IB_FILES_DIR/etc/config/dropbear" ] && chmod 600 "$IB_FILES_DIR/etc/config/dropbear"
+            if [ -d "$IB_FILES_DIR/root/.ssh" ]; then
+              chmod 700 "$IB_FILES_DIR/root/.ssh"
+              find "$IB_FILES_DIR/root/.ssh" -type f -name "authorized_keys*" -exec chmod 600 {} \;
+            fi
+            find "$IB_FILES_DIR/etc/dropbear" -type f -name "dropbear_*_host_key" -exec chmod 600 {} \; 2>/dev/null || true
+            
+            echo "✅ 文件注入及权限修复完成"
+          else
+            echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
+          fi
+
+      # ⭐ 合并步骤：统一拉取所有第三方插件源码（替代 custom-packages）
+      - name: Clone Third-Party Packages
+        run: |
+          cd openwrt
+          mkdir -p packages
+          
+          echo "📥 正在克隆 kenzok8/small 仓库..."
+          git clone --depth 1 https://github.com/kenzok8/small packages/small
+          
+          echo "📥 正在克隆 EasyTier/luci-app-easytier 仓库..."
+          git clone --depth 1 https://github.com/EasyTier/luci-app-easytier packages/easytier
+          
+          echo "✅ 所有第三方插件仓库克隆完成"
+          ls -la packages/
+          cd ..
+
+      - name: Build Rootfs with Custom Config
+        run: |
+          cd openwrt
+          
+          make image PROFILE=generic \
+            FILES="files" \
+            ROOTFS_PARTSIZE=1024 \
+            PACKAGES="\
+              base-files busybox bash coreutils coreutils-base64 coreutils-nohup coreutils-truncate getopt gawk iconv jq jshn libjson-script pigz pv rename tar unzip whereis which xz xz-utils zstd gzip bzip2 bsdtar acpid attr chattr lsattr openssh-sftp-server git htop iperf3 coremark \
+              block-mount blockd blkid dosfstools dumpe2fs e2freefrag e2fsprogs exfat-mkfs f2fs-tools f2fsck fdisk losetup lsblk lscpu mkf2fs mount-utils parted resize2fs tune2fs uuidgen btrfs-progs xfs-fsck xfs-mkfs ziptool mdadm ntfs-3g \
+              curl wget-ssl uclient-fetch openssl-util liblucihttp liblucihttp-lua ppp ppp-mod-pppoe comgt comgt-ncm uqmi usb-modeswitch wwan kmod-cfg80211 kmod-mac80211 kmod-brcmfmac kmod-brcmutil wpad-basic hostapd-common iw iwinfo wireless-tools \
+              kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer kmod-lp kmod-fs-ext4 kmod-fs-ntfs \
+              docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
+              uhttpd uhttpd-mod-ubus cgi-io ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-mysqli php8-mod-pdo-mysql php8-mod-session php8-mod-zip php8-mod-mbstring php8-mod-iconv \
+              luci luci-base luci-compat luci-lib-base luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system luci-i18n-base-zh-cn luci-theme-argon \
+              luci-app-amlogic luci-i18n-amlogic-zh-cn \
+              luci-app-easytier \
+              luci-app-socat luci-i18n-socat-zh-cn socat \
+              luci-app-diskman luci-i18n-diskman-zh-cn luci-app-ddns-go luci-i18n-ddns-go-zh-cn luci-app-hd-idle luci-i18n-hd-idle-zh-cn luci-app-p910nd luci-i18n-p910nd-zh-cn luci-app-package-manager \
+              luci-app-zerotier luci-i18n-zerotier-zh-cn luci-app-wol luci-i18n-wol-zh-cn luci-app-firewall luci-i18n-firewall-zh-cn luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
+              luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server kmod-fs-ksmbd luci-i18n-ksmbd-zh-cn kmod-fs-cifs cifsmount luci-i18n-cifs-mount-zh-cn nfs-kernel-server luci-i18n-nfs-zh-cn minidlna luci-i18n-minidlna-zh-cn \
+              zoneinfo-asia zoneinfo-core \
+              perl perl-http-date perlbase-base perlbase-bytes perlbase-charnames perlbase-class perlbase-config perlbase-cwd perlbase-dynaloader perlbase-errno perlbase-essential perlbase-fcntl perlbase-file perlbase-getopt perlbase-symbol perlbase-tie perlbase-time perlbase-unicode perlbase-utf8 \
+            " \
+            -j$(nproc)
+
+      - name: Package Amlogic Firmware with ophub
+        uses: ophub/amlogic-s9xxx-openwrt@main
+        with:
+          openwrt_path: openwrt/bin/targets/armsr/armv8/*-rootfs.tar.gz
+          openwrt_board: ${{ github.event.inputs.device_board }}
+          openwrt_kernel: ${{ github.event.inputs.kernel_version }}
+          auto_kernel: true
+          builder_name: ImmortalWrt
+
+      - name: Upload Firmware to Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
+          path: ${{ env.PACKAGED_OUTPUTPATH }}
+
+      - name: Upload Firmware to Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: IWrt-image-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: IWrt-image S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          body: |
+            自动编译的 ImmortalWrt S905X3 固件 (ImageBuilder + ophub)
+            - 版本: ${{ github.event.inputs.immortalwrt_version }}
+            - 设备: ${{ github.event.inputs.device_board }}
+            - 内核: ${{ github.event.inputs.kernel_version }}
+            
+            ### 🔗 第三方插件来源
+            - luci-app-amlogic: ImmortalWrt 官方源
+            - luci-app-easytier: github.com/EasyTier/luci-app-easytier
+            - luci-app-socat 等: github.com/kenzok8/small
+            
+            ### 📁 自定义内容
+            - custom-files: 已注入并覆盖系统同名文件
+            
+            ### ⚠️ kmods 安装说明
+            ImageBuilder 使用官方预编译内核，可直接从官方源安装匹配的内核模块：
+            ```bash
+            opkg update
+            opkg install kmod-tun kmod-usb-net-rtl8152
+            ```
+            无需自建 kmods 源，vermagic 与官方仓库完全一致。
+          files: |
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
