@@ -1,4 +1,4 @@
-name: S905X3 with ImageBuilder & Prebuilt IPs
+name: Build ImmortalWrt S905X3 with ImageBuilder
 
 on:
   workflow_dispatch:
@@ -75,7 +75,8 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils jq
+          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion \
+            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
@@ -93,8 +94,20 @@ jobs:
           fi
           mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 openwrt
 
-      - name: Inject Custom Files
+      - name: Inject Custom Files & Packages
         run: |
+          CUSTOM_PKG_DIR="./custom-packages"
+          IB_PKG_DIR="./openwrt/packages"
+          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR/*.ipk 2>/dev/null)" ]; then
+            echo "📦 注入自定义 ipk 包..."
+            mkdir -p "$IB_PKG_DIR"
+            cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
+            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
+            ls -lh "$IB_PKG_DIR"/*.ipk
+          else
+            echo "⚠️ 未找到 custom-packages 目录或为空，跳过包注入"
+          fi
+          
           CUSTOM_FILES_DIR="./custom-files"
           IB_FILES_DIR="./openwrt/files"
           if [ -d "$CUSTOM_FILES_DIR" ]; then
@@ -118,49 +131,6 @@ jobs:
             echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
           fi
 
-      # ⭐ 新增步骤：下载预编译插件 (Prebuilt Packages)
-      - name: Download Prebuilt Packages
-        run: |
-          cd openwrt
-          mkdir -p bin/packages/aarch64_cortex-a53/base
-          PKG_DIR="bin/packages/aarch64_cortex-a53/base"
-
-          # 1. 下载 luci-app-amlogic (ophub) - 自动获取最新 -js 版本
-          echo "📥 正在获取 luci-app-amlogic 最新版本..."
-          AMLOGIC_API="https://api.github.com/repos/ophub/luci-app-amlogic/releases/latest"
-          AMLOGIC_TAG=$(curl -s $AMLOGIC_API | jq -r '.tag_name')
-          # 提取版本号部分 (去除 'v' 前缀)
-          AMLOGIC_VER=$(echo $AMLOGIC_TAG | sed 's/v//')
-          
-          # 构造文件名 (通常格式: luci-app-amlogic_vX.X.X-js_all.ipk)
-          AMLOGIC_FILE="luci-app-amlogic_v${AMLOGIC_VER}-js_all.ipk"
-          AMLOGIC_URL="https://github.com/ophub/luci-app-amlogic/releases/download/${AMLOGIC_TAG}/${AMLOGIC_FILE}"
-          
-          echo "⏬ 下载: $AMLOGIC_FILE"
-          wget -q $AMLOGIC_URL -O $PKG_DIR/$AMLOGIC_FILE || echo "❌ 下载 $AMLOGIC_FILE 失败，可能文件名格式有变，请检查。"
-
-          # 2. 下载 luci-app-easytier (EasyTier) - 自动获取最新版本
-          echo "📥 正在获取 luci-app-easytier 最新版本..."
-          EASYTIER_API="https://api.github.com/repos/EasyTier/luci-app-easytier/releases/latest"
-          EASYTIER_TAG=$(curl -s $EASYTIER_API | jq -r '.tag_name')
-          EASYTIER_VER=$(echo $EASYTIER_TAG | sed 's/v//')
-          
-          # 构造文件名 (通常格式: luci-app-easytier_v2.6.4_all.ipk)
-          EASYTIER_FILE="luci-app-easytier_v${EASYTIER_VER}_all.ipk"
-          EASYTIER_URL="https://github.com/EasyTier/luci-app-easytier/releases/download/${EASYTIER_TAG}/${EASYTIER_FILE}"
-          
-          echo "⏬ 下载: $EASYTIER_FILE"
-          wget -q $EASYTIER_URL -O $PKG_DIR/$EASYTIER_FILE || echo "❌ 下载 $EASYTIER_FILE 失败，可能文件名格式有变，请检查。"
-
-          # 3. 下载 kenzok8/small 的预编译包 (直接下载整合包解压，比克隆快)
-          # 注意：这里下载的是 small-package 的每日构建，包含大量插件
-          echo "📥 正在下载 kenzok8/small 预编译插件包..."
-          SMALL_URL="https://github.com/kenzok8/small-package/releases/latest/download/small-package.tar.gz"
-          wget -q $SMALL_URL -O /tmp/small-package.tar.gz
-          tar -xzf /tmp/small-package.tar.gz -C $PKG_DIR --strip-components=1 || echo "❌ 下载或解压 small-package 失败，将使用 ImageBuilder 默认源。"
-
-          cd ..
-
       - name: Build Rootfs with Custom Config
         run: |
           cd openwrt
@@ -169,29 +139,31 @@ jobs:
             FILES="files" \
             ROOTFS_PARTSIZE=1024 \
             PACKAGES="\
-              base-files busybox bash curl wget-ssl uclient-fetch ca-bundle ppp ppp-mod-pppoe acpid \
-              kmod-brcmfmac kmod-brcmutil brcmfmac-firmware-43455-sdio wpad-basic-mbedtls hostapd-common iw iwinfo wireless-tools \
-              kmod-usb-net-rtl8152 kmod-usb-net-aqc111 \
-              luci luci-base luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system \
-              luci-i18n-base-zh-cn luci-theme-argon \
-              block-mount fdisk losetup kmod-fs-ext4 openssh-sftp-server \
-              php8 php8-cgi php8-mod-curl php8-mod-mbstring php8-mod-openssl php8-mod-session php8-mod-zip \
-              nfs-kernel-server luci-i18n-nfs-zh-cn \
-              luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server kmod-fs-ksmbd kmod-fs-cifs cifsmount luci-i18n-cifs-mount-zh-cn \
-              luci-app-p910nd luci-i18n-p910nd-zh-cn kmod-usb-printer kmod-lp \
-              luci-app-hd-idle luci-i18n-hd-idle-zh-cn \
-              comgt comgt-ncm uqmi usb-modeswitch wwan kmod-usb-serial-option kmod-usb-net-rndis kmod-usb-net-cdc-ether \
+              base-files busybox bash pigz zstd xz-utils openssh-sftp-server htop \
+              block-mount fdisk losetup kmod-fs-ext4 kmod-fs-f2fs f2fs-tools exfat-mkfs ntfs-3g mount-utils \
+              curl wget-ssl uclient-fetch ppp ppp-mod-pppoe \
+              kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer \
               docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
-              luci-app-zerotier luci-i18n-zerotier-zh-cn \
-              luci-app-easytier \
+              ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn \
+              php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-session php8-mod-zip php8-mod-mbstring \
+              luci luci-base luci-compat luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system \
+              luci-i18n-base-zh-cn luci-theme-argon \
+              luci-app-amlogic luci-i18n-amlogic-zh-cn \
               luci-app-socat luci-i18n-socat-zh-cn socat \
+              luci-app-easytier \
+              luci-app-diskman luci-i18n-diskman-zh-cn \
               luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
+              luci-app-hd-idle luci-i18n-hd-idle-zh-cn \
+              luci-app-package-manager \
+              luci-app-zerotier luci-i18n-zerotier-zh-cn \
               luci-app-wol luci-i18n-wol-zh-cn \
+              luci-app-firewall luci-i18n-firewall-zh-cn \
               luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
-              luci-i18n-filebrowser-go-zh-cn \
-              luci-app-amlogic \
-              luci-i18n-amlogic-zh-cn \
-              kmod-tun \
+              luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server kmod-fs-ksmbd luci-i18n-ksmbd-zh-cn \
+              kmod-fs-cifs cifsmount luci-i18n-cifs-mount-zh-cn \
+              nfs-kernel-server luci-i18n-nfs-zh-cn \
+              minidlna luci-i18n-minidlna-zh-cn \
+              zoneinfo-asia zoneinfo-core \
             " \
             -j$(nproc)
 
@@ -219,18 +191,21 @@ jobs:
           tag_name: IWrt-image-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
           name: IWrt-image S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            自动编译的 ImmortalWrt S905X3 固件 (ImageBuilder + ophub)
+            自动编译的 ImmortalWrt 固件 (ImageBuilder 精简版)
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
             - 设备: ${{ github.event.inputs.device_board }}
             - 内核: ${{ github.event.inputs.kernel_version }}
             
-            ### 🔗 第三方插件来源
-            - luci-app-amlogic: github.com/ophub/luci-app-amlogic (Latest Release)
-            - luci-app-easytier: github.com/EasyTier/luci-app-easytier (Latest Release)
-            - 代理插件等: github.com/kenzok8/small-package (Prebuilt)
+            ### ✂️ 精简说明
+            - ❌ 已移除 Perl 全家桶
+            - ❌ 已移除冗余基础工具 (coremark/git/iperf3/rename等)
+            - ❌ 已移除桌面级文件系统工具 (btrfs/xfs)
+            - ❌ 已移除无用无线驱动栈 (brcmfmac/wpad-basic)
+            - ❌ 已移除 PHP 数据库模块
             
             ### 📁 自定义内容
             - custom-files: 已注入并覆盖系统同名文件
+            - custom-packages: 本地 .ipk 已预装
             
             ### ⚠️ kmods 安装说明
             ImageBuilder 使用官方预编译内核，可直接从官方源安装匹配的内核模块：
@@ -238,7 +213,6 @@ jobs:
             opkg update
             opkg install kmod-tun kmod-usb-net-rtl8152
             ```
-            无需自建 kmods 源，vermagic 与官方仓库完全一致。
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
