@@ -1,4 +1,4 @@
-name: Build ImmortalWrt S905X3 with ImageBuilder
+name: Build s905x3 with ImageBuilder
 
 on:
   workflow_dispatch:
