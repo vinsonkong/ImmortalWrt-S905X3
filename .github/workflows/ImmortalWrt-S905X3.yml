@@ -6,7 +6,7 @@ on:
       immortalwrt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '24.10.6'
+        default: '23.05.7'
         type: choice
         options:
           - 23.05.0
@@ -32,7 +32,7 @@ on:
       kernel_version:
         description: 'Kernel Branch (ophub/kernel)'
         required: true
-        default: '6.18.y'
+        default: '5.15.y'
         type: choice
         options:
           - 5.10.y
@@ -75,16 +75,26 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils
+          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils
 
-      - name: Download ImmortalWrt ImageBuilder
+      - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
           VERSION=${{ github.event.inputs.immortalwrt_version }}
-          BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.zst"
-          echo "Downloading from $BUILDER_URL"
-          wget -q $BUILDER_URL -O imagebuilder.tar.zst
-          tar -I zstd -xf imagebuilder.tar.zst
-          mv immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64 openwrt
+          # 判断版本号前缀以确定压缩格式
+          if [[ "$VERSION" == "23.05."* ]]; then
+            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.xz"
+            echo "Downloading 23.05.x ImageBuilder (xz format): $BUILDER_URL"
+            wget -q $BUILDER_URL -O imagebuilder.tar.xz
+            tar -xf imagebuilder.tar.xz
+          else
+            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.zst"
+            echo "Downloading 24.10+ ImageBuilder (zstd format): $BUILDER_URL"
+            wget -q $BUILDER_URL -O imagebuilder.tar.zst
+            tar -I zstd -xf imagebuilder.tar.zst
+          fi
+          
+          # 重命名解压后的目录（注意：23.05的目录名可能不带后缀，这里使用通配符确保兼容）
+          mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 openwrt
 
       # ========== 核心修改：注入自定义文件与本地软件包 ==========
       - name: Inject Custom Files & Packages
@@ -112,43 +122,43 @@ jobs:
             find "$IB_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
             echo "✅ 文件注入完成，列表："
             find "$IB_FILES_DIR" -type f | sort
+            
             # ⭐ Dropbear SSH 专属权限修复
             echo "🔐 修复 Dropbear 权限..."
-            # dropbear 配置必须为 600
             [ -f "$IB_FILES_DIR/etc/config/dropbear" ] && chmod 600 "$IB_FILES_DIR/etc/config/dropbear"
-            # authorized_keys 必须为 600，所属目录必须为 700
             if [ -d "$IB_FILES_DIR/root/.ssh" ]; then
               chmod 700 "$IB_FILES_DIR/root/.ssh"
               find "$IB_FILES_DIR/root/.ssh" -type f -name "authorized_keys*" -exec chmod 600 {} \;
             fi
-            # 主机密钥文件必须为 600
             find "$IB_FILES_DIR/etc/dropbear" -type f -name "dropbear_*_host_key" -exec chmod 600 {} \; 2>/dev/null || true
-            
             echo "✅ 文件注入及权限修复完成"
           else
             echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
           fi
 
-          
-
       - name: Build Rootfs with Custom Config
         run: |
           cd openwrt
-          make image PROFILE=generic FILES="files" PACKAGES="\
-            base-files busybox bash coreutils coreutils-base64 coreutils-nohup coreutils-truncate getopt gawk iconv jq jshn libjson-script pigz pv rename tar unzip whereis which xz xz-utils zstd gzip bzip2 bsdtar acpid attr chattr lsattr openssh-sftp-server git htop iperf3 coremark \
-            block-mount blockd blkid dosfstools dumpe2fs e2freefrag e2fsprogs exfat-mkfs f2fs-tools f2fsck fdisk losetup lsblk lscpu mkf2fs mount-utils parted resize2fs tune2fs uuidgen btrfs-progs xfs-fsck xfs-mkfs ziptool mdadm ntfs-3g \
-            ipv6helper curl wget-ssl uclient-fetch openssl-util liblucihttp liblucihttp-lua ppp ppp-mod-pppoe comgt comgt-ncm uqmi usb-modeswitch wwan kmod-cfg80211 kmod-mac80211 kmod-brcmfmac kmod-brcmutil wpad-basic hostapd-common iw iwinfo wireless-tools \
-            kmod-virtio-net kmod-virtio-blk kmod-virtio-scsi kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer kmod-lp kmod-fs-ext4 kmod-fs-ntfs \
-            docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
-            uhttpd uhttpd-mod-ubus cgi-io ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-mysqli php8-mod-pdo-mysql php8-mod-session php8-mod-zip php8-mod-mbstring php8-mod-iconv \
-            luci luci-base luci-compat luci-lib-base luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system luci-i18n-base-zh-cn luci-theme-argon \
-            ./packages/luci-app-amlogic.ipk ./packages/luci-i18n-amlogic-zh-cn.ipk ./packages/luci-app-socat.ipk ./packages/luci-i18n-socat-zh-cn.ipk socat ./packages/luci-app-easytier.ipk luci-app-diskman luci-i18n-diskman-zh-cn luci-app-ddns-go luci-i18n-ddns-go-zh-cn luci-app-hd-idle luci-i18n-hd-idle-zh-cn luci-app-p910nd luci-i18n-p910nd-zh-cn luci-app-package-manager luci-i18n-package-manager-zh-cn luci-i18n-filebrowser-go-zh-cn \
-            luci-app-zerotier luci-i18n-zerotier-zh-cn luci-app-wol luci-i18n-wol-zh-cn luci-app-firewall luci-i18n-firewall-zh-cn luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
-            luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server kmod-fs-ksmbd luci-i18n-ksmbd-zh-cn kmod-fs-cifs cifsmount luci-i18n-cifs-mount-zh-cn nfs-kernel-server luci-i18n-nfs-zh-cn minidlna luci-i18n-minidlna-zh-cn \
-            zoneinfo-asia zoneinfo-core \
-            perl perl-http-date perlbase-base perlbase-bytes perlbase-charnames perlbase-class perlbase-config perlbase-cwd perlbase-dynaloader perlbase-errno perlbase-essential perlbase-fcntl perlbase-file perlbase-getopt perlbase-symbol perlbase-tie perlbase-time perlbase-unicode perlbase-utf8 \
-            \
-          " -j$(nproc)
+          # 针对 23.05 版本，确保 feeds 是更新的，避免某些基础包找不到
+          ./scripts/feeds update -a
+          
+          make image PROFILE=generic \
+            FILES="files" \
+            PACKAGES="\
+              base-files busybox bash coreutils coreutils-base64 coreutils-nohup coreutils-truncate getopt gawk iconv jq jshn libjson-script pigz pv rename tar unzip whereis which xz xz-utils zstd gzip bzip2 bsdtar acpid attr chattr lsattr openssh-sftp-server git htop iperf3 coremark \
+              block-mount blockd blkid dosfstools dumpe2fs e2freefrag e2fsprogs exfat-mkfs f2fs-tools f2fsck fdisk losetup lsblk lscpu mkf2fs mount-utils parted resize2fs tune2fs uuidgen btrfs-progs xfs-fsck xfs-mkfs ziptool mdadm ntfs-3g \
+              ipv6helper curl wget-ssl uclient-fetch openssl-util liblucihttp liblucihttp-lua ppp ppp-mod-pppoe comgt comgt-ncm uqmi usb-modeswitch wwan kmod-cfg80211 kmod-mac80211 kmod-brcmfmac kmod-brcmutil wpad-basic hostapd-common iw iwinfo wireless-tools \
+              kmod-virtio-net kmod-virtio-blk kmod-virtio-scsi kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer kmod-lp kmod-fs-ext4 kmod-fs-ntfs \
+              docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
+              uhttpd uhttpd-mod-ubus cgi-io ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-mysqli php8-mod-pdo-mysql php8-mod-session php8-mod-zip php8-mod-mbstring php8-mod-iconv \
+              luci luci-base luci-compat luci-lib-base luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system luci-i18n-base-zh-cn luci-theme-argon \
+              ./packages/luci-app-amlogic.ipk ./packages/luci-i18n-amlogic-zh-cn.ipk ./packages/luci-app-socat.ipk ./packages/luci-i18n-socat-zh-cn.ipk socat ./packages/luci-app-easytier.ipk luci-app-diskman luci-i18n-diskman-zh-cn luci-app-ddns-go luci-i18n-ddns-go-zh-cn luci-app-hd-idle luci-i18n-hd-idle-zh-cn luci-app-p910nd luci-i18n-p910nd-zh-cn luci-app-package-manager luci-i18n-package-manager-zh-cn luci-i18n-filebrowser-go-zh-cn \
+              luci-app-zerotier luci-i18n-zerotier-zh-cn luci-app-wol luci-i18n-wol-zh-cn luci-app-firewall luci-i18n-firewall-zh-cn luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
+              luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server kmod-fs-ksmbd luci-i18n-ksmbd-zh-cn kmod-fs-cifs cifsmount luci-i18n-cifs-mount-zh-cn nfs-kernel-server luci-i18n-nfs-zh-cn minidlna luci-i18n-minidlna-zh-cn \
+              zoneinfo-asia zoneinfo-core \
+              perl perl-http-date perlbase-base perlbase-bytes perlbase-charnames perlbase-class perlbase-config perlbase-cwd perlbase-dynaloader perlbase-errno perlbase-essential perlbase-fcntl perlbase-file perlbase-getopt perlbase-symbol perlbase-tie perlbase-time perlbase-unicode perlbase-utf8 \
+            " \
+            -j$(nproc)
 
       - name: Package Amlogic Firmware with ophub
         uses: ophub/amlogic-s9xxx-openwrt@main
