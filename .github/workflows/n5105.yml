@@ -107,19 +107,22 @@ jobs:
             echo "⚠️ 未找到 custom-files 目录，仅注入了 ASPM 修复脚本"
           fi
 
-      # ⭐ 合并步骤：统一拉取所有第三方插件源码
+      # ⭐ 替换为 sbwml + kiddin9 第三方源
       - name: Clone Third-Party Packages
         run: |
           cd openwrt
           mkdir -p packages
           
-          echo "📥 正在克隆 kenzok8/small 仓库..."
-          git clone --depth 1 https://github.com/kenzok8/small packages/small
+          echo "🧹 清理原有第三方源..."
+          rm -rf packages/small packages/easytier
           
-          echo "📥 正在克隆 EasyTier/luci-app-easytier 仓库..."
-          git clone --depth 1 https://github.com/EasyTier/luci-app-easytier packages/easytier
+          echo "📥 正在克隆 sbwml/openwrt_packages 仓库..."
+          git clone --depth 1 https://github.com/sbwml/openwrt_packages packages/sbwml
           
-          echo "✅ 所有第三方插件仓库克隆完成"
+          echo "📥 正在克隆 kiddin9/openwrt-packages 仓库..."
+          git clone --depth 1 https://github.com/kiddin9/openwrt-packages packages/kiddin9
+          
+          echo "✅ 第三方插件仓库克隆完成"
           ls -la packages/
           cd ..
 
@@ -152,12 +155,12 @@ jobs:
               comgt comgt-ncm uqmi usb-modeswitch wwan kmod-usb-serial-option kmod-usb-net-rndis kmod-usb-net-cdc-ether \
               docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
               luci-app-zerotier luci-i18n-zerotier-zh-cn \
-              luci-app-easytier \
+              luci-app-easytier luci-i18n-easytier-zh-cn \
               luci-app-socat luci-i18n-socat-zh-cn socat \
               luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
               luci-app-wol luci-i18n-wol-zh-cn \
               luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
-              luci-i18n-filebrowser-go-zh-cn \
+              luci-app-filebrowser luci-i18n-filebrowser-zh-cn \
             " \
             -j$(nproc)
 
@@ -191,16 +194,15 @@ jobs:
             ### 📦 已集成核心功能
             Docker / Samba4 / NFS / PHP8 / Aria2 / ZeroTier / EasyTier
             DDNS-Go / WoL / USB打印(p910nd) / 硬盘休眠(hd-idle)
-            4G/5G USB上网卡 / Socat / FileBrowser(语言包)
+            4G/5G USB上网卡 / Socat / FileBrowser
             
             ### 🔗 第三方插件来源
-            - luci-app-easytier: github.com/EasyTier/luci-app-easytier
-            - luci-app-socat 等: github.com/kenzok8/small
+            - sbwml/openwrt_packages (EasyTier / FileBrowser 等)
+            - kiddin9/openwrt-packages (Socat / DDNS-Go 等)
             
             ### ⚠️ 使用说明
             1. 本固件为只读 SquashFS，系统升级保留配置，恢复出厂仅需重置 overlay
-            2. FileBrowser 仅提供 LuCI 汉化，后端需通过 Docker 部署
-            3. Perl 已从本固件中彻底移除，数据库等重型需求请使用 Docker
+            2. Perl 已从本固件中彻底移除，数据库等重型需求请使用 Docker
           files: |
             openwrt/bin/targets/x86/64/*.img.gz
             openwrt/bin/targets/x86/64/*.vmdk
