@@ -183,7 +183,7 @@ jobs:
               docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
               luci-app-zerotier luci-i18n-zerotier-zh-cn \
               ./packages/luci-app-easytier ./packages/luci-i18n-easytier-zh-cn \
-              luci-app-socat luci-i18n-socat-zh-cn socat \
+              ./packages/luci-app-socat ./packages/luci-i18n-socat-zh-cn socat \
               luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
               luci-app-wol luci-i18n-wol-zh-cn \
               luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
