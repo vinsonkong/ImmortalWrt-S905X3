@@ -1,4 +1,4 @@
-name: Build ImmortalWrt N5105
+name: Build ImmortalWrt N5105 SquashFS
 
 on:
   workflow_dispatch:
@@ -24,7 +24,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build ImmortalWrt N5105 Full
+    name: Build ImmortalWrt N5105 SquashFS
 
     steps:
       - name: Checkout
@@ -70,7 +70,7 @@ jobs:
       - name: Inject Custom Files & Packages
         run: |
           # 注入自定义 ipk 包
-          CUSTOM_PKG_DIR="./custom-packagesX86"
+          CUSTOM_PKG_DIR="./custom-packages"
           IB_PKG_DIR="./openwrt/packages"
           if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
             echo "📦 注入自定义 ipk 包..."
@@ -120,9 +120,16 @@ jobs:
             echo "⚠️ 未找到 custom-files 目录，仅注入了 ASPM 修复脚本"
           fi
 
-      - name: Build Rootfs with Custom Config
+      - name: Build Rootfs with SquashFS Config
         run: |
           cd openwrt
+          
+          # ⭐ 显式强制启用 SquashFS + ZSTD 压缩
+          cat >> .config << EOF
+          CONFIG_TARGET_ROOTFS_SQUASHFS=y
+          CONFIG_SQUASHFS_ZSTD=y
+          CONFIG_SQUASHFS_BLOCK_SIZE=262144
+          EOF
           
           make image PROFILE=generic \
             FILES="files" \
@@ -154,7 +161,7 @@ jobs:
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-N5105-Full-${{ github.event.inputs.immortalwrt_version }}
+          name: ImmortalWrt-N5105-SquashFS-${{ github.event.inputs.immortalwrt_version }}
           path: openwrt/bin/targets/x86/64/*
 
       - name: Upload Firmware to Release
@@ -163,12 +170,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: IWrt-N5105-Full-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
-          name: IWrt N5105 Full ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          tag_name: IWrt-N5105-SquashFS-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: IWrt N5105 SquashFS ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            ImmortalWrt N5105 固件 (ImageBuilder)
+            自动编译的 ImmortalWrt N5105 SquashFS 固件 (ImageBuilder)
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
             - 架构: x86_64 (Intel Jasper Lake N5105)
+            - 文件系统: **SquashFS (ZSTD 压缩, 256K Block)**
             
             ### 🛠️ N5105 专属优化
             - ✅ Intel UHD Graphics (i915) 驱动 + DMC 固件
@@ -183,8 +191,8 @@ jobs:
             4G/5G USB上网卡 / Socat / FileBrowser(语言包)
             
             ### ⚠️ 使用说明
-            1. FileBrowser 仅提供 LuCI 汉化，后端需通过 Docker 部署
-            2. 若 4G/5G 模组无法识别，请根据 lsusb 结果补充对应 kmod-usb-serial-* 驱动
+            1. 本固件为只读 SquashFS，系统升级保留配置，恢复出厂仅需重置 overlay
+            2. FileBrowser 仅提供 LuCI 汉化，后端需通过 Docker 部署
             3. Perl 已从本固件中彻底移除，数据库等重型需求请使用 Docker
           files: |
             openwrt/bin/targets/x86/64/*.img.gz
