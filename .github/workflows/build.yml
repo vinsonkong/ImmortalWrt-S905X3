@@ -125,7 +125,6 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # ========== 新增：注入自定义二进制文件 (miniserve & gowebdav) ==========
       - name: Inject Custom Binaries (files method)
         run: |
           echo "📦 检查并注入 custom-files ..."
@@ -137,7 +136,6 @@ jobs:
             mkdir -p "$OPENWRT_FILES_DIR"
             cp -r "$CUSTOM_FILES_DIR"/* "$OPENWRT_FILES_DIR/"
 
-            # 强制添加执行权限 (关键步骤，防止因 Git 权限丢失导致二进制/init.d 无法运行)
             find "$OPENWRT_FILES_DIR/usr/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
             find "$OPENWRT_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
 
@@ -162,7 +160,6 @@ jobs:
         run: |
           cd openwrt
 
-          # 读取仓库根目录的 .config 种子文件
           if [ -f "../${{ env.CONFIG_FILE }}" ]; then
             echo "✅ 找到自定义 .config，正在应用..."
             cp "../${{ env.CONFIG_FILE }}" .config
@@ -170,19 +167,15 @@ jobs:
             echo "⚠️ 未找到 .config 文件，将使用 ImmortalWrt 默认配置！"
           fi
 
-          # 强制将 rootfs 分区大小设置为 1024MB (防止 Docker/Samba 撑爆空间)
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
 
-          # 核心步骤：让系统根据种子配置，自动计算并展开所有底层依赖
           make defconfig
 
-          # 输出最终启用的包数量，方便排查
           echo "=== 最终生成的 .config 中启用的包数量 ==="
           grep "=y" .config | wc -l
           echo "=== 软件包数 ==="
           grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
 
-          # 检查关键插件是否成功被选中
           echo "=== 检查关键插件状态 ==="
           grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
 
@@ -201,6 +194,39 @@ jobs:
           make -j$(nproc) || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
 
+      # ========== 新增：收集 kmods 并生成 opkg 索引 ==========
+      - name: Collect and Index kmods
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          cd openwrt
+          KMOD_DIR="../kmods-repo"
+          mkdir -p "$KMOD_DIR"
+
+          echo "🔍 正在收集所有 kmod ipk 文件..."
+          find bin/packages/ -type f -name "kmod-*.ipk" -exec cp {} "$KMOD_DIR/" \; 2>/dev/null || true
+          find bin/targets/ -type f -name "kmod-*.ipk" -exec cp {} "$KMOD_DIR/" \; 2>/dev/null || true
+
+          echo "📝 生成 Packages 索引..."
+          cd "$KMOD_DIR"
+          if [ -f "../openwrt/scripts/ipkg-make-index.sh" ]; then
+              ../openwrt/scripts/ipkg-make-index.sh . > Packages
+          else
+              dpkg-scanpackages . /dev/null > Packages 2>/dev/null || echo "⚠️ 索引生成失败"
+          fi
+          gzip -c Packages > Packages.gz
+
+          KMOD_COUNT=$(ls kmod-*.ipk 2>/dev/null | wc -l)
+          echo "✅ 共收集到 ${KMOD_COUNT} 个 kmod 包"
+          echo "✅ 索引文件已生成: Packages.gz ($(du -h Packages.gz | cut -f1))"
+
+      # ========== 新增：打包 kmods 仓库 ==========
+      - name: Package kmods as tar.gz
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          echo "📦 打包 kmods 仓库..."
+          tar -czf kmods-repo.tar.gz -C kmods-repo .
+          echo "✅ 打包完成: kmods-repo.tar.gz ($(du -h kmods-repo.tar.gz | cut -f1))"
+
       - name: Package Amlogic Firmware with ophub
         if: steps.compile.outputs.status == 'success'
         uses: ophub/amlogic-s9xxx-openwrt@main
@@ -218,7 +244,8 @@ jobs:
           name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
           path: ${{ env.PACKAGED_OUTPUTPATH }}
 
-      - name: Upload Firmware to Release
+      # ========== 修改：Release 同时上传固件和 kmods 源 ==========
+      - name: Upload Firmware & kmods to Release
         uses: softprops/action-gh-release@v2
         if: success()
         env:
@@ -234,6 +261,14 @@ jobs:
             - 默认 IP: 192.168.30.254 (旁路由模式，已关 DHCP)
             - 主题: Argon
             - 插件: Amlogic, Socat, ZeroTier, miniserve, gowebdav
+            
+            ### 📦 kmods 本地源使用说明
+            下载 `kmods-repo.tar.gz` 解压后通过 HTTP 托管，在路由器中添加：
+            ```
+            src/gz custom_kmods http://<你的服务器IP>/kmods/
+            ```
+            ⚠️ 此源仅适用于本次编译的固件，重新编译后需同步更新。
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
+            kmods-repo.tar.gz
