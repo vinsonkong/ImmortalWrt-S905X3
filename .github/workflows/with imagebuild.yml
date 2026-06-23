@@ -1,4 +1,4 @@
-name: Build ImmortalWrt S905X3 with ImageBuilder
+name: S905X3 with ImageBuilder
 
 on:
   workflow_dispatch:
@@ -127,8 +127,10 @@ jobs:
           echo "📥 正在克隆 kenzok8/small 仓库..."
           git clone --depth 1 https://github.com/kenzok8/small packages/small
           
-          echo "📥 正在克隆 EasyTier/luci-app-easytier 仓库..."
+          echo "📥 正在克隆 EasyTier/l 仓库..."
           git clone --depth 1 https://github.com/EasyTier/luci-app-easytier packages/easytier
+          git clone --depth 1 https://github.com/ophub/luci-app-amlogic packages/amlogic
+
           
           echo "✅ 所有第三方插件仓库克隆完成"
           ls -la packages/
