@@ -188,8 +188,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: IWrt-image-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
-          name: IWrt-image S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          tag_name: IWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: IWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
             自动编译的 ImmortalWrt 固件 (ImageBuilder 精简版)
             - 版本: ${{ github.event.inputs.immortalwrt_version }}
