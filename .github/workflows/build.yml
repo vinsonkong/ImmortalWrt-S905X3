@@ -167,8 +167,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
-          name: ImmortalWrt ${{ inputs.immortalwrt_version }} for ${{ inputs.device_board }}
+          tag_name: lWrt-kmods-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
+          name: IWrt-kmods-${{ inputs.immortalwrt_version }} for ${{ inputs.device_board }}
           body: |
             ImmortalWrt 固件
             - **版本**: ${{ inputs.immortalwrt_version }}
