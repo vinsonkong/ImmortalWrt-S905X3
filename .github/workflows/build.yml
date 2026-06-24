@@ -8,19 +8,7 @@ on:
         required: true
         default: '24.10.6'
         type: choice
-        options:
-          - 23.05.4
-          - 23.05.5
-          - 23.05.6
-          - 23.05.7
-          - 24.10.0
-          - 24.10.1
-          - 24.10.2
-          - 24.10.3
-          - 24.10.4
-          - 24.10.5
-          - 24.10.6
-          - 25.12.0
+        options: [23.05.4, 23.05.5, 23.05.6, 23.05.7, 24.10.0, 24.10.1, 24.10.2, 24.10.3, 24.10.4, 24.10.5, 24.10.6]
       device_board:
         description: 'Device Board'
         required: true
@@ -30,18 +18,7 @@ on:
         required: true
         default: '6.18.y'
         type: choice
-        options:
-          - 5.10.y
-          - 5.15.y
-          - 6.1.y
-          - 6.6.y
-          - 6.12.y
-          - 6.18.y
-          - 5.10.y_5.15.y
-          - 6.1.y_6.6.y
-          - 6.12.y_6.18.y
-          - 6.1.y_6.12.y
-          - 6.1.y_6.18.y
+        options: [5.10.y, 5.15.y, 6.1.y, 6.6.y, 6.12.y, 6.18.y]
 
 env:
   CONFIG_FILE: .config24
@@ -51,23 +28,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build for ${{ github.event.inputs.device_board }}
+    name: Build for ${{ inputs.device_board }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Create Swap File (Prevent Memory Overflow)
+      - name: Create Swap File
         run: |
-          if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
-            echo "No active swap found. Creating 4G swap..."
+          if [ -z "$(swapon --show=NAME --noheadings)" ]; then
             sudo fallocate -l 4G /mnt/swapfile
             sudo chmod 600 /mnt/swapfile
             sudo mkswap /mnt/swapfile
             sudo swapon /mnt/swapfile
-          else
-            echo "Swap already active:"
-            swapon --show
           fi
           free -h
 
@@ -82,42 +54,30 @@ jobs:
           sudo -E apt-get -qq autoremove --purge
           sudo -E apt-get -qq clean
 
-      - name: Free up disk space (CRITICAL)
+      - name: Free up disk space
         run: |
-          echo "=== Before cleanup ==="
-          df -hT
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
           docker rmi $(docker images -q) || true
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
-          echo "=== After cleanup ==="
           df -hT
 
       - name: Clone ImmortalWrt source code
         run: |
-          VERSION="${{ github.event.inputs.immortalwrt_version }}"
+          VERSION="${{ inputs.immortalwrt_version }}"
           git clone --depth 1 -b v${VERSION} https://github.com/immortalwrt/immortalwrt.git openwrt || \
           git clone --depth 1 -b openwrt-${VERSION%.*} https://github.com/immortalwrt/immortalwrt.git openwrt || \
           git clone --depth 1 -b master https://github.com/immortalwrt/immortalwrt.git openwrt
-          echo "OPENWRT_PATH=$(pwd)/openwrt" >> $GITHUB_ENV
 
-      - name: Clone specific plugins (No Feeds)
+      - name: Clone specific plugins
         run: |
           cd openwrt/package
-          mkdir -p custom_plugins
-          cd custom_plugins
-
-          echo "=== 1. 克隆 luci-app-amlogic (ophub 官方) ==="
+          mkdir -p custom_plugins && cd custom_plugins
           git clone --depth 1 https://github.com/ophub/luci-app-amlogic.git
-
-          echo "=== 2. 提取 luci-app-socat (从 kenzok8 精准剥离) ==="
           git clone --depth 1 https://github.com/kenzok8/small-package.git temp_repo
           [ -d "temp_repo/luci-app-socat" ] && cp -r temp_repo/luci-app-socat .
           [ -d "temp_repo/socat" ] && cp -r temp_repo/socat .
           rm -rf temp_repo
-
-          echo "=== 当前 custom_plugins 目录下的插件 ==="
-          ls -l
 
       - name: Update & Install feeds
         run: |
@@ -125,193 +85,92 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Inject Custom Binaries (files method)
+      - name: Inject Custom Binaries
         run: |
-          echo "📦 检查并注入 custom-files ..."
-          CUSTOM_FILES_DIR="custom-files"
-          OPENWRT_FILES_DIR="openwrt/files"
-
-          if [ -d "$CUSTOM_FILES_DIR" ]; then
-            echo "✅ 找到 custom-files，正在复制到 OpenWrt files 目录..."
-            mkdir -p "$OPENWRT_FILES_DIR"
-            cp -r "$CUSTOM_FILES_DIR"/* "$OPENWRT_FILES_DIR/" 2>/dev/null || true
-
-            find "$OPENWRT_FILES_DIR/usr/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
-            find "$OPENWRT_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
-
-            echo "✅ 注入完成。已注入的文件列表："
-            find "$OPENWRT_FILES_DIR" -type f 2>/dev/null | sort || true
-          else
-            echo "⚠️ 警告：未找到 $CUSTOM_FILES_DIR 目录，跳过自定义二进制文件注入。"
+          if [ -d "custom-files" ]; then
+            mkdir -p openwrt/files
+            cp -r custom-files/* openwrt/files/ 2>/dev/null || true
+            find openwrt/files/usr/bin openwrt/files/etc/init.d -type f -exec chmod +x {} \; 2>/dev/null || true
           fi
 
-      - name: Run DIY script (Clean Target & Inject Configs)
+      - name: Run DIY script
         run: |
           cd openwrt
           if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
-            cp "../${{ env.DIY_SCRIPT }}" "${{ env.DIY_SCRIPT }}"
-            chmod +x "${{ env.DIY_SCRIPT }}"
-            ./"${{ env.DIY_SCRIPT }}"
-          else
-            echo "⚠️ 未找到 diy.sh，跳过自定义配置注入。"
+            chmod +x "../${{ env.DIY_SCRIPT }}"
+            ./"../${{ env.DIY_SCRIPT }}"
           fi
 
       - name: Load custom configuration
         run: |
           cd openwrt
-
-          if [ -f "../${{ env.CONFIG_FILE }}" ]; then
-            echo "✅ 找到自定义 .config，正在应用..."
-            cp "../${{ env.CONFIG_FILE }}" .config
-          else
-            echo "⚠️ 未找到 .config 文件，将使用 ImmortalWrt 默认配置！"
-          fi
-
+          [ -f "../${{ env.CONFIG_FILE }}" ] && cp "../${{ env.CONFIG_FILE }}" .config
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=1024" >> .config
-
           make defconfig
-
-          echo "=== 最终生成的 .config 中启用的包数量 ==="
-          grep "=y" .config | wc -l
-          echo "=== 软件包数 ==="
-          grep "^CONFIG_PACKAGE_.*=y$" .config | wc -l
-
-          echo "=== 检查关键插件状态 ==="
-          grep -E "luci-app-amlogic|luci-app-socat|luci-app-zerotier|luci-theme-argon" .config | grep "=y" || echo "⚠️ 警告：部分关键插件未被成功选中！"
 
       - name: Download package
         run: |
           cd openwrt
           make download -j8
-          find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
       - name: Compile the firmware
         id: compile
         run: |
           cd openwrt
-          echo -e "$(nproc) thread compile"
-          make -j$(nproc) || make -j1 V=s
-          echo "status=success" >> $GITHUB_OUTPUT
+          if make -j$(nproc); then
+            echo "status=success" >> $GITHUB_OUTPUT
+          elif make -j1 V=s; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
-      # ========== 新增：收集 kmods 并生成 opkg 索引 ==========
       - name: Collect and Index kmods
         if: steps.compile.outputs.status == 'success'
         run: |
+          # 修复 sha256 命令缺失问题
+          echo -e '#!/bin/sh\nsha256sum "$@" | awk "{print \$1}"' | sudo tee /usr/local/bin/sha256 > /dev/null
+          sudo chmod +x /usr/local/bin/sha256
+          
           cd openwrt
-          KMOD_DIR="../kmods-repo"
-          mkdir -p "$KMOD_DIR"
+          mkdir -p ../kmods-repo
+          find bin/packages bin/targets -type f -name "kmod-*.ipk" -exec cp {} ../kmods-repo/ \; 2>/dev/null || true
+          
+          cd ../kmods-repo
+          ../openwrt/scripts/ipkg-make-index.sh . > Packages
+          gzip -c Packages > Packages.gz
+          tar -czf ../kmods-repo.tar.gz -C . .
 
-          echo "🔍 正在收集所有 kmod ipk 文件..."
-          find bin/packages/ -type f -name "kmod-*.ipk" -exec cp {} "$KMOD_DIR/" \; 2>/dev/null || true
-          find bin/targets/ -type f -name "kmod-*.ipk" -exec cp {} "$KMOD_DIR/" \; 2>/dev/null || true
-
-          echo "📝 生成 Packages 索引..."
-          cd "$KMOD_DIR"
-          if [ -f "../openwrt/scripts/ipkg-make-index.sh" ]; then
-              ../openwrt/scripts/ipkg-make-index.sh . > Packages
-          else
-              # 使用简单的方法生成索引
-              for ipk in *.ipk; do
-                [ -f "$ipk" ] && echo "Package: $(basename "$ipk" .ipk)" >> Packages.tmp
-              done
-              mv Packages.tmp Packages 2>/dev/null || true
-          fi
-          gzip -c Packages > Packages.gz 2>/dev/null || true
-
-          KMOD_COUNT=$(ls *.ipk 2>/dev/null | wc -l)
-          echo "✅ 共收集到 ${KMOD_COUNT} 个 kmod 包"
-          echo "✅ 索引文件已生成: Packages.gz ($(du -h Packages.gz 2>/dev/null | cut -f1 || echo '0K'))"
-
-      # ========== 新增：打包 kmods 仓库 ==========
-      - name: Package kmods as tar.gz
-        if: steps.compile.outputs.status == 'success'
-        run: |
-          echo "📦 打包 kmods 仓库..."
-          if [ -d "kmods-repo" ]; then
-            tar -czf kmods-repo.tar.gz -C kmods-repo .
-            echo "✅ 打包完成: kmods-repo.tar.gz ($(du -h kmods-repo.tar.gz | cut -f1))"
-          else
-            echo "⚠️ 警告：kmods-repo 目录不存在，跳过打包"
-          fi
-
-      - name: Package Amlogic Firmware with ophub
+      - name: Package Amlogic Firmware
         if: steps.compile.outputs.status == 'success'
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
           openwrt_path: openwrt/bin/targets/*/*/*rootfs.tar.gz
-          openwrt_board: ${{ github.event.inputs.device_board }}
-          openwrt_kernel: ${{ github.event.inputs.kernel_version }}
+          openwrt_board: ${{ inputs.device_board }}
+          openwrt_kernel: ${{ inputs.kernel_version }}
           auto_kernel: true
           builder_name: ImmortalWrt
 
-      - name: Get packaged output path
-        if: steps.compile.outputs.status == 'success'
-        run: |
-          # 设置输出目录路径，与 ophub 插件的默认输出目录一致
-          echo "PACKAGED_OUTPUTPATH=openwrt-out" >> $GITHUB_ENV
-
       - name: Upload Firmware to Artifact
+        if: steps.compile.outputs.status == 'success'
         uses: actions/upload-artifact@v4
-        if: steps.compile.outputs.status == 'success'
         with:
-          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
+          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
           path: |
-            openwrt-out/*
-            openwrt/bin/targets/*/*/*.img
-            openwrt/bin/targets/*/*/*.img.gz
+            openwrt-out/*.img*
+            openwrt/bin/targets/*/*/*.img*
 
-      # ========== 修改：Release 同时上传固件和 kmods 源 ==========
       - name: Create Release
-        uses: softprops/action-gh-release@v2
         if: steps.compile.outputs.status == 'success'
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
-          name: ImmortalWrt ${{ github.event.inputs.immortalwrt_version }} for ${{ github.event.inputs.device_board }}
-          body: |
-            自动编译的 ImmortalWrt 固件 (旁路由极简版)
-            
-            ## 固件信息
-            - **版本**: ${{ github.event.inputs.immortalwrt_version }}
-            - **设备**: ${{ github.event.inputs.device_board }}
-            - **内核**: ${{ github.event.inputs.kernel_version }}
-            
-            ## 默认配置
-            - **管理地址**: 192.168.30.254
-            - **用户名**: root
-            - **密码**: password
-            - **旁路由模式**: 已启用（DHCP 已关闭）
-            
-            ## 包含插件
-            - luci-app-amlogic (ophub 官方)
-            - luci-app-socat
-            - luci-app-zerotier
-            - luci-theme-argon
-            - miniserve
-            - gowebdav
-            
-            ## 📦 kmods 本地源使用说明
-            下载 `kmods-repo.tar.gz` 解压后通过 HTTP 托管，在路由器中添加：
-            ```
-            src/gz custom_kmods http://<你的服务器IP>/kmods/
-            ```
-            
-            ⚠️ **重要提示**:
-            1. 此源仅适用于本次编译的固件
-            2. 重新编译后需同步更新 kmods 源
-            3. 建议使用 Web 服务器托管解压后的 kmods 目录
-            
-            ## 刷机说明
-            1. 将固件写入 USB 或 SD 卡
-            2. 插入设备并启动
-            3. 访问 192.168.30.254 进行配置
+          tag_name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
+          name: ImmortalWrt ${{ inputs.immortalwrt_version }} for ${{ inputs.device_board }}
           files: |
-            openwrt-out/*.img
-            openwrt-out/*.img.gz
-            openwrt/bin/targets/*/*/*.img
-            openwrt/bin/targets/*/*/*.img.gz
+            openwrt-out/*.img*
+            openwrt/bin/targets/*/*/*.img*
             kmods-repo.tar.gz
-          draft: false
-          prerelease: false
