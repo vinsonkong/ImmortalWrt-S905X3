@@ -1,4 +1,4 @@
-name: Build ImmortalWrt 24.10 S905X3
+name: Build ImmortalWrt S905X3
 
 on:
   workflow_dispatch:
@@ -56,7 +56,7 @@ jobs:
 
       - name: Free up disk space
         run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache || true
           docker rmi $(docker images -q) || true
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
@@ -161,6 +161,20 @@ jobs:
           path: openwrt-out/
           retention-days: 7
 
+      - name: Download Amlogic Firmware Artifact
+        if: steps.compile.outputs.status == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
+          path: firmware_tmp
+
+      - name: Move Firmware to Output
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          mkdir -p openwrt-out
+          # 将下载的固件移动到 openwrt-out 目录，以便 Release 步骤读取
+          mv firmware_tmp/* openwrt-out/ 2>/dev/null || true
+
       - name: Create Release
         if: steps.compile.outputs.status == 'success'
         uses: softprops/action-gh-release@v2
@@ -180,4 +194,3 @@ jobs:
             kmods-repo.tar.gz
           draft: false
           prerelease: false
-
