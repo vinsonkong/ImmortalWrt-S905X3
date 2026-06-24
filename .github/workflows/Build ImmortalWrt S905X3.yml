@@ -13,12 +13,14 @@ on:
         description: 'Device Board'
         required: true
         default: 's905x3'
+        type: choice
+        options: ['s905x3', 's905x4', 's922x', 'r68s', 'r66s', 'rk3588']
       kernel_version:
         description: 'Kernel Branch (ophub/kernel)'
         required: true
         default: '6.18.y'
         type: choice
-        options: [5.10.y, 5.15.y, 6.1.y, 6.6.y, 6.12.y, 6.18.y]
+        options: ['5.10.y', '5.15.y', '6.1.y', '6.6.y', '6.12.y', '6.18.y']
 
 env:
   CONFIG_FILE: .config24
@@ -165,7 +167,7 @@ jobs:
         run: |
           mkdir -p openwrt-out
           
-          # 开启 nullglob，防止通配符未匹配时变成字面字符串导致报错
+          # 开启 nullglob，防止通配符未匹配时变成字面字符串导致 mv/cp 报错
           shopt -s nullglob
           
           echo "=== 🔍 检查 ophub 输出目录 ==="
@@ -199,6 +201,7 @@ jobs:
               else
                 ext=".img"
               fi
+              
               new_name="${DEVICE}-immortalwrt_${VERSION}_${BUILD_TIME}${ext}"
               mv "$file" "$new_name"
               echo "✅ Renamed: $file -> $new_name"
@@ -209,11 +212,11 @@ jobs:
           # 关闭 nullglob
           shopt -u nullglob
           
-          # 移动 kmods
+          # 将 kmods 压缩包移动到同一目录
           mv kmods-repo.tar.gz openwrt-out/ 2>/dev/null || true
           
           echo "=========================================="
-          echo "📦 最终准备上传的文件:"
+          echo "📦 Files ready for Artifact and Release:"
           ls -lh openwrt-out/
           echo "=========================================="
 
@@ -244,30 +247,3 @@ jobs:
           draft: false
           prerelease: false
           fail_on_unmatched_files: false
-
-        with:
-          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
-          path: openwrt-out/
-          retention-days: 7
-
-      - name: Create Release
-        if: steps.compile.outputs.status == 'success'
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: lWrt-kmods-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}-${{ github.run_id }}
-          name: IWrt-kmods-${{ inputs.immortalwrt_version }} for ${{ inputs.device_board }}-${{ github.run_id }}
-          body: |
-            ImmortalWrt 固件
-            - **版本**: ${{ inputs.immortalwrt_version }}
-            - **设备**: ${{ inputs.device_board }}
-            - **内核**: ${{ inputs.kernel_version }}
-            - **构建时间**: ${{ github.run_id }}
-          files: |
-            openwrt-out/*.img
-            openwrt-out/*.img.gz
-            openwrt-out/kmods-repo.tar.gz
-          draft: false
-          prerelease: false
-          fail_on_unmatched_files: false # 防止因缺少某种后缀(如只有.gz没有.img)而报错中断
