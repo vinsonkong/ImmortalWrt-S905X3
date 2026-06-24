@@ -24,6 +24,8 @@ env:
   CONFIG_FILE: .config24
   DIY_SCRIPT: diy.sh
   TZ: Asia/Shanghai
+  # 屏蔽 GitHub Actions 底层第三方 Action 使用 Node 20 产生的弃用警告
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
   build:
@@ -32,6 +34,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22' # 升级系统 Node.js 版本至 22 LTS
 
       - name: Create Swap File
         run: |
@@ -56,7 +63,7 @@ jobs:
 
       - name: Free up disk space
         run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache || true
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /usr/local/.ghcup /opt/hostedtoolcache || true
           docker rmi $(docker images -q) || true
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /tmp/*
@@ -153,6 +160,51 @@ jobs:
           auto_kernel: true
           builder_name: ImmortalWrt
 
+      - name: Organize and Rename Firmware Files
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          mkdir -p openwrt-out
+          
+          # 兼容 ophub 的输出目录 (out 或 openwrt-out)
+          if [ -d "out" ]; then
+            mv out/*.img out/*.img.gz openwrt-out/ 2>/dev/null || true
+          fi
+          
+          # 确保所有固件都在 openwrt-out 根目录
+          find openwrt-out -mindepth 2 -type f $ -name "*.img" -o -name "*.img.gz" $ -exec mv {} openwrt-out/ \; 2>/dev/null || true
+          
+          # 获取构建时间 (格式: YYYYMMDDHHmm)
+          BUILD_TIME=$(date +'%Y%m%d%H%M')
+          DEVICE="${{ inputs.device_board }}"
+          VERSION="${{ inputs.immortalwrt_version }}"
+          
+          # 重命名固件文件
+          cd openwrt-out
+          for file in *.img *.img.gz; do
+            if [ -f "$file" ]; then
+              # 判断后缀名
+              if [[ "$file" == *.img.gz ]]; then
+                ext=".img.gz"
+              else
+                ext=".img"
+              fi
+              
+              # 组合新文件名: s905x3-immortalwrt_24.10.6_202606242140.img
+              new_name="${DEVICE}-immortalwrt_${VERSION}_${BUILD_TIME}${ext}"
+              mv "$file" "$new_name"
+              echo "✅ Renamed: $file -> $new_name"
+            fi
+          done
+          cd ..
+          
+          # 将 kmods 压缩包移动到同一目录
+          mv kmods-repo.tar.gz openwrt-out/ 2>/dev/null || true
+          
+          echo "=========================================="
+          echo "📦 Files ready for Artifact and Release:"
+          ls -lh openwrt-out/
+          echo "=========================================="
+
       - name: Upload Firmware to Artifact
         if: steps.compile.outputs.status == 'success'
         uses: actions/upload-artifact@v4
@@ -160,20 +212,6 @@ jobs:
           name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
           path: openwrt-out/
           retention-days: 7
-
-      - name: Download Amlogic Firmware Artifact
-        if: steps.compile.outputs.status == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
-          path: firmware_tmp
-
-      - name: Move Firmware to Output
-        if: steps.compile.outputs.status == 'success'
-        run: |
-          mkdir -p openwrt-out
-          # 将下载的固件移动到 openwrt-out 目录，以便 Release 步骤读取
-          mv firmware_tmp/* openwrt-out/ 2>/dev/null || true
 
       - name: Create Release
         if: steps.compile.outputs.status == 'success'
@@ -188,9 +226,11 @@ jobs:
             - **版本**: ${{ inputs.immortalwrt_version }}
             - **设备**: ${{ inputs.device_board }}
             - **内核**: ${{ inputs.kernel_version }}
+            - **构建时间**: ${{ github.run_id }}
           files: |
             openwrt-out/*.img
             openwrt-out/*.img.gz
-            kmods-repo.tar.gz
+            openwrt-out/kmods-repo.tar.gz
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false # 防止因缺少某种后缀(如只有.gz没有.img)而报错中断
