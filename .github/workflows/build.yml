@@ -158,9 +158,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
-          path: |
-            openwrt-out/*.img*
-            openwrt/bin/targets/*/*/*.img*
+          path: openwrt-out/
+          retention-days: 7
 
       - name: Create Release
         if: steps.compile.outputs.status == 'success'
@@ -170,7 +169,15 @@ jobs:
         with:
           tag_name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
           name: ImmortalWrt ${{ inputs.immortalwrt_version }} for ${{ inputs.device_board }}
+          body: |
+            ImmortalWrt 固件
+            - **版本**: ${{ inputs.immortalwrt_version }}
+            - **设备**: ${{ inputs.device_board }}
+            - **内核**: ${{ inputs.kernel_version }}
           files: |
-            openwrt-out/*.img*
-            openwrt/bin/targets/*/*/*.img*
+            openwrt-out/*.img
+            openwrt-out/*.img.gz
             kmods-repo.tar.gz
+          draft: false
+          prerelease: false
+
