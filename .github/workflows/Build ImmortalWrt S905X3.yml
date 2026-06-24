@@ -165,31 +165,40 @@ jobs:
         run: |
           mkdir -p openwrt-out
           
-          # 兼容 ophub 的输出目录 (out 或 openwrt-out)
+          # 开启 nullglob，防止通配符未匹配时变成字面字符串导致报错
+          shopt -s nullglob
+          
+          echo "=== 🔍 检查 ophub 输出目录 ==="
+          ls -la out/ 2>/dev/null || echo "根目录 out/ 不存在"
+          ls -la openwrt/out/ 2>/dev/null || echo "openwrt/out/ 不存在"
+          
+          # 1. 从可能的 ophub 输出目录复制文件 (使用 cp 防止移动失败)
           if [ -d "out" ]; then
-            mv out/*.img out/*.img.gz openwrt-out/ 2>/dev/null || true
+            cp -f out/*.img out/*.img.gz openwrt-out/ 2>/dev/null || true
+          fi
+          if [ -d "openwrt/out" ]; then
+            cp -f openwrt/out/*.img openwrt/out/*.img.gz openwrt-out/ 2>/dev/null || true
           fi
           
-          # 确保所有固件都在 openwrt-out 根目录
-          find openwrt-out -mindepth 2 -type f $ -name "*.img" -o -name "*.img.gz" $ -exec mv {} openwrt-out/ \; 2>/dev/null || true
+          # 2. 修复 find 语法，确保提取所有可能的固件文件
+          find . -maxdepth 3 -type f $ -name "*.img" -o -name "*.img.gz" $ -exec cp -f {} openwrt-out/ \; 2>/dev/null || true
           
-          # 获取构建时间 (格式: YYYYMMDDHHmm)
           BUILD_TIME=$(date +'%Y%m%d%H%M')
           DEVICE="${{ inputs.device_board }}"
           VERSION="${{ inputs.immortalwrt_version }}"
           
-          # 重命名固件文件
+          echo "=== 📂 重命名前的文件列表 ==="
+          ls -la openwrt-out/
+          
+          # 3. 重命名固件
           cd openwrt-out
           for file in *.img *.img.gz; do
             if [ -f "$file" ]; then
-              # 判断后缀名
               if [[ "$file" == *.img.gz ]]; then
                 ext=".img.gz"
               else
                 ext=".img"
               fi
-              
-              # 组合新文件名: s905x3-immortalwrt_24.10.6_202606242140.img
               new_name="${DEVICE}-immortalwrt_${VERSION}_${BUILD_TIME}${ext}"
               mv "$file" "$new_name"
               echo "✅ Renamed: $file -> $new_name"
@@ -197,17 +206,45 @@ jobs:
           done
           cd ..
           
-          # 将 kmods 压缩包移动到同一目录
+          # 关闭 nullglob
+          shopt -u nullglob
+          
+          # 移动 kmods
           mv kmods-repo.tar.gz openwrt-out/ 2>/dev/null || true
           
           echo "=========================================="
-          echo "📦 Files ready for Artifact and Release:"
+          echo "📦 最终准备上传的文件:"
           ls -lh openwrt-out/
           echo "=========================================="
 
       - name: Upload Firmware to Artifact
         if: steps.compile.outputs.status == 'success'
         uses: actions/upload-artifact@v4
+        with:
+          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
+          path: openwrt-out/
+          retention-days: 7
+
+      - name: Create Release
+        if: steps.compile.outputs.status == 'success'
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: lWrt-kmods-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}-${{ github.run_id }}
+          name: IWrt-kmods-${{ inputs.immortalwrt_version }} for ${{ inputs.device_board }}-${{ github.run_id }}
+          body: |
+            ImmortalWrt 固件
+            - **版本**: ${{ inputs.immortalwrt_version }}
+            - **设备**: ${{ inputs.device_board }}
+            - **内核**: ${{ inputs.kernel_version }}
+            - **构建时间**: ${{ github.run_id }}
+          # 使用通配符 * 代替具体的后缀，只要目录下有文件就不会报 unmatched 警告
+          files: openwrt-out/*
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+
         with:
           name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
           path: openwrt-out/
