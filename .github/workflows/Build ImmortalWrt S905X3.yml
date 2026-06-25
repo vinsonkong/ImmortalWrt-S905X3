@@ -165,62 +165,67 @@ jobs:
         run: |
           mkdir -p openwrt-out
           
-          echo "=== 🔍 正在全局搜索固件文件 ==="
-          # 【核心修正】不依赖可能失效的变量，直接在整个工作空间中搜索 .img 或 .img.gz 所在的目录
-          FIRMWARE_DIR=$(find /home/runner/work/ -type f $ -name "*.img" -o -name "*.img.gz" $ -exec dirname {} \; 2>/dev/null | head -n 1)
+          echo "=== 🔍 正在定位固件文件 ==="
           
-          if [ -z "$FIRMWARE_DIR" ]; then
-            echo "❌ 错误: 在 /home/runner/work/ 下未找到任何 .img 或 .img.gz 固件文件！"
-            echo "列出所有名为 out 的目录以供调试："
-            find /home/runner/work/ -type d -name "out"
+          # 1. 定义已知的 ophub 输出目录
+          OPHUB_OUT="/home/runner/work/_actions/ophub/amlogic-s9xxx-openwrt/main/openwrt/out"
+          
+          # 2. 检查目录是否存在且非空
+          if [ -d "$OPHUB_OUT" ]; then
+            echo "📂 ophub 输出目录内容:"
+            ls -lh "$OPHUB_OUT"
+          else
+            echo "❌ 错误: ophub 输出目录不存在: $OPHUB_OUT"
+            exit 1
+          fi
+          
+          # 3. 查找固件文件 (匹配 ophub 生成的特定格式)
+          FIRMWARE_FILES=$(find "$OPHUB_OUT" -type f -name "openwrt_amlogic_*.img*" 2>/dev/null)
+          
+          if [ -z "$FIRMWARE_FILES" ]; then
+            echo "❌ 错误: 未在 $OPHUB_OUT 中找到 openwrt_amlogic_*.img* 格式的固件文件！"
             exit 1
           fi
 
-          echo "=== 📂 固件源目录检测为: $FIRMWARE_DIR ==="
-          ls -lh "$FIRMWARE_DIR"
+          echo "✅ 找到固件文件:"
+          echo "$FIRMWARE_FILES"
           
-          # 复制所有 img 和 img.gz 文件到 openwrt-out
-          cp -f "$FIRMWARE_DIR"/*.img "$FIRMWARE_DIR"/*.img.gz openwrt-out/ 2>/dev/null || true
+          # 4. 复制文件
+          echo "$FIRMWARE_FILES" | while read -r file; do
+            cp -f "$file" openwrt-out/
+          done
           
-          # 检查是否复制成功
-          if [ $(ls openwrt-out/*.img* 2>/dev/null | wc -l) -eq 0 ]; then
-            echo "❌ 错误: 复制固件文件失败！"
-            exit 1
-          fi
-
-          # 重命名逻辑
+          # 5. 重命名文件
           BUILD_TIME=$(date +'%Y%m%d%H%M')
           DEVICE="${{ inputs.device_board }}"
           VERSION="${{ inputs.immortalwrt_version }}"
           
           cd openwrt-out
-          for file in *.img *.img.gz; do
+          for file in *; do
             if [ -f "$file" ]; then
+              # 获取文件扩展名
               if [[ "$file" == *.img.gz ]]; then
-                ext=".img.gz"
+                EXT=".img.gz"
+              elif [[ "$file" == *.img.xz ]]; then
+                EXT=".img.xz"
               else
-                ext=".img"
+                EXT=".img"
               fi
               
-              # 提取基础名称，防止重命名时后缀叠加
-              base_name="${file%$ext}"
-              new_name="${DEVICE}-immortalwrt_${VERSION}_${BUILD_TIME}${ext}"
+              BASE_NAME="${file%$EXT}"
+              # 提取内核版本 (例如从 openwrt_amlogic_s905x3_k6.18.36_... 提取 6.18.36)
+              KERNEL_VER=$(echo "$BASE_NAME" | grep -oP 'k\K[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
               
-              # 如果有多个同后缀文件，加上原始名称的一部分以防覆盖
-              if [ $(ls *$ext 2>/dev/null | wc -l) -gt 1 ]; then
-                new_name="${DEVICE}-immortalwrt_${VERSION}_${BUILD_TIME}_${base_name##*_}${ext}"
-              fi
+              NEW_NAME="${DEVICE}-immortalwrt_${VERSION}_k${KERNEL_VER}_${BUILD_TIME}${EXT}"
               
-              mv "$file" "$new_name"
-              echo "✅ Renamed: $file -> $new_name"
+              mv "$file" "$NEW_NAME"
+              echo "✅ 固件已重命名为: $NEW_NAME"
             fi
           done
           cd ..
           
-          # 移动 kmods (如果存在)
-          if [ -f "kmods-repo.tar.gz" ]; then
-            mv kmods-repo.tar.gz openwrt-out/
-          fi
+          # 6. 移动 kmods
+          [ -f "kmods-repo.tar.gz" ] && mv kmods-repo.tar.gz openwrt-out/
           
           echo "=========================================="
           echo "📦 最终准备上传的文件:"
