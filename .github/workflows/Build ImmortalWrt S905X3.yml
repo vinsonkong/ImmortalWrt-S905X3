@@ -152,7 +152,6 @@ jobs:
 
       - name: Package Amlogic Firmware
         if: steps.compile.outputs.status == 'success'
-        id: package # 添加 id，以便后续步骤引用 outputs
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
           openwrt_path: openwrt/bin/targets/*/*/*rootfs.tar.gz
@@ -166,34 +165,26 @@ jobs:
         run: |
           mkdir -p openwrt-out
           
-          # 【关键修正】直接使用上一步插件输出的环境变量路径
-          # 如果环境变量存在，则直接使用；否则回退到旧路径
-          if [ -n "${{ steps.package.outputs.PACKAGED_OUTPUTPATH }}" ] && [ -d "${{ steps.package.outputs.PACKAGED_OUTPUTPATH }}" ]; then
-            OUPUT_DIR="${{ steps.package.outputs.PACKAGED_OUTPUTPATH }}"
-          else
-            OUPUT_DIR="./out"
-            # 尝试查找可能的子目录
-            if [ ! -d "$OUPUT_DIR" ] && [ -d "./openwrt/out" ]; then
-              OUPUT_DIR="./openwrt/out"
-            fi
-          fi
-
-          echo "=== 📂 固件源目录检测为: $OUPUT_DIR ==="
+          echo "=== 🔍 正在全局搜索固件文件 ==="
+          # 【核心修正】不依赖可能失效的变量，直接在整个工作空间中搜索 .img 或 .img.gz 所在的目录
+          FIRMWARE_DIR=$(find /home/runner/work/ -type f $ -name "*.img" -o -name "*.img.gz" $ -exec dirname {} \; 2>/dev/null | head -n 1)
           
-          # 检查目录是否存在文件
-          if [ -d "$OUPUT_DIR" ]; then
-            ls -la "$OUPUT_DIR"
-          else
-            echo "❌ 错误: 固件目录 $OUPUT_DIR 不存在！"
+          if [ -z "$FIRMWARE_DIR" ]; then
+            echo "❌ 错误: 在 /home/runner/work/ 下未找到任何 .img 或 .img.gz 固件文件！"
+            echo "列出所有名为 out 的目录以供调试："
+            find /home/runner/work/ -type d -name "out"
             exit 1
           fi
+
+          echo "=== 📂 固件源目录检测为: $FIRMWARE_DIR ==="
+          ls -lh "$FIRMWARE_DIR"
           
-          # 复制所有 img 和 img.gz 文件
-          cp -f "$OUPUT_DIR"/*.img "$OUPUT_DIR"/*.img.gz openwrt-out/ 2>/dev/null || true
+          # 复制所有 img 和 img.gz 文件到 openwrt-out
+          cp -f "$FIRMWARE_DIR"/*.img "$FIRMWARE_DIR"/*.img.gz openwrt-out/ 2>/dev/null || true
           
           # 检查是否复制成功
           if [ $(ls openwrt-out/*.img* 2>/dev/null | wc -l) -eq 0 ]; then
-            echo "❌ 错误: 没有找到任何固件文件 (*.img 或 *.img.gz)！"
+            echo "❌ 错误: 复制固件文件失败！"
             exit 1
           fi
 
@@ -210,15 +201,26 @@ jobs:
               else
                 ext=".img"
               fi
+              
+              # 提取基础名称，防止重命名时后缀叠加
+              base_name="${file%$ext}"
               new_name="${DEVICE}-immortalwrt_${VERSION}_${BUILD_TIME}${ext}"
+              
+              # 如果有多个同后缀文件，加上原始名称的一部分以防覆盖
+              if [ $(ls *$ext 2>/dev/null | wc -l) -gt 1 ]; then
+                new_name="${DEVICE}-immortalwrt_${VERSION}_${BUILD_TIME}_${base_name##*_}${ext}"
+              fi
+              
               mv "$file" "$new_name"
               echo "✅ Renamed: $file -> $new_name"
             fi
           done
           cd ..
           
-          # 移动 kmods
-          mv kmods-repo.tar.gz openwrt-out/ 2>/dev/null || true
+          # 移动 kmods (如果存在)
+          if [ -f "kmods-repo.tar.gz" ]; then
+            mv kmods-repo.tar.gz openwrt-out/
+          fi
           
           echo "=========================================="
           echo "📦 最终准备上传的文件:"
