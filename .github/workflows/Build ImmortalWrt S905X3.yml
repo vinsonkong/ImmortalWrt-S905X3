@@ -26,7 +26,6 @@ env:
   CONFIG_FILE: .config24
   DIY_SCRIPT: diy.sh
   TZ: Asia/Shanghai
-  # 屏蔽 GitHub Actions 底层第三方 Action 使用 Node 20 产生的弃用警告
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
@@ -40,7 +39,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22' # 升级系统 Node.js 版本至 22 LTS
+          node-version: '22'
 
       - name: Create Swap File
         run: |
@@ -139,7 +138,6 @@ jobs:
       - name: Collect and Index kmods
         if: steps.compile.outputs.status == 'success'
         run: |
-          # 修复 sha256 命令缺失问题
           echo -e '#!/bin/sh\nsha256sum "$@" | awk "{print \$1}"' | sudo tee /usr/local/bin/sha256 > /dev/null
           sudo chmod +x /usr/local/bin/sha256
           
@@ -154,6 +152,7 @@ jobs:
 
       - name: Package Amlogic Firmware
         if: steps.compile.outputs.status == 'success'
+        id: package # 添加 id，以便后续步骤引用 outputs
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
           openwrt_path: openwrt/bin/targets/*/*/*rootfs.tar.gz
@@ -167,32 +166,42 @@ jobs:
         run: |
           mkdir -p openwrt-out
           
-          # 开启 nullglob，防止通配符未匹配时变成字面字符串导致 mv/cp 报错
-          shopt -s nullglob
-          
-          echo "=== 🔍 检查 ophub 输出目录 ==="
-          ls -la out/ 2>/dev/null || echo "根目录 out/ 不存在"
-          ls -la openwrt/out/ 2>/dev/null || echo "openwrt/out/ 不存在"
-          
-          # 1. 从可能的 ophub 输出目录复制文件 (使用 cp 防止移动失败)
-          if [ -d "out" ]; then
-            cp -f out/*.img out/*.img.gz openwrt-out/ 2>/dev/null || true
+          # 【关键修正】直接使用上一步插件输出的环境变量路径
+          # 如果环境变量存在，则直接使用；否则回退到旧路径
+          if [ -n "${{ steps.package.outputs.PACKAGED_OUTPUTPATH }}" ] && [ -d "${{ steps.package.outputs.PACKAGED_OUTPUTPATH }}" ]; then
+            OUPUT_DIR="${{ steps.package.outputs.PACKAGED_OUTPUTPATH }}"
+          else
+            OUPUT_DIR="./out"
+            # 尝试查找可能的子目录
+            if [ ! -d "$OUPUT_DIR" ] && [ -d "./openwrt/out" ]; then
+              OUPUT_DIR="./openwrt/out"
+            fi
           fi
-          if [ -d "openwrt/out" ]; then
-            cp -f openwrt/out/*.img openwrt/out/*.img.gz openwrt-out/ 2>/dev/null || true
+
+          echo "=== 📂 固件源目录检测为: $OUPUT_DIR ==="
+          
+          # 检查目录是否存在文件
+          if [ -d "$OUPUT_DIR" ]; then
+            ls -la "$OUPUT_DIR"
+          else
+            echo "❌ 错误: 固件目录 $OUPUT_DIR 不存在！"
+            exit 1
           fi
           
-          # 2. 修复 find 语法，确保提取所有可能的固件文件
-          find . -maxdepth 3 -type f $ -name "*.img" -o -name "*.img.gz" $ -exec cp -f {} openwrt-out/ \; 2>/dev/null || true
+          # 复制所有 img 和 img.gz 文件
+          cp -f "$OUPUT_DIR"/*.img "$OUPUT_DIR"/*.img.gz openwrt-out/ 2>/dev/null || true
           
+          # 检查是否复制成功
+          if [ $(ls openwrt-out/*.img* 2>/dev/null | wc -l) -eq 0 ]; then
+            echo "❌ 错误: 没有找到任何固件文件 (*.img 或 *.img.gz)！"
+            exit 1
+          fi
+
+          # 重命名逻辑
           BUILD_TIME=$(date +'%Y%m%d%H%M')
           DEVICE="${{ inputs.device_board }}"
           VERSION="${{ inputs.immortalwrt_version }}"
           
-          echo "=== 📂 重命名前的文件列表 ==="
-          ls -la openwrt-out/
-          
-          # 3. 重命名固件
           cd openwrt-out
           for file in *.img *.img.gz; do
             if [ -f "$file" ]; then
@@ -201,7 +210,6 @@ jobs:
               else
                 ext=".img"
               fi
-              
               new_name="${DEVICE}-immortalwrt_${VERSION}_${BUILD_TIME}${ext}"
               mv "$file" "$new_name"
               echo "✅ Renamed: $file -> $new_name"
@@ -209,14 +217,11 @@ jobs:
           done
           cd ..
           
-          # 关闭 nullglob
-          shopt -u nullglob
-          
-          # 将 kmods 压缩包移动到同一目录
+          # 移动 kmods
           mv kmods-repo.tar.gz openwrt-out/ 2>/dev/null || true
           
           echo "=========================================="
-          echo "📦 Files ready for Artifact and Release:"
+          echo "📦 最终准备上传的文件:"
           ls -lh openwrt-out/
           echo "=========================================="
 
@@ -242,7 +247,6 @@ jobs:
             - **设备**: ${{ inputs.device_board }}
             - **内核**: ${{ inputs.kernel_version }}
             - **构建时间**: ${{ github.run_id }}
-          # 使用通配符 * 代替具体的后缀，只要目录下有文件就不会报 unmatched 警告
           files: openwrt-out/*
           draft: false
           prerelease: false
