@@ -6,26 +6,20 @@ STOP=10
 
 NAME=navidrome
 BIN=/usr/bin/navidrome
-CONF=/etc/config/navidrome.toml
+CONF=/etc/navidrome/navidrome.toml 
 USER=root
 
 # 启动服务
 start_service() {
+    mkdir -p "$(dirname "$CONF")"
+
     procd_open_instance
-    procd_set_param command $BIN --configfile $CONF
-    procd_set_param user $USER
+    procd_set_param command "$BIN" --configfile "$CONF"
+    procd_set_param user "$USER"
     procd_set_param stdout 1
     procd_set_param stderr 1
+    # 设置崩溃自动重启机制 (阈值3600秒, 超时5秒, 重试5次)
     procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
     procd_close_instance
 }
 
-# 停止服务
-stop_service() {
-    killall $NAME
-}
-
-restart() {
-    stop
-    start
-}
