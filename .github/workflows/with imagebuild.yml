@@ -115,6 +115,7 @@ jobs:
           cd openwrt
           
           # 将包列表提取为变量，避免在多行字符串中使用 # 导致被识别为包名
+          # 注意：已移除 luci-app-socat 以解决与底层 socat 的文件冲突
           PACKAGES_LIST="acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
             cgi-io chattr coremark coreutils coreutils-base64 coreutils-nohup coreutils-truncate \
             gawk getopt git gzip htop iconv jq jshn libjson-script openssh-sftp-server \
@@ -163,14 +164,12 @@ jobs:
           openwrt_kernel: ${{ inputs.kernel_version }}
           auto_kernel: true
           builder_name: ImmortalWrt
-          # 显式指定输出路径，确保后续 Release 上传能准确找到文件
-          openwrt_outpath: openwrt/out
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
-          path: openwrt/out/*
+          path: ${{ env.PACKAGED_OUTPUTPATH }}
 
       - name: Upload Firmware to Release
         uses: softprops/action-gh-release@v2
@@ -197,5 +196,5 @@ jobs:
             opkg install kmod-tun kmod-usb-net-rtl8152
             ```
           files: |
-            openwrt/out/*.img
-            openwrt/out/*.img.gz
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
