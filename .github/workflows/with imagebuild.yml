@@ -6,7 +6,7 @@ on:
       immortalwrt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '23.05.7'
+        default: '23.05.4'
         type: choice
         options:
           - 23.05.4
@@ -40,23 +40,20 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build for ${{ github.event.inputs.device_board }}
+    name: Build for ${{ inputs.device_board }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Swap File (Prevent Memory Overflow)
+      - name: Create Swap File
         run: |
-          if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
-            echo "No active swap found. Creating 4G swap..."
+          if [ -z "$(swapon --show=NAME --noheadings)" ]; then
+            echo "Creating 4G swap..."
             sudo fallocate -l 4G /mnt/swapfile
             sudo chmod 600 /mnt/swapfile
             sudo mkswap /mnt/swapfile
             sudo swapon /mnt/swapfile
-          else
-            echo "Swap already active:"
-            swapon --show
           fi
           free -h
 
@@ -64,138 +61,116 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion \
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
             libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
-          VERSION=${{ github.event.inputs.immortalwrt_version }}
+          VERSION=${{ inputs.immortalwrt_version }}
+          BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8"
+          
           if [[ "$VERSION" == "23.05."* ]]; then
-            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.xz"
-            echo "Downloading 23.05.x ImageBuilder (xz format): $BUILDER_URL"
-            wget -q $BUILDER_URL -O imagebuilder.tar.xz
-            tar -xf imagebuilder.tar.xz
+            EXT="tar.xz"
           else
-            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.zst"
-            echo "Downloading 24.10+ ImageBuilder (zstd format): $BUILDER_URL"
-            wget -q $BUILDER_URL -O imagebuilder.tar.zst
-            tar -I zstd -xf imagebuilder.tar.zst
+            EXT="tar.zst"
           fi
+          
+          BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.${EXT}"
+          echo "Downloading: $BUILDER_URL"
+          wget -q "$BUILDER_URL" -O "imagebuilder.${EXT}"
+          
+          # GNU tar 自动识别 xz/zst 格式
+          tar -xf "imagebuilder.${EXT}"
           mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 openwrt
 
       - name: Inject Custom Files & Packages
         run: |
-          CUSTOM_PKG_DIR="./custom-packages"
-          IB_PKG_DIR="./openwrt/packages"
-          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR/*.ipk 2>/dev/null)" ]; then
+          # 1. 注入自定义 ipk 包
+          if [ -d "./custom-packages" ] && ls ./custom-packages/*.ipk 1> /dev/null 2>&1; then
             echo "📦 注入自定义 ipk 包..."
-            mkdir -p "$IB_PKG_DIR"
-            cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
-            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
-            ls -lh "$IB_PKG_DIR"/*.ipk
+            mkdir -p ./openwrt/packages
+            cp ./custom-packages/*.ipk ./openwrt/packages/
           else
-            echo "⚠️ 未找到 custom-packages 目录或为空，跳过包注入"
+            echo "⚠️ 未找到 custom-packages，跳过"
           fi
           
-          CUSTOM_FILES_DIR="./custom-files"
-          IB_FILES_DIR="./openwrt/files"
-          if [ -d "$CUSTOM_FILES_DIR" ]; then
-            echo "📦 注入 custom-files 到 ImageBuilder..."
-            mkdir -p "$IB_FILES_DIR"
-            cp -r "$CUSTOM_FILES_DIR"/* "$IB_FILES_DIR/"
-            find "$IB_FILES_DIR/usr/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
-            find "$IB_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
+          # 2. 注入自定义文件并修复权限
+          if [ -d "./custom-files" ]; then
+            echo "📦 注入 custom-files..."
+            mkdir -p ./openwrt/files
+            cp -r ./custom-files/* ./openwrt/files/
             
-            echo "🔐 修复 Dropbear 及配置文件权限..."
-            find "$IB_FILES_DIR/etc/config" -type f -exec chmod 600 {} \; 2>/dev/null || true
-            [ -f "$IB_FILES_DIR/etc/config/dropbear" ] && chmod 600 "$IB_FILES_DIR/etc/config/dropbear"
-            if [ -d "$IB_FILES_DIR/root/.ssh" ]; then
-              chmod 700 "$IB_FILES_DIR/root/.ssh"
-              find "$IB_FILES_DIR/root/.ssh" -type f -name "authorized_keys*" -exec chmod 600 {} \;
-            fi
-            find "$IB_FILES_DIR/etc/dropbear" -type f -name "dropbear_*_host_key" -exec chmod 600 {} \; 2>/dev/null || true
-            
+            # 批量修复执行权限和敏感文件权限
+            chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
+            chmod 600 ./openwrt/files/etc/config/* 2>/dev/null || true
+            [ -d "./openwrt/files/root/.ssh" ] && chmod 700 ./openwrt/files/root/.ssh && chmod 600 ./openwrt/files/root/.ssh/* 2>/dev/null || true
             echo "✅ 文件注入及权限修复完成"
           else
-            echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
+            echo "⚠️ 未找到 custom-files，跳过"
           fi
 
       - name: Build Rootfs with Custom Config
         run: |
           cd openwrt
           
-          make image PROFILE=generic \
-            FILES="files" \
-            ROOTFS_PARTSIZE=1024 \
-            PACKAGES="\
-             # ================= 1. 基础系统与常用工具 (Base System & Utils) =================
-             acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
-             cgi-io chattr coremark coreutils coreutils-base64 coreutils-nohup coreutils-truncate \
-             gawk getopt git gzip htop iconv jq jshn libjson-script openssh-sftp-server \
-             perl-http-date perlbase-file perlbase-getopt perlbase-time perlbase-unicode perlbase-utf8 \
-             php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-session php8-mod-zip php8-mod-mbstring \
-             pigz pv rename tar ttyd unzip uuidgen whereis which xz xz-utils ziptool zstd \
-             \
-             # ================= 2. 磁盘、文件系统与存储 (Disk, Filesystem & USB) =================
-             block-mount btrfs-progs dosfstools dumpe2fs e2freefrag e2fsprogs exfat-mkfs \
-             f2fs-tools f2fsck fdisk kmod-fs-ext4 kmod-fs-f2fs kmod-fs-ksmbd kmod-fs-cifs \
-             kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer \
-             losetup lsattr lsblk lscpu mkf2fs mount-utils ntfs-3g parted resize2fs tune2fs xfs-fsck xfs-mkfs \
-             \
-             # ================= 3. 网络、拨号与无线 (Network, PPP & Wireless) =================
-             comgt comgt-ncm curl iw iwinfo openssl-util ppp ppp-mod-pppoe \
-             uclient-fetch uqmi usb-modeswitch wget-ssl wpad-basic wwan \
-             kmod-brcmfmac kmod-brcmutil kmod-cfg80211 kmod-mac80211 \
-             socat luci-app-socat luci-i18n-socat-zh-cn \
-             luci-app-easytier luci-app-zerotier luci-i18n-zerotier-zh-cn \
-             luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
-             \
-             # ================= 4. Docker 容器环境 (Docker & Container) =================
-             containerd docker docker-compose dockerd runc tini \
-             luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
-             \
-             # ================= 5. LuCI 基础、主题与系统管理 (LuCI Base & System) =================
-             luci luci-base luci-compat luci-i18n-base-zh-cn luci-lib-base \
-             luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio \
-             luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system \
-             luci-proto-3g luci-proto-ipip luci-proto-ipv6 luci-proto-ncm luci-proto-openconnect \
-             luci-proto-ppp luci-proto-qmi luci-proto-relay \
-             uhttpd uhttpd-mod-ubus liblucihttp liblucihttp-lua \
-             luci-theme-argon \
-             luci-app-amlogic luci-i18n-amlogic-zh-cn \
-             luci-app-firewall luci-i18n-firewall-zh-cn \
-             luci-app-package-manager luci-app-ttyd luci-i18n-ttyd-zh-cn \
-             luci-app-wol luci-i18n-wol-zh-cn \
-             luci-app-diskman luci-i18n-diskman-zh-cn \
-             luci-app-hd-idle luci-i18n-hd-idle-zh-cn \
-             \
-             # ================= 6. 共享、下载与多媒体服务 (Sharing & Multimedia) =================
-             aria2 luci-app-aria2 luci-i18n-aria2-zh-cn \
-             samba4-server luci-app-samba4 luci-i18n-samba4-zh-cn luci-i18n-ksmbd-zh-cn \
-             cifsmount luci-i18n-cifs-mount-zh-cn \
-             nfs-kernel-server luci-i18n-nfs-zh-cn \
-             minidlna luci-i18n-minidlna-zh-cn \
-             \
-             # ================= 7. 时区 (Timezone) =================
-             zoneinfo-asia zoneinfo-core \
-             " \
-            -j$(nproc)
+          # 将包列表提取为变量，避免在多行字符串中使用 # 导致被识别为包名
+          PACKAGES_LIST="acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
+            cgi-io chattr coremark coreutils coreutils-base64 coreutils-nohup coreutils-truncate \
+            gawk getopt git gzip htop iconv jq jshn libjson-script openssh-sftp-server \
+            perl-http-date perlbase-file perlbase-getopt perlbase-time perlbase-unicode perlbase-utf8 \
+            php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-session php8-mod-zip php8-mod-mbstring \
+            pigz pv rename tar ttyd unzip uuidgen whereis which xz xz-utils ziptool zstd \
+            block-mount btrfs-progs dosfstools dumpe2fs e2freefrag e2fsprogs exfat-mkfs \
+            f2fs-tools f2fsck fdisk kmod-fs-ext4 kmod-fs-f2fs kmod-fs-ksmbd kmod-fs-cifs \
+            kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer \
+            losetup lsattr lsblk lscpu mkf2fs mount-utils ntfs-3g parted resize2fs tune2fs xfs-fsck xfs-mkfs \
+            comgt comgt-ncm curl iw iwinfo openssl-util ppp ppp-mod-pppoe \
+            uclient-fetch uqmi usb-modeswitch wget-ssl wpad-basic wwan \
+            kmod-brcmfmac kmod-brcmutil kmod-cfg80211 kmod-mac80211 \
+            socat luci-app-socat luci-i18n-socat-zh-cn \
+            luci-app-easytier luci-app-zerotier luci-i18n-zerotier-zh-cn \
+            luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
+            containerd docker docker-compose dockerd runc tini \
+            luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
+            luci luci-base luci-compat luci-i18n-base-zh-cn luci-lib-base \
+            luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio \
+            luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system \
+            luci-proto-3g luci-proto-ipip luci-proto-ipv6 luci-proto-ncm luci-proto-openconnect \
+            luci-proto-ppp luci-proto-qmi luci-proto-relay \
+            uhttpd uhttpd-mod-ubus liblucihttp liblucihttp-lua \
+            luci-theme-argon \
+            luci-app-amlogic luci-i18n-amlogic-zh-cn \
+            luci-app-firewall luci-i18n-firewall-zh-cn \
+            luci-app-package-manager luci-app-ttyd luci-i18n-ttyd-zh-cn \
+            luci-app-wol luci-i18n-wol-zh-cn \
+            luci-app-diskman luci-i18n-diskman-zh-cn \
+            luci-app-hd-idle luci-i18n-hd-idle-zh-cn \
+            aria2 luci-app-aria2 luci-i18n-aria2-zh-cn \
+            samba4-server luci-app-samba4 luci-i18n-samba4-zh-cn luci-i18n-ksmbd-zh-cn \
+            cifsmount luci-i18n-cifs-mount-zh-cn \
+            nfs-kernel-server luci-i18n-nfs-zh-cn \
+            minidlna luci-i18n-minidlna-zh-cn \
+            zoneinfo-asia zoneinfo-core"
+          
+          make image PROFILE=generic FILES="files" ROOTFS_PARTSIZE=1024 PACKAGES="$PACKAGES_LIST"
 
-      - name: Package Amlogic Firmware with ophub
+      - name: Package Amlogic Firmware
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
           openwrt_path: openwrt/bin/targets/armsr/armv8/*-rootfs.tar.gz
-          openwrt_board: ${{ github.event.inputs.device_board }}
-          openwrt_kernel: ${{ github.event.inputs.kernel_version }}
+          openwrt_board: ${{ inputs.device_board }}
+          openwrt_kernel: ${{ inputs.kernel_version }}
           auto_kernel: true
           builder_name: ImmortalWrt
+          # 显式指定输出路径，确保后续 Release 上传能准确找到文件
+          openwrt_outpath: openwrt/out
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
-          path: ${{ env.PACKAGED_OUTPUTPATH }}
+          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
+          path: openwrt/out/*
 
       - name: Upload Firmware to Release
         uses: softprops/action-gh-release@v2
@@ -203,13 +178,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: IWrt-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
-          name: IWrt S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          tag_name: IWrt-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: IWrt S905X3 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
             自动编译的 ImmortalWrt 固件 (ImageBuilder 精简版)
-            - 版本: ${{ github.event.inputs.immortalwrt_version }}
-            - 设备: ${{ github.event.inputs.device_board }}
-            - 内核: ${{ github.event.inputs.kernel_version }}
+            - 版本: ${{ inputs.immortalwrt_version }}
+            - 设备: ${{ inputs.device_board }}
+            - 内核: ${{ inputs.kernel_version }}
             
             ### 📁 自定义内容
             - custom-files: 已注入并覆盖系统同名文件
@@ -222,5 +197,5 @@ jobs:
             opkg install kmod-tun kmod-usb-net-rtl8152
             ```
           files: |
-            ${{ env.PACKAGED_OUTPUTPATH }}/*.img
-            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
+            openwrt/out/*.img
+            openwrt/out/*.img.gz
