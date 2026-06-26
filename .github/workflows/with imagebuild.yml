@@ -216,13 +216,6 @@ jobs:
             - 设备: ${{ github.event.inputs.device_board }}
             - 内核: ${{ github.event.inputs.kernel_version }}
             
-            ### ✂️ 精简说明
-            - ❌ 已移除 Perl 全家桶
-            - ❌ 已移除冗余基础工具 (coremark/git/iperf3/rename等)
-            - ❌ 已移除桌面级文件系统工具 (btrfs/xfs)
-            - ❌ 已移除无用无线驱动栈 (brcmfmac/wpad-basic)
-            - ❌ 已移除 PHP 数据库模块
-            
             ### 📁 自定义内容
             - custom-files: 已注入并覆盖系统同名文件
             - custom-packages: 本地 .ipk 已预装
