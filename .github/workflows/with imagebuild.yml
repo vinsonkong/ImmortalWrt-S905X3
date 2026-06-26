@@ -41,11 +41,6 @@ on:
           - 6.6.y
           - 6.12.y
           - 6.18.y
-          - 5.10.y_5.15.y
-          - 6.1.y_6.6.y
-          - 6.12.y_6.18.y
-          - 6.1.y_6.12.y
-          - 6.1.y_6.18.y
 
 jobs:
   build:
@@ -139,32 +134,57 @@ jobs:
             FILES="files" \
             ROOTFS_PARTSIZE=1024 \
             PACKAGES="\
-              base-files busybox bash pigz zstd xz-utils openssh-sftp-server htop \
-              block-mount fdisk losetup kmod-fs-ext4 kmod-fs-f2fs f2fs-tools exfat-mkfs ntfs-3g mount-utils \
-              curl wget-ssl uclient-fetch ppp ppp-mod-pppoe \
-              kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer \
-              docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
-              ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn \
-              php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-session php8-mod-zip php8-mod-mbstring \
-              luci luci-base luci-compat luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system \
-              luci-i18n-base-zh-cn luci-theme-argon \
-              luci-app-amlogic luci-i18n-amlogic-zh-cn \
-              luci-app-socat luci-i18n-socat-zh-cn socat \
-              luci-app-easytier \
-              luci-app-diskman luci-i18n-diskman-zh-cn \
-              luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
-              luci-app-hd-idle luci-i18n-hd-idle-zh-cn \
-              luci-app-package-manager \
-              luci-app-zerotier luci-i18n-zerotier-zh-cn \
-              luci-app-wol luci-i18n-wol-zh-cn \
-              luci-app-firewall luci-i18n-firewall-zh-cn \
-              luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
-              luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server kmod-fs-ksmbd luci-i18n-ksmbd-zh-cn \
-              kmod-fs-cifs cifsmount luci-i18n-cifs-mount-zh-cn \
-              nfs-kernel-server luci-i18n-nfs-zh-cn \
-              minidlna luci-i18n-minidlna-zh-cn \
-              zoneinfo-asia zoneinfo-core \
-            " \
+             # ================= 1. 基础系统与常用工具 (Base System & Utils) =================
+             acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
+             cgi-io chattr coremark coreutils coreutils-base64 coreutils-nohup coreutils-truncate \
+             gawk getopt git gzip htop iconv jq jshn libjson-script openssh-sftp-server \
+             perl-http-date perlbase-file perlbase-getopt perlbase-time perlbase-unicode perlbase-utf8 \
+             php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-session php8-mod-zip php8-mod-mbstring \
+             pigz pv rename tar ttyd unzip uuidgen whereis which xz xz-utils ziptool zstd \
+             \
+             # ================= 2. 磁盘、文件系统与存储 (Disk, Filesystem & USB) =================
+             block-mount btrfs-progs dosfstools dumpe2fs e2freefrag e2fsprogs exfat-mkfs \
+             f2fs-tools f2fsck fdisk kmod-fs-ext4 kmod-fs-f2fs kmod-fs-ksmbd kmod-fs-cifs \
+             kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer \
+             losetup lsattr lsblk lscpu mkf2fs mount-utils ntfs-3g parted resize2fs tune2fs xfs-fsck xfs-mkfs \
+             \
+             # ================= 3. 网络、拨号与无线 (Network, PPP & Wireless) =================
+             comgt comgt-ncm curl iw iwinfo openssl-util ppp ppp-mod-pppoe \
+             uclient-fetch uqmi usb-modeswitch wget-ssl wpad-basic wwan \
+             kmod-brcmfmac kmod-brcmutil kmod-cfg80211 kmod-mac80211 \
+             socat luci-app-socat luci-i18n-socat-zh-cn \
+             luci-app-easytier luci-app-zerotier luci-i18n-zerotier-zh-cn \
+             luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
+             \
+             # ================= 4. Docker 容器环境 (Docker & Container) =================
+             containerd docker docker-compose dockerd runc tini \
+             luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
+             \
+             # ================= 5. LuCI 基础、主题与系统管理 (LuCI Base & System) =================
+             luci luci-base luci-compat luci-i18n-base-zh-cn luci-lib-base \
+             luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio \
+             luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system \
+             luci-proto-3g luci-proto-ipip luci-proto-ipv6 luci-proto-ncm luci-proto-openconnect \
+             luci-proto-ppp luci-proto-qmi luci-proto-relay \
+             uhttpd uhttpd-mod-ubus liblucihttp liblucihttp-lua \
+             luci-theme-argon \
+             luci-app-amlogic luci-i18n-amlogic-zh-cn \
+             luci-app-firewall luci-i18n-firewall-zh-cn \
+             luci-app-package-manager luci-app-ttyd luci-i18n-ttyd-zh-cn \
+             luci-app-wol luci-i18n-wol-zh-cn \
+             luci-app-diskman luci-i18n-diskman-zh-cn \
+             luci-app-hd-idle luci-i18n-hd-idle-zh-cn \
+             \
+             # ================= 6. 共享、下载与多媒体服务 (Sharing & Multimedia) =================
+             aria2 luci-app-aria2 luci-i18n-aria2-zh-cn \
+             samba4-server luci-app-samba4 luci-i18n-samba4-zh-cn luci-i18n-ksmbd-zh-cn \
+             cifsmount luci-i18n-cifs-mount-zh-cn \
+             nfs-kernel-server luci-i18n-nfs-zh-cn \
+             minidlna luci-i18n-minidlna-zh-cn \
+             \
+             # ================= 7. 时区 (Timezone) =================
+             zoneinfo-asia zoneinfo-core \
+             " \
             -j$(nproc)
 
       - name: Package Amlogic Firmware with ophub
