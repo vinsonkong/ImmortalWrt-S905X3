@@ -128,7 +128,7 @@ jobs:
             comgt comgt-ncm curl iw iwinfo openssl-util ppp ppp-mod-pppoe \
             uclient-fetch uqmi usb-modeswitch wget-ssl wpad-basic wwan \
             kmod-brcmfmac kmod-brcmutil kmod-cfg80211 kmod-mac80211 \
-            socat luci-app-socat luci-i18n-socat-zh-cn \
+            luci-app-socat luci-i18n-socat-zh-cn \
             luci-app-easytier luci-app-zerotier luci-i18n-zerotier-zh-cn \
             luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
             containerd docker docker-compose dockerd runc tini \
