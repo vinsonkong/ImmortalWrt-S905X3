@@ -6,7 +6,7 @@ on:
       immortalwrt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '23.05.4'
+        default: '24.10.6'
         type: choice
         options:
           - 23.05.4
@@ -27,7 +27,7 @@ on:
       kernel_version:
         description: 'Kernel Branch (ophub/kernel)'
         required: true
-        default: '5.15.y'
+        default: '6.18.y'
         type: choice
         options:
           - 5.10.y
@@ -114,6 +114,10 @@ jobs:
             chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
             chmod 600 ./openwrt/files/etc/config/* 2>/dev/null || true
             chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
+            
+            # 🚨 强化：修复 custom-files 可能带入的 Dropbear 错误权限
+            [ -d "./openwrt/files/etc/dropbear" ] && chmod 700 ./openwrt/files/etc/dropbear && chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
+            
             [ -d "./openwrt/files/root/.ssh" ] && chmod 700 ./openwrt/files/root/.ssh && chmod 600 ./openwrt/files/root/.ssh/* 2>/dev/null || true
             echo "✅ 文件注入及权限修复完成"
           else
@@ -169,9 +173,6 @@ jobs:
         with:
           openwrt_path: openwrt/bin/targets/armsr/armv8/*-rootfs.tar.gz
           openwrt_board: ${{ inputs.device_board }}
-          # 🚨 关键修复：必须关闭 auto_kernel！
-          # 使用 ImageBuilder 自带的 armsr 内核，确保与 PACKAGES_LIST 中的 kmod 版本完全一致。
-          # 如果开启 true，ophub 会替换内核，导致官方 kmod (网卡驱动等) 因版本不匹配全部失效！
           auto_kernel: false
           builder_name: ImmortalWrt
 
@@ -197,6 +198,7 @@ jobs:
             
             ### 📁 自定义内容
             - diy.sh: 静态配置已注入（修复 DSA 网口桥接与 uhttpd 崩溃问题）
+            - Dropbear: 已强化 /etc/dropbear 目录归属(root:root)及严格权限(700/600)
             - custom-files: 已注入并覆盖系统同名文件
             - custom-packages: 本地 .ipk 已预装
             
