@@ -66,60 +66,41 @@ echo "🔧 3. 静态注入所有 /etc/config 基础配置..."
 mkdir -p "${BASE_FILES}/etc/config"
 mkdir -p "${BASE_FILES}/etc/dropbear"
 
-# ================= [ 3.1 网络配置 - 🚨已修复DSA物理网口桥接] =================
+# ================= [ 3.1 网络配置 ] =================
 cat > "${BASE_FILES}/etc/config/network" <<'EOF'
-
 config interface 'loopback'
-	option device 'lo'
-	option proto 'static'
-	option ipaddr '127.0.0.1'
-	option netmask '255.0.0.0'
+    option device 'lo'
+    option proto 'static'
+    option ipaddr '127.0.0.1'
+    option netmask '255.0.0.0'
 
 config globals 'globals'
-	option ula_prefix 'fddc:52f6:ea41::/48'
-	option packet_steering '1'
+    option ula_prefix 'auto'
 
 config device
-	option name 'br-lan'
-	option type 'bridge'
-	list ports 'eth0'
+    option name 'br-lan'
+    option type 'bridge'
+    list ports 'eth0'
 
 config interface 'lan'
-	option device 'br-lan'
-	option proto 'static'
-	option ipaddr '192.168.30.10'
-	option netmask '255.255.255.0'
-	list dns '223.5.5.5'
-	list dns '8.8.8.8'
-	option gateway '192.168.30.1'
+    option device 'br-lan'
+    option proto 'static'
+    option ipaddr '192.168.30.254'
+    option netmask '255.255.255.0'
+    option gateway '192.168.30.1'
+    option delegate '0'
+    list dns '223.5.5.5'
+    list dns '114.114.114.114'
+    list dns '8.8.8.8'
 
 config interface 'lan6'
-	option proto 'dhcpv6'
-	option device '@lan'
-	option reqaddress 'try'
-	option reqprefix 'auto'
-	option norelease '1'
-	option sourcefilter '0'
-	option delegate '0'
-
-config interface 'docker'
-	option device 'docker0'
-	option proto 'none'
-	option auto '0'
-
-config device
-	option type 'bridge'
-	option name 'docker0'
-
-config interface 'wwan'
-	option proto 'dhcp'
-
-config interface 'EasyTier'
-	option proto 'none'
-	option device 'easytier'
-	option ifname 'easytier'
-
-
+    option proto 'dhcpv6'
+    option device 'br-lan'
+    option reqaddress 'try'
+    option reqprefix 'auto'
+    option norelease '1'
+    option sourcefilter '0'
+    option delegate '0'
 EOF
 
 # ================= [ 3.2 DHCP 配置 ] =================
@@ -175,15 +156,9 @@ config timeserver 'ntp'
     list server 'ntp2.aliyun.com'
     list server 'ntp3.aliyun.com'
     list server 'ntp4.aliyun.com'
-
-config imm_init
-	option lang '1'
-	option system_chn '1'
-	option opkg_mirror 'https://mirrors.vsean.net/openwrt'
-
 EOF
 
-# ================= [ 3.4 uhttpd 配置 - 🚨已修复危险挂载点] =================
+# ================= [ 3.4 uhttpd 配置 ] =================
 UHTTPD_PATH="${BASE_FILES}/etc/config/uhttpd"
 cat > "$UHTTPD_PATH" <<'EOF'
 config uhttpd 'main'
@@ -205,8 +180,6 @@ config uhttpd 'main'
     option max_requests '50'
     option script_timeout '3600'
 
-# 🚨 关键修复：将 home 改为安全的 /www/webguide，防止因分区未挂载导致 uhttpd 崩溃
-# 如果你需要指向 mmcblk2p4，请在 rc.local 中通过软链接实现，切勿直接写死在 uhttpd 配置中
 config uhttpd 'web'
     list listen_http '0.0.0.0:39380'
     list listen_http '[::]:39380'
@@ -248,10 +221,17 @@ ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDg995BH9wmXnqi+voUaQT0oSYi+guKytDzJBMe0psH
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE4un4qvoUbhkmaOvIEvRWZ5qlSrrqzRpUb8BsKn65bn x96max+
 EOF
 
+# 🚨 静态构建阶段：强制设置 Dropbear 目录及文件的权限
+chmod 700 "${BASE_FILES}/etc/dropbear"
+chmod 600 "${BASE_FILES}/etc/dropbear/authorized_keys"
+# 注：在构建环境中修改属主需要 root 权限，ImageBuilder 打包 tar.gz 时默认属主即为 root，
+# 但为了双重保险，我们在 rc.local 中再次强制 chown。
+
 # ================= [ 3.7 rc.local (动态逻辑) ] =================
 cat > "${BASE_FILES}/etc/rc.local" <<'EOF'
 #!/bin/sh
-# 修复 Dropbear 公钥权限
+# 🚨 修复 Dropbear 文件夹及公钥的权限和归属 (防止 SSH 拒绝密钥登录)
+chown -R root:root /etc/dropbear 2>/dev/null
 chmod 700 /etc/dropbear 2>/dev/null
 chmod 600 /etc/dropbear/authorized_keys 2>/dev/null
 
