@@ -187,42 +187,46 @@ EOF
 UHTTPD_PATH="${BASE_FILES}/etc/config/uhttpd"
 cat > "$UHTTPD_PATH" <<'EOF'
 config uhttpd 'main'
-    list listen_http '0.0.0.0:80'
-    list listen_http '[::]:80'
-    option redirect_https '0'
-    option home '/www'
-    option rfc1918_filter '1'
-    option max_connections '100'
-    option cert '/etc/uhttpd.crt'
-    option key '/etc/uhttpd.key'
-    option cgi_prefix '/cgi-bin'
-    list lua_prefix '/cgi-bin/luci=/usr/lib/lua/luci/sgi/uhttpd.lua'
-    option network_timeout '30'
-    option http_keepalive '20'
-    option tcp_keepalive '1'
-    option ubus_prefix '/ubus'
-    list index_page 'cgi-bin/luci'
-    option max_requests '50'
-    option script_timeout '3600'
+	list listen_http '0.0.0.0:80'
+	list listen_http '[::]:80'
+	list listen_https ''
+	option redirect_https '0'
+	option home '/www'
+	option rfc1918_filter '1'
+	option max_connections '100'
+	option cert '/etc/uhttpd.crt'
+	option key '/etc/uhttpd.key'
+	option cgi_prefix '/cgi-bin'
+	list lua_prefix '/cgi-bin/luci=/usr/lib/lua/luci/sgi/uhttpd.lua'
+	option network_timeout '30'
+	option http_keepalive '20'
+	option tcp_keepalive '1'
+	option ubus_prefix '/ubus'
+	list index_page 'cgi-bin/luci'
+	option max_requests '50'
+	option script_timeout '3600'
 
 config uhttpd 'web'
-    list listen_http '0.0.0.0:39380'
-    list listen_http '[::]:39380'
-    option redirect_https '0'
-    option home '/www/webguide'
+	list listen_http '0.0.0.0:39380'
+	list listen_http '[::]:39380'
+	option redirect_https '0'
+	option home '/mnt/mmcblk2p4/webguide'
     list interpreter '.php=/usr/bin/php-cgi'
     option script_timeout '60'
     option index_page 'index.php index.html'
 
+
 config cert 'defaults'
-    option days '730'
-    option key_type 'ec'
-    option bits '2048'
-    option ec_curve 'P-256'
-    option country 'ZZ'
-    option state 'Somewhere'
-    option location 'Unknown'
-    option commonname 'OpenWrt'
+	option days '730'
+	option key_type 'ec'
+	option bits '2048'
+	option ec_curve 'P-256'
+	option country 'ZZ'
+	option state 'Somewhere'
+	option location 'Unknown'
+	option commonname 'OpenWrt'
+
+
 EOF
 
 # ================= [ 3.5 ZeroTier 配置 ] =================
@@ -259,12 +263,6 @@ cat > "${BASE_FILES}/etc/rc.local" <<'EOF'
 chown -R root:root /etc/dropbear 2>/dev/null
 chmod 700 /etc/dropbear 2>/dev/null
 chmod 600 /etc/dropbear/authorized_keys 2>/dev/null
-
-# 动态处理 webguide 目录软链接 (解决 uhttpd 挂载点问题)
-mkdir -p /www/webguide
-if [ -d "/mnt/mmcblk2p4/webguide" ]; then
-    mount --bind /mnt/mmcblk2p4/webguide /www/webguide 2>/dev/null
-fi
 
 # 动态添加 ImmortalWrt kmods 源
 KMODS_MARKER="immortalwrt_kmods"
