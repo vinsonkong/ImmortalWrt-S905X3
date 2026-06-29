@@ -98,7 +98,6 @@ jobs:
 
       - name: Inject Custom Files & Packages
         run: |
-          # 1. 注入自定义 ipk 包
           if [ -d "./custom-packages" ] && ls ./custom-packages/*.ipk 1> /dev/null 2>&1; then
             echo "📦 注入自定义 ipk 包..."
             mkdir -p ./openwrt/packages
@@ -107,7 +106,6 @@ jobs:
             echo "⚠️ 未找到 custom-packages，跳过"
           fi
           
-          # 2. 注入自定义文件并修复权限
           if [ -d "./custom-files" ]; then
             echo "📦 注入 custom-files..."
             mkdir -p ./openwrt/files
@@ -126,7 +124,6 @@ jobs:
         run: |
           cd openwrt
           
-          # ✅ 软件包列表以此为准，已包含 luci-app-socat
           PACKAGES_LIST="acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
             cgi-io chattr coremark coreutils coreutils-base64 coreutils-nohup coreutils-truncate \
             gawk getopt git gzip htop iconv jq jshn libjson-script openssh-sftp-server \
@@ -172,8 +169,10 @@ jobs:
         with:
           openwrt_path: openwrt/bin/targets/armsr/armv8/*-rootfs.tar.gz
           openwrt_board: ${{ inputs.device_board }}
-          openwrt_kernel: ${{ inputs.kernel_version }}
-          auto_kernel: true
+          # 🚨 关键修复：必须关闭 auto_kernel！
+          # 使用 ImageBuilder 自带的 armsr 内核，确保与 PACKAGES_LIST 中的 kmod 版本完全一致。
+          # 如果开启 true，ophub 会替换内核，导致官方 kmod (网卡驱动等) 因版本不匹配全部失效！
+          auto_kernel: false
           builder_name: ImmortalWrt
 
       - name: Upload Firmware to Artifact
@@ -194,19 +193,16 @@ jobs:
             自动编译的 ImmortalWrt 固件 (ImageBuilder 精简版)
             - 版本: ${{ inputs.immortalwrt_version }}
             - 设备: ${{ inputs.device_board }}
-            - 内核: ${{ inputs.kernel_version }}
+            - 内核: 官方 armsr 内核 (确保 kmod 100% 兼容)
             
             ### 📁 自定义内容
-            - diy.sh: 静态配置已注入（彻底替代 uci-defaults）
+            - diy.sh: 静态配置已注入（修复 DSA 网口桥接与 uhttpd 崩溃问题）
             - custom-files: 已注入并覆盖系统同名文件
             - custom-packages: 本地 .ipk 已预装
             
-            ### ⚠️ kmods 安装说明
-            ImageBuilder 使用官方预编译内核，可直接从官方源安装匹配的内核模块：
-            ```bash
-            opkg update
-            opkg install kmod-tun kmod-usb-net-rtl8152
-            ```
+            ### ⚠️ 刷机提示
+            1. 默认 IP: 192.168.30.254
+            2. 若修改 DTB，请编辑 BOOT 分区的 /boot/uEnv.txt
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
