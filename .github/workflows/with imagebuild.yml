@@ -83,7 +83,6 @@ jobs:
           tar -xf "imagebuilder.${EXT}"
           mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 openwrt
 
-      # ✅ 新增：在打包前执行 diy.sh 注入静态配置
       - name: Execute diy.sh for Static Config Injection
         run: |
           if [ -f "./diy.sh" ]; then
@@ -109,7 +108,6 @@ jobs:
           fi
           
           # 2. 注入自定义文件并修复权限
-          # ⚠️ 注意：此步骤会覆盖 diy.sh 写入的同名文件，请确保 custom-files 中无冲突配置
           if [ -d "./custom-files" ]; then
             echo "📦 注入 custom-files..."
             mkdir -p ./openwrt/files
@@ -128,6 +126,7 @@ jobs:
         run: |
           cd openwrt
           
+          # ✅ 软件包列表以此为准，已包含 luci-app-socat
           PACKAGES_LIST="acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
             cgi-io chattr coremark coreutils coreutils-base64 coreutils-nohup coreutils-truncate \
             gawk getopt git gzip htop iconv jq jshn libjson-script openssh-sftp-server \
