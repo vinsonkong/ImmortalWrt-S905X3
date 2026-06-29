@@ -1,23 +1,40 @@
 #!/bin/bash
+set -e
 
-echo "🚀 1. 开始执行 Target 层白名单清理.."
-TARGET_FILE=""
-
-# 兼容 24.10 的 armsr 和 23.05 的 armvirt
-if [ -f "target/linux/armsr/armv8/target.mk" ]; then
-    TARGET_FILE="target/linux/armsr/armv8/target.mk"
-elif [ -f "target/linux/armsr/target.mk" ]; then
-    TARGET_FILE="target/linux/armsr/target.mk"
-elif [ -f "target/linux/armvirt/target.mk" ]; then
-    TARGET_FILE="target/linux/armvirt/target.mk"
-elif [ -f "target/linux/armvirt/Makefile" ]; then
-    TARGET_FILE="target/linux/armvirt/Makefile"
+# =========================================================
+# 环境自适应检测 (核心：兼容 ImageBuilder 与 源码编译)
+# =========================================================
+if [ -d "package/base-files/files" ]; then
+    echo "🔍 检测到【源码编译】环境"
+    BASE_FILES="package/base-files/files"
+    TARGET_DIR="target/linux"
+    IS_IMAGEBUILDER=false
+elif [ -f ".config" ] || [ -d "files" ]; then
+    echo "🔍 检测到【ImageBuilder】环境"
+    BASE_FILES="files"
+    TARGET_DIR=""
+    IS_IMAGEBUILDER=true
+else
+    echo "❌ 无法识别编译环境，退出"; exit 1
 fi
 
-if [ -n "$TARGET_FILE" ]; then
-    cp "$TARGET_FILE" "${TARGET_FILE}.bak"
-    sed -i '/^DEFAULT_PACKAGES +=/d' "$TARGET_FILE"
-    cat >> "$TARGET_FILE" <<EOF
+echo "🚀 1. Target 层白名单清理..."
+if [ "$IS_IMAGEBUILDER" = false ] && [ -n "$TARGET_DIR" ]; then
+    TARGET_FILE=""
+    if [ -f "${TARGET_DIR}/armsr/armv8/target.mk" ]; then
+        TARGET_FILE="${TARGET_DIR}/armsr/armv8/target.mk"
+    elif [ -f "${TARGET_DIR}/armsr/target.mk" ]; then
+        TARGET_FILE="${TARGET_DIR}/armsr/target.mk"
+    elif [ -f "${TARGET_DIR}/armvirt/target.mk" ]; then
+        TARGET_FILE="${TARGET_DIR}/armvirt/target.mk"
+    elif [ -f "${TARGET_DIR}/armvirt/Makefile" ]; then
+        TARGET_FILE="${TARGET_DIR}/armvirt/Makefile"
+    fi
+
+    if [ -n "$TARGET_FILE" ]; then
+        cp "$TARGET_FILE" "${TARGET_FILE}.bak"
+        sed -i '/^DEFAULT_PACKAGES +=/d' "$TARGET_FILE"
+        cat >> "$TARGET_FILE" <<EOF
 
 # === 自定义基础白名单 (旁路由精简版) ===
 DEFAULT_PACKAGES += base-files busybox dropbear opkg
@@ -26,171 +43,206 @@ DEFAULT_PACKAGES += luci luci-base luci-compat luci-lib-ipkg
 DEFAULT_PACKAGES += luci-theme-argon
 DEFAULT_PACKAGES += kmod-virtio-net kmod-virtio-blk kmod-virtio-scsi
 EOF
-    echo "✅ Target 默认包已精简并注入！(文件: $TARGET_FILE)"
+        echo "✅ Target 默认包已精简并注入！(文件: $TARGET_FILE)"
+    else
+        echo "ℹ️ 未找到 Target 定义文件，跳过白名单清理。"
+    fi
 else
-    echo "ℹ️ 未找到 Target 定义文件，已由 .config 全权管理，跳过白名单清理。"
+    echo "ℹ️ ImageBuilder 环境无 Target 目录，跳过白名单清理（由 PACKAGES 参数管理）。"
 fi
 
-echo "🎨 2. 开始注入自定义基础配置..."
-sed -i 's/192.168.1.1/192.168.30.254/g' package/base-files/files/bin/config_generate
-sed -i 's/ImmortalWrt/X96Max/g' package/base-files/files/bin/config_generate
-sed -i "s/'UTC'/'CST-8'\n   set system.@system[-1].zonename='Asia\/Shanghai'/g" package/base-files/files/bin/config_generate
+echo "🎨 2. 修改 config_generate (Fallback 兜底)..."
+CONFIG_GENERATE="${BASE_FILES}/bin/config_generate"
+if [ -f "$CONFIG_GENERATE" ]; then
+    sed -i 's/192.168.1.1/192.168.30.254/g' "$CONFIG_GENERATE"
+    sed -i 's/ImmortalWrt/X96Max/g' "$CONFIG_GENERATE"
+    sed -i "s/'UTC'/'CST-8'\n   set system.@system[-1].zonename='Asia\/Shanghai'/g" "$CONFIG_GENERATE"
+    echo "✅ config_generate 已修改"
+else
+    echo "⚠️ 未找到 config_generate，跳过（ImageBuilder 正常现象）"
+fi
 
-echo "🔧 3. 注入 99-custom-settings ..."
-mkdir -p package/base-files/files/etc/uci-defaults
+echo "🔧 3. 静态注入所有 /etc/config 基础配置..."
+mkdir -p "${BASE_FILES}/etc/config"
+mkdir -p "${BASE_FILES}/etc/dropbear"
 
-cat <<'SCRIPT_EOF' > package/base-files/files/etc/uci-defaults/99-custom-settings
+# ================= [ 3.1 网络配置 ] =================
+cat > "${BASE_FILES}/etc/config/network" <<'EOF'
+config interface 'loopback'
+    option device 'lo'
+    option proto 'static'
+    option ipaddr '127.0.0.1'
+    option netmask '255.0.0.0'
+
+config globals 'globals'
+    option ula_prefix 'auto'
+
+config interface 'lan'
+    option device 'br-lan'
+    option proto 'static'
+    option ipaddr '192.168.30.254'
+    option netmask '255.255.255.0'
+    option gateway '192.168.30.1'
+    option delegate '0'
+    list dns '223.5.5.5'
+    list dns '114.114.114.114'
+    list dns '8.8.8.8'
+
+config interface 'lan6'
+    option proto 'dhcpv6'
+    option device 'br-lan'
+    option reqaddress 'try'
+    option reqprefix 'auto'
+    option norelease '1'
+    option sourcefilter '0'
+    option delegate '0'
+EOF
+
+# ================= [ 3.2 DHCP 配置 ] =================
+cat > "${BASE_FILES}/etc/config/dhcp" <<'EOF'
+config dnsmasq
+    option domainneeded '1'
+    option localise_queries '1'
+    option rebind_protection '1'
+    option rebind_localhost '1'
+    option local '/lan/'
+    option domain 'lan'
+    option expandhosts '1'
+    option authoritative '1'
+    option readethers '1'
+    option leasefile '/tmp/dhcp.leases'
+    option resolvfile '/tmp/resolv.conf.d/resolv.conf.auto'
+    option nonwildcard '1'
+    option localservice '1'
+    option ednspacket_max '1232'
+
+config dhcp 'lan'
+    option interface 'lan'
+    option ignore '1'
+    option dhcpv6 'disabled'
+    option ra 'disabled'
+    option ndp 'disabled'
+
+config dhcp 'wan'
+    option interface 'wan'
+    option ignore '1'
+
+config odhcpd 'odhcpd'
+    option maindhcp '0'
+    option leasefile '/tmp/hosts/odhcpd'
+    option leasetrigger '/usr/sbin/odhcpd-update'
+    option loglevel '4'
+EOF
+
+# ================= [ 3.3 系统配置 ] =================
+cat > "${BASE_FILES}/etc/config/system" <<'EOF'
+config system
+    option hostname 'X96Max'
+    option timezone 'CST-8'
+    option zonename 'Asia/Shanghai'
+    option ttylogin '0'
+    option log_size '64'
+    option urandom_seed '0'
+
+config timeserver 'ntp'
+    option enabled '1'
+    option enable_server '0'
+    list server 'ntp1.aliyun.com'
+    list server 'ntp2.aliyun.com'
+    list server 'ntp3.aliyun.com'
+    list server 'ntp4.aliyun.com'
+EOF
+
+# ================= [ 3.4 uhttpd 配置 ] =================
+UHTTPD_PATH="${BASE_FILES}/etc/config/uhttpd"
+cat > "$UHTTPD_PATH" <<'EOF'
+config uhttpd 'main'
+    list listen_http '0.0.0.0:80'
+    list listen_http '[::]:80'
+    option redirect_https '0'
+    option home '/www'
+    option rfc1918_filter '1'
+    option max_connections '100'
+    option cert '/etc/uhttpd.crt'
+    option key '/etc/uhttpd.key'
+    option cgi_prefix '/cgi-bin'
+    list lua_prefix '/cgi-bin/luci=/usr/lib/lua/luci/sgi/uhttpd.lua'
+    option network_timeout '30'
+    option http_keepalive '20'
+    option tcp_keepalive '1'
+    option ubus_prefix '/ubus'
+    list index_page 'cgi-bin/luci'
+    option max_requests '50'
+    option script_timeout '3600'
+
+config uhttpd 'web'
+    list listen_http '0.0.0.0:39380'
+    list listen_http '[::]:39380'
+    option redirect_https '0'
+    option home '/mnt/mmcblk2p4/webguide'
+    list interpreter '.php=/usr/bin/php-cgi'
+    option script_timeout '60'
+    option index_page 'index.php index.html'
+
+config cert 'defaults'
+    option days '730'
+    option key_type 'ec'
+    option bits '2048'
+    option ec_curve 'P-256'
+    option country 'ZZ'
+    option state 'Somewhere'
+    option location 'Unknown'
+    option commonname 'OpenWrt'
+EOF
+
+# ================= [ 3.5 ZeroTier 配置 ] =================
+cat > "${BASE_FILES}/etc/config/zerotier" <<'EOF'
+config zerotier 'earth'
+    option id '9f77fc393e652048'
+    option enabled '1'
+EOF
+
+# ================= [ 3.6 Dropbear SSH 配置与公钥 ] =================
+cat > "${BASE_FILES}/etc/config/dropbear" <<'EOF'
+config dropbear
+    option PasswordAuth 'on'
+    option RootPasswordAuth 'on'
+    option RootLogin '1'
+    option Port '22'
+EOF
+
+cat > "${BASE_FILES}/etc/dropbear/authorized_keys" <<'EOF'
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDg995BH9wmXnqi+voUaQT0oSYi+guKytDzJBMe0psHZDC1APuG5T1dfRdQzK2STWx3gq/b9cG8H9wm6KtSiQsTjQkvfVyuLSe4u9f0BChBEbUcfpvjt51Lnkobyo5Ppnj9l3v8TMehdVMcMluNciF8HxTJwrtuPiKcfLeqqUvzSU0wUdvkdq+rirusEhK45mzBZBmCDUq6fECxdEcKKCFmOUHM6CWdXJnAWk1ehchy+EGxMri5fG6uMJh4Y43vjVBYavN0aqW37ASkUe9LXuokYm0W2gBVzoZuCHBw09roPEeZvJYhSjdVrfmYXbi1qoyaHMjT0zSTSt6ov/WFfI+n x96max
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE4un4qvoUbhkmaOvIEvRWZ5qlSrrqzRpUb8BsKn65bn x96max+
+EOF
+
+# ================= [ 3.7 rc.local (动态逻辑) ] =================
+cat > "${BASE_FILES}/etc/rc.local" <<'EOF'
 #!/bin/sh
-# =========================================================
-# 旁路由初始化脚本 (仅在设备首次启动时执行)
-# =========================================================
+# 修复 Dropbear 公钥权限
+chmod 700 /etc/dropbear 2>/dev/null
+chmod 600 /etc/dropbear/authorized_keys 2>/dev/null
 
-# --- 1. 网络配置 (旁路由核心) ---
-uci -q set network.lan.proto='static'
-uci -q set network.lan.ipaddr='192.168.30.254'
-uci -q set network.lan.netmask='255.255.255.0'
-uci -q set network.lan.gateway='192.168.30.1'
-
-# 24.10+ 强制使用 device，彻底废弃 ifname 避免警告
-uci -q set network.lan.device='br-lan'
-uci -q delete network.lan.ifname 2>/dev/null
-
-# DNS 与委托配置
-uci -q delete network.lan.dns 2>/dev/null
-uci -q add_list network.lan.dns='223.5.5.5'
-uci -q add_list network.lan.dns='114.114.114.114'
-uci -q add_list network.lan.dns='8.8.8.8'
-uci -q set network.lan.delegate='0'
-
-# --- 2. IPv6 穿透配置 ---
-uci -q delete network.lan6 2>/dev/null
-uci -q set network.lan6=interface
-uci -q set network.lan6.proto='dhcpv6'
-uci -q set network.lan6.device='br-lan'
-uci -q set network.lan6.reqaddress='try'
-uci -q set network.lan6.reqprefix='auto'
-uci -q set network.lan6.norelease='1'
-uci -q set network.lan6.sourcefilter='0'
-uci -q set network.lan6.delegate='0'
-uci commit network
-
-# --- 3. 关闭 DHCP 服务 ---
-uci -q set dhcp.lan.ignore='1'
-uci -q set dhcp.lan.dhcpv6='disabled'
-uci -q set dhcp.lan.ra='disabled'
-uci -q set dhcp.lan.ndp='disabled'
-uci commit dhcp
-
-# --- 4. 系统与主题配置 ---
-uci -q set system.@system[0].hostname='X96Max'
-uci -q set system.@system[0].zonename='Asia/Shanghai'
-uci -q set system.@system[0].timezone='CST-8'
-uci commit system
-ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-
-# --- 5. 重置 uhttpd 配置 ---
-uci -q delete uhttpd
-uci -q batch << 'UCIBATCH'
-set uhttpd.main=uhttpd
-add_list uhttpd.main.listen_http='0.0.0.0:80'
-add_list uhttpd.main.listen_http='[::]:80'
-add_list uhttpd.main.listen_https=''
-set uhttpd.main.redirect_https='0'
-set uhttpd.main.home='/www'
-set uhttpd.main.rfc1918_filter='1'
-set uhttpd.main.max_connections='100'
-set uhttpd.main.cert='/etc/uhttpd.crt'
-set uhttpd.main.key='/etc/uhttpd.key'
-set uhttpd.main.cgi_prefix='/cgi-bin'
-add_list uhttpd.main.lua_prefix='/cgi-bin/luci=/usr/lib/lua/luci/sgi/uhttpd.lua'
-set uhttpd.main.network_timeout='30'
-set uhttpd.main.http_keepalive='20'
-set uhttpd.main.tcp_keepalive='1'
-set uhttpd.main.ubus_prefix='/ubus'
-add_list uhttpd.main.index_page='cgi-bin/luci'
-set uhttpd.main.max_requests='50'
-set uhttpd.main.script_timeout='3600'
-
-set uhttpd.web=uhttpd
-add_list uhttpd.web.listen_http='0.0.0.0:39380'
-add_list uhttpd.web.listen_http='[::]:39380'
-set uhttpd.web.redirect_https='0'
-set uhttpd.web.home='/mnt/mmcblk2p4/webguide'
-add_list uhttpd.web.interpreter='.php=/usr/bin/php-cgi'
-set uhttpd.web.script_timeout='60'
-set uhttpd.web.index_page='index.php index.html'
-
-set uhttpd.defaults=cert
-set uhttpd.defaults.days='730'
-set uhttpd.defaults.key_type='ec'
-set uhttpd.defaults.bits='2048'
-set uhttpd.defaults.ec_curve='P-256'
-set uhttpd.defaults.country='ZZ'
-set uhttpd.defaults.state='Somewhere'
-set uhttpd.defaults.location='Unknown'
-set uhttpd.defaults.commonname='OpenWrt'
-commit uhttpd
-UCIBATCH
-/etc/init.d/uhttpd restart 2>/dev/null
-
-# --- 6. ZeroTier 配置 (带容错守卫) ---
-if uci -q get zerotier.earth >/dev/null 2>&1; then
-    uci -q set zerotier.earth.id='9f77fc393e652048'
-    uci -q commit zerotier
-fi
-
-# --- 7. 注入 Dropbear SSH 公钥 ---
-SSH_PUBKEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDg995BH9wmXnqi+voUaQT0oSYi+guKytDzJBMe0psHZDC1APuG5T1dfRdQzK2STWx3gq/b9cG8H9wm6KtSiQsTjQkvfVyuLSe4u9f0BChBEbUcfpvjt51Lnkobyo5Ppnj9l3v8TMehdVMcMluNciF8HxTJwrtuPiKcfLeqqUvzSU0wUdvkdq+rirusEhK45mzBZBmCDUq6fECxdEcKKCFmOUHM6CWdXJnAWk1ehchy+EGxMri5fG6uMJh4Y43vjVBYavN0aqW37ASkUe9LXuokYm0W2gBVzoZuCHBw09roPEeZvJYhSjdVrfmYXbi1qoyaHMjT0zSTSt6ov/WFfI+n x96max ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE4un4qvoUbhkmaOvIEvRWZ5qlSrrqzRpUb8BsKn65bn x96max+"
-
-DROPBEAR_DIR="/etc/dropbear"
-AUTH_KEYS="${DROPBEAR_DIR}/authorized_keys"
-mkdir -p "$DROPBEAR_DIR"
-chmod 700 "$DROPBEAR_DIR"
-
-if ! grep -qF "$SSH_PUBKEY" "$AUTH_KEYS" 2>/dev/null; then
-    echo "$SSH_PUBKEY" >> "$AUTH_KEYS"
-    echo "✅ SSH 公钥已注入"
-fi
-
-chmod 600 "$AUTH_KEYS"
-chown root:root "$AUTH_KEYS"
-chmod 700 "$DROPBEAR_DIR"
-chown root:root "$DROPBEAR_DIR"
-
-uci -q set dropbear.@dropbear[0].PasswordAuth='on'
-uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
-uci -q set dropbear.@dropbear[0].RootLogin='1'
-uci -q commit dropbear
-/etc/init.d/dropbear reload 2>/dev/null
-
-# --- 8. 动态添加 ImmortalWrt kmods 源 (读取系统实际版本) ---
+# 动态添加 ImmortalWrt kmods 源
 KMODS_MARKER="immortalwrt_kmods"
 if ! grep -q "$KMODS_MARKER" /etc/opkg/distfeeds.conf 2>/dev/null; then
     KERNEL_VER=$(uname -r)
     ARCH=$(uname -m)
-    
     case "$ARCH" in
         aarch64) TARGET_PATH="targets/armsr/armv8" ;;
-        *)       echo "⚠️ 未知架构 $ARCH，跳过 kmods 源添加"; exit 0 ;;
+        x86_64)  TARGET_PATH="targets/x86/64" ;;
+        *)       TARGET_PATH="" ;;
     esac
-    
-    # 从系统释放文件中动态提取真实版本号，避免硬编码导致跨版本失效
-    IW_VERSION=$(grep -oE 'DISTRIB_RELEASE="[0-9.]+"' /etc/openwrt_release | cut -d'"' -f2)
-    [ -z "$IW_VERSION" ] && IW_VERSION="24.10.6"
-    
-    KMODS_URL="https://mirrors.ustc.edu.cn/immortalwrt/releases/${IW_VERSION}/${TARGET_PATH}/kmods/${KERNEL_VER}"
-    
-    echo "# ImmortalWrt kmods (auto-added)" >> /etc/opkg/distfeeds.conf
-    echo "src/gz immortalwrt_kmods ${KMODS_URL}" >> /etc/opkg/distfeeds.conf
-    echo "✅ kmods 源已添加: ${KMODS_URL}"
-    # 仅写入配置，不阻塞首次启动网络请求
+    if [ -n "$TARGET_PATH" ]; then
+        IW_VERSION=$(grep -oE 'DISTRIB_RELEASE="[0-9.]+"' /etc/openwrt_release | cut -d'"' -f2)
+        [ -z "$IW_VERSION" ] && IW_VERSION="24.10.6"
+        KMODS_URL="https://mirrors.ustc.edu.cn/immortalwrt/releases/${IW_VERSION}/${TARGET_PATH}/kmods/${KERNEL_VER}"
+        echo "# ImmortalWrt kmods (auto-added)" >> /etc/opkg/distfeeds.conf
+        echo "src/gz immortalwrt_kmods ${KMODS_URL}" >> /etc/opkg/distfeeds.conf
+    fi
 fi
+exit 0
+EOF
 
-# --- 9. 脚本自删除 (运行时执行，非编译时) ---
-rm -f /etc/uci-defaults/99-custom-settings
-SCRIPT_EOF
-
-# ✅ 仅赋予执行权限，绝不能在编译阶段 rm 删除此文件！
-chmod +x package/base-files/files/etc/uci-defaults/99-custom-settings
-
-echo "✅ diy.sh 执行完毕"
+chmod +x "${BASE_FILES}/etc/rc.local"
+echo "✅ 所有基础配置已静态注入完毕！"
