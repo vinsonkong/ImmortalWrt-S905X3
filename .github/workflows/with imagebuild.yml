@@ -80,9 +80,22 @@ jobs:
           echo "Downloading: $BUILDER_URL"
           wget -q "$BUILDER_URL" -O "imagebuilder.${EXT}"
           
-          # GNU tar 自动识别 xz/zst 格式
           tar -xf "imagebuilder.${EXT}"
           mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 openwrt
+
+      # ✅ 新增：在打包前执行 diy.sh 注入静态配置
+      - name: Execute diy.sh for Static Config Injection
+        run: |
+          if [ -f "./diy.sh" ]; then
+            echo "🔧 开始执行 diy.sh 静态配置注入..."
+            chmod +x ./diy.sh
+            cd openwrt
+            ../diy.sh
+            cd ..
+            echo "✅ diy.sh 执行完毕"
+          else
+            echo "⚠️ 未找到 diy.sh，跳过"
+          fi
 
       - name: Inject Custom Files & Packages
         run: |
@@ -96,14 +109,15 @@ jobs:
           fi
           
           # 2. 注入自定义文件并修复权限
+          # ⚠️ 注意：此步骤会覆盖 diy.sh 写入的同名文件，请确保 custom-files 中无冲突配置
           if [ -d "./custom-files" ]; then
             echo "📦 注入 custom-files..."
             mkdir -p ./openwrt/files
             cp -r ./custom-files/* ./openwrt/files/
             
-            # 批量修复执行权限和敏感文件权限
             chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
             chmod 600 ./openwrt/files/etc/config/* 2>/dev/null || true
+            chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
             [ -d "./openwrt/files/root/.ssh" ] && chmod 700 ./openwrt/files/root/.ssh && chmod 600 ./openwrt/files/root/.ssh/* 2>/dev/null || true
             echo "✅ 文件注入及权限修复完成"
           else
@@ -114,8 +128,6 @@ jobs:
         run: |
           cd openwrt
           
-          # 将包列表提取为变量，避免在多行字符串中使用 # 导致被识别为包名
-          # 注意：已移除 luci-app-socat 以解决与底层 socat 的文件冲突
           PACKAGES_LIST="acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
             cgi-io chattr coremark coreutils coreutils-base64 coreutils-nohup coreutils-truncate \
             gawk getopt git gzip htop iconv jq jshn libjson-script openssh-sftp-server \
@@ -186,6 +198,7 @@ jobs:
             - 内核: ${{ inputs.kernel_version }}
             
             ### 📁 自定义内容
+            - diy.sh: 静态配置已注入（彻底替代 uci-defaults）
             - custom-files: 已注入并覆盖系统同名文件
             - custom-packages: 本地 .ipk 已预装
             
