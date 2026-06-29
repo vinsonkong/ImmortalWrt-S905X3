@@ -66,7 +66,7 @@ echo "🔧 3. 静态注入所有 /etc/config 基础配置..."
 mkdir -p "${BASE_FILES}/etc/config"
 mkdir -p "${BASE_FILES}/etc/dropbear"
 
-# ================= [ 3.1 网络配置 ] =================
+# ================= [ 3.1 网络配置 - 🚨已修复DSA物理网口桥接] =================
 cat > "${BASE_FILES}/etc/config/network" <<'EOF'
 config interface 'loopback'
     option device 'lo'
@@ -76,6 +76,12 @@ config interface 'loopback'
 
 config globals 'globals'
     option ula_prefix 'auto'
+
+# 🚨 关键修复：必须定义物理网口设备并桥接，否则网口不亮！
+config device
+    option name 'br-lan'
+    option type 'bridge'
+    list ports 'eth0'
 
 config interface 'lan'
     option device 'br-lan'
@@ -153,7 +159,7 @@ config timeserver 'ntp'
     list server 'ntp4.aliyun.com'
 EOF
 
-# ================= [ 3.4 uhttpd 配置 ] =================
+# ================= [ 3.4 uhttpd 配置 - 🚨已修复危险挂载点] =================
 UHTTPD_PATH="${BASE_FILES}/etc/config/uhttpd"
 cat > "$UHTTPD_PATH" <<'EOF'
 config uhttpd 'main'
@@ -175,11 +181,13 @@ config uhttpd 'main'
     option max_requests '50'
     option script_timeout '3600'
 
+# 🚨 关键修复：将 home 改为安全的 /www/webguide，防止因分区未挂载导致 uhttpd 崩溃
+# 如果你需要指向 mmcblk2p4，请在 rc.local 中通过软链接实现，切勿直接写死在 uhttpd 配置中
 config uhttpd 'web'
     list listen_http '0.0.0.0:39380'
     list listen_http '[::]:39380'
     option redirect_https '0'
-    option home '/mnt/mmcblk2p4/webguide'
+    option home '/www/webguide'
     list interpreter '.php=/usr/bin/php-cgi'
     option script_timeout '60'
     option index_page 'index.php index.html'
@@ -222,6 +230,12 @@ cat > "${BASE_FILES}/etc/rc.local" <<'EOF'
 # 修复 Dropbear 公钥权限
 chmod 700 /etc/dropbear 2>/dev/null
 chmod 600 /etc/dropbear/authorized_keys 2>/dev/null
+
+# 动态处理 webguide 目录软链接 (解决 uhttpd 挂载点问题)
+mkdir -p /www/webguide
+if [ -d "/mnt/mmcblk2p4/webguide" ]; then
+    mount --bind /mnt/mmcblk2p4/webguide /www/webguide 2>/dev/null
+fi
 
 # 动态添加 ImmortalWrt kmods 源
 KMODS_MARKER="immortalwrt_kmods"
