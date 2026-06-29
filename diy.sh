@@ -157,6 +157,12 @@ config timeserver 'ntp'
     list server 'ntp2.aliyun.com'
     list server 'ntp3.aliyun.com'
     list server 'ntp4.aliyun.com'
+
+config imm_init
+	option lang '1'
+	option system_chn '1'
+	option opkg_mirror 'https://mirrors.vsean.net/openwrt'
+
 EOF
 
 # ================= [ 3.4 uhttpd 配置 - 🚨已修复危险挂载点] =================
