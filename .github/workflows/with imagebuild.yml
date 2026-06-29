@@ -173,8 +173,10 @@ jobs:
         with:
           openwrt_path: openwrt/bin/targets/armsr/armv8/*-rootfs.tar.gz
           openwrt_board: ${{ inputs.device_board }}
-          auto_kernel: false
+          openwrt_kernel: ${{ inputs.kernel_version }}
+          auto_kernel: true
           builder_name: ImmortalWrt
+
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
