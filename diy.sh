@@ -87,7 +87,7 @@ config device
 config interface 'lan'
 	option device 'br-lan'
 	option proto 'static'
-	option ipaddr '192.168.30.10'
+	option ipaddr '192.168.30.254'
 	option netmask '255.255.255.0'
 	list dns '223.5.5.5'
 	list dns '8.8.8.8'
@@ -118,7 +118,6 @@ config interface 'EasyTier'
 	option proto 'none'
 	option device 'easytier'
 	option ifname 'easytier'
-
 
 EOF
 
@@ -158,83 +157,6 @@ config odhcpd 'odhcpd'
     option loglevel '4'
 EOF
 
-# ================= [ 3.3 系统配置 ] =================
-cat > "${BASE_FILES}/etc/config/system" <<'EOF'
-config system
-    option hostname 'X96Max'
-    option timezone 'CST-8'
-    option zonename 'Asia/Shanghai'
-    option ttylogin '0'
-    option log_size '64'
-    option urandom_seed '0'
-
-config timeserver 'ntp'
-    option enabled '1'
-    option enable_server '0'
-    list server 'ntp1.aliyun.com'
-    list server 'ntp2.aliyun.com'
-    list server 'ntp3.aliyun.com'
-    list server 'ntp4.aliyun.com'
-
-config imm_init
-	option lang '1'
-	option system_chn '1'
-	option opkg_mirror 'https://mirrors.vsean.net/openwrt'
-
-EOF
-
-# ================= [ 3.4 uhttpd 配置 ] =================
-UHTTPD_PATH="${BASE_FILES}/etc/config/uhttpd"
-cat > "$UHTTPD_PATH" <<'EOF'
-config uhttpd 'main'
-	list listen_http '0.0.0.0:80'
-	list listen_http '[::]:80'
-	list listen_https ''
-	option redirect_https '0'
-	option home '/www'
-	option rfc1918_filter '1'
-	option max_connections '100'
-	option cert '/etc/uhttpd.crt'
-	option key '/etc/uhttpd.key'
-	option cgi_prefix '/cgi-bin'
-	list lua_prefix '/cgi-bin/luci=/usr/lib/lua/luci/sgi/uhttpd.lua'
-	option network_timeout '30'
-	option http_keepalive '20'
-	option tcp_keepalive '1'
-	option ubus_prefix '/ubus'
-	list index_page 'cgi-bin/luci'
-	option max_requests '50'
-	option script_timeout '3600'
-
-config uhttpd 'web'
-	list listen_http '0.0.0.0:39380'
-	list listen_http '[::]:39380'
-	option redirect_https '0'
-	option home '/mnt/mmcblk2p4/webguide'
-    list interpreter '.php=/usr/bin/php-cgi'
-    option script_timeout '60'
-    option index_page 'index.php index.html'
-
-
-config cert 'defaults'
-	option days '730'
-	option key_type 'ec'
-	option bits '2048'
-	option ec_curve 'P-256'
-	option country 'ZZ'
-	option state 'Somewhere'
-	option location 'Unknown'
-	option commonname 'OpenWrt'
-
-
-EOF
-
-# ================= [ 3.5 ZeroTier 配置 ] =================
-cat > "${BASE_FILES}/etc/config/zerotier" <<'EOF'
-config zerotier 'earth'
-    option id '9f77fc393e652048'
-    option enabled '1'
-EOF
 
 # ================= [ 3.6 Dropbear SSH 配置与公钥 ] =================
 cat > "${BASE_FILES}/etc/config/dropbear" <<'EOF'
@@ -264,24 +186,6 @@ chown -R root:root /etc/dropbear 2>/dev/null
 chmod 700 /etc/dropbear 2>/dev/null
 chmod 600 /etc/dropbear/authorized_keys 2>/dev/null
 
-# 动态添加 ImmortalWrt kmods 源
-KMODS_MARKER="immortalwrt_kmods"
-if ! grep -q "$KMODS_MARKER" /etc/opkg/distfeeds.conf 2>/dev/null; then
-    KERNEL_VER=$(uname -r)
-    ARCH=$(uname -m)
-    case "$ARCH" in
-        aarch64) TARGET_PATH="targets/armsr/armv8" ;;
-        x86_64)  TARGET_PATH="targets/x86/64" ;;
-        *)       TARGET_PATH="" ;;
-    esac
-    if [ -n "$TARGET_PATH" ]; then
-        IW_VERSION=$(grep -oE 'DISTRIB_RELEASE="[0-9.]+"' /etc/openwrt_release | cut -d'"' -f2)
-        [ -z "$IW_VERSION" ] && IW_VERSION="24.10.6"
-        KMODS_URL="https://mirrors.ustc.edu.cn/immortalwrt/releases/${IW_VERSION}/${TARGET_PATH}/kmods/${KERNEL_VER}"
-        echo "# ImmortalWrt kmods (auto-added)" >> /etc/opkg/distfeeds.conf
-        echo "src/gz immortalwrt_kmods ${KMODS_URL}" >> /etc/opkg/distfeeds.conf
-    fi
-fi
 exit 0
 EOF
 
