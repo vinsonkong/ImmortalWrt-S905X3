@@ -142,6 +142,9 @@ jobs:
             uclient-fetch uqmi usb-modeswitch wget-ssl wpad-basic wwan \
             kmod-brcmfmac kmod-brcmutil kmod-cfg80211 kmod-mac80211 \
             luci-app-socat luci-i18n-socat-zh-cn \
+            # 24版软件中文包作用luci-i18n-package-manager-zh-cn，23版使用luci-i18n-opkg-zh-cn
+            luci-i18n-package-manager-zh-cn \
+            luci-i18n-filebrowser-go-zh-cn \
             luci-app-easytier luci-app-zerotier luci-i18n-zerotier-zh-cn \
             luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
             containerd docker docker-compose dockerd runc tini \
