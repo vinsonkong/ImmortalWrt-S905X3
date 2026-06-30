@@ -111,7 +111,8 @@ jobs:
             mkdir -p ./openwrt/files
             cp -r ./custom-files/* ./openwrt/files/
             
-            chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d ./openwrt/files/etc/hosts-new/updatehosts.sh 2>/dev/null || true
+            chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
+            chmod +x ./openwrt/files/etc/hosts-new/hostsupdate.sh 2>/dev/null || true
             chmod 600 ./openwrt/files/etc/config/* 2>/dev/null || true
             chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
             
