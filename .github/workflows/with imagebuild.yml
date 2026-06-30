@@ -197,13 +197,12 @@ jobs:
           tag_name: IWrt-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
           name: IWrt S905X3 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            自动编译的 ImmortalWrt 固件 (ImageBuilder 精简版)
+            自动编译的 ImmortalWrt 固件 (with ImageBuilder)
             - 版本: ${{ inputs.immortalwrt_version }}
             - 设备: ${{ inputs.device_board }}
-            - 内核: 官方 armsr 内核 (确保 kmod 100% 兼容)
             
             ### 📁 自定义内容
-            - diy.sh: 静态配置已注入（修复 DSA 网口桥接与 uhttpd 崩溃问题）
+            - diy.sh: 静态配置已注入
             - Dropbear: 已强化 /etc/dropbear 目录归属(root:root)及严格权限(700/600)
             - custom-files: 已注入并覆盖系统同名文件
             - custom-packages: 本地 .ipk 已预装
