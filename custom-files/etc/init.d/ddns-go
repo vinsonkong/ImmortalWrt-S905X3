@@ -4,9 +4,9 @@
 START=99
 USE_PROCD=1
 
-CONF="/etc/config/ddns-go"
-YAML="/etc/ddns-go/config.yaml"
-PROG="/usr/bin/ddns-go"
+CONF="ddns-go"
+YAML="/etc/$CONF/config.yaml"
+PROG="/usr/bin/$CONF"
 
 start_service() {
 	config_load "$CONF"
