@@ -118,9 +118,13 @@ jobs:
             echo "⚠️ 无 custom-files，跳过"
           fi
           
-          echo "🧹 暴力清洗所有注入文件的 CRLF 换行符..."
-          find ./openwrt/files -type f -exec perl -pi -e 's/\r\n/\n/g; s/\r/\n/g' {} + 2>/dev/null || true
-          find ./openwrt/files -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+          echo "🧹 仅对文本文件清洗 CRLF 换行符（跳过二进制文件）..."
+          find ./openwrt/files -type f | while IFS= read -r file; do
+            # 使用 file 命令判断是否为文本文件
+            if file "$file" | grep -qiE 'text|ascii|utf-8|script|json|xml'; then
+              sed -i 's/\r$//' "$file" 2>/dev/null || true
+            fi
+          done
           
           echo "🔐 设置文件权限..."
           chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
