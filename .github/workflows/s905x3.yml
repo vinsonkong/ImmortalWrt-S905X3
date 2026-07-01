@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Create Swap File
         run: |
@@ -117,18 +117,14 @@ jobs:
           else
             echo "⚠️ 无 custom-files，跳过"
           fi
-          
-          echo "🧹 暴力清洗所有注入文件的 CRLF 换行符..."
-          find ./openwrt/files -type f -exec perl -pi -e 's/\r\n/\n/g; s/\r/\n/g' {} + 2>/dev/null || true
-          find ./openwrt/files -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-          
+                    
           echo "🔐 设置文件权限..."
           chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
           chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
           chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
           chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
           
-          echo "✅ 注入与清洗完成！"
+          echo "✅ 注入完成
 
       - name: Build Rootfs with Custom Config
         run: |
@@ -141,7 +137,7 @@ jobs:
             echo "✅ sha256 命令已就绪"
           fi
           
-          # 读取 packages.txt（不修改索引、不解压注入、不注册自定义源）
+          # 读取 packages.txt
           PACKAGES_LIST=""
           while IFS= read -r line; do
             case "$line" in \#*|"") continue ;; esac
