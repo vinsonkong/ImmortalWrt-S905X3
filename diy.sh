@@ -59,12 +59,11 @@ if [ -f "$CONFIG_GENERATE" ]; then
     sed -i 's/192.168.1.1/192.168.30.254/g' "$CONFIG_GENERATE"
     sed -i 's/ImmortalWrt/X96Max/g' "$CONFIG_GENERATE"
     
-    # 增加上下文校验，防止不同版本结构差异导致 sed 替换错位
     if grep -q "'UTC'" "$CONFIG_GENERATE"; then
         sed -i "s/'UTC'/'CST-8'\n   set system.@system[-1].zonename='Asia\/Shanghai'/g" "$CONFIG_GENERATE"
         echo "✅ config_generate 已修改（IP/主机名/时区）"
     else
-        echo "⚠️ config_generate 中未找到 'UTC' 字段，时区注入跳过，请检查固件版本差异"
+        echo "⚠️ config_generate 中未找到 'UTC' 字段，时区注入跳过"
     fi
 else
     echo "⚠️ 未找到 config_generate，跳过（ImageBuilder 正常现象）"
@@ -73,7 +72,6 @@ fi
 # ================= [ 3. Navidrome 二进制文件下载 ] =================
 echo "🎵 3. 注入 Navidrome 二进制文件..."
 NAVIDROME_VERSION="0.59.0"
-# S905X3 / armsr armv8 均为 aarch64 架构
 NAVIDROME_ARCH="arm64"
 
 mkdir -p "${BASE_FILES}/usr/bin"
@@ -82,7 +80,21 @@ wget -q "https://github.com/navidrome/navidrome/releases/download/v${NAVIDROME_V
 tar -xzf /tmp/navidrome.tar.gz -C "${BASE_FILES}/usr/bin/" navidrome
 rm -f /tmp/navidrome.tar.gz
 chmod +x "${BASE_FILES}/usr/bin/navidrome"
-
 echo "✅ Navidrome 二进制已注入至 ${BASE_FILES}/usr/bin/navidrome"
-echo "📌 提示: 配置文件、init.d 启动脚本、网络/DHCP/SSH 配置请通过 custom-files 目录覆盖"
+
+# ================= [ 4. 修复 uhttpd 证书生成 Bug ] =================
+echo "🔧 4. 修复 uhttpd 证书生成潜在的引号/EOF 错误..."
+# 核心修复：提前创建证书占位文件，使 uhttpd postinst 跳过自动生成逻辑
+UHTTPD_CERT="${BASE_FILES}/etc/uhttpd.crt"
+UHTTPD_KEY="${BASE_FILES}/etc/uhttpd.key"
+mkdir -p "${BASE_FILES}/etc"
+touch "$UHTTPD_CERT"
+touch "$UHTTPD_KEY"
+echo "✅ 已创建 uhttpd 证书占位文件，跳过 postinst 自动生成"
+
+# 强制清理 custom-files 中可能带入的 Windows CRLF 换行符 (导致语法错误的元凶)
+find "${BASE_FILES}/etc" -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+find "${BASE_FILES}/usr" -type f -name "*.sh" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+echo "✅ 已清理潜在的 CRLF 换行符"
+
 echo "🎉 diy.sh 执行完毕！"
