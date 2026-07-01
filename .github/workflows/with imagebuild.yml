@@ -62,8 +62,10 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update -qq
+          # 👇 核心修复：添加 coreutils 以提供 sha256 命令，供 ipkg-make-index.sh 使用
           sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
-            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl
+            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl \
+            coreutils
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
@@ -137,8 +139,7 @@ jobs:
         run: |
           cd openwrt
           
-          # 👇 核心修复：重建本地 packages 目录索引
-          # 让 ImageBuilder 能正确识别 custom-packages 中的 lucky 等第三方 ipk
+          # 重建本地 packages 目录索引
           if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
             echo "📦 检测到本地 ipk，正在重建索引..."
             ./scripts/ipkg-make-index.sh packages/ > packages/Packages
