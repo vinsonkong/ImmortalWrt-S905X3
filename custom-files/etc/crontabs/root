@@ -1,2 +1,2 @@
 00 5 * * * sleep 5 && touch /etc/banner && reboot
-30 * * * *  /etc/hosts-new/updatehosts.sh   >/dev/null  2>&1 &
+30 * * * *  /etc/hosts-new/updatehosts.sh >/dev/null  2>&1 &
