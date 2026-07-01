@@ -1,0 +1,9 @@
+#!/bin/sh
+# 🚨 修复 Dropbear 文件夹及公钥的权限和归属 (防止 SSH 拒绝密钥登录)
+chown -R root:root /etc 2>/dev/null
+chown -R root:root /etc/dropbear 2>/dev/null
+chmod 700 /etc/dropbear 2>/dev/null
+chmod 600 /etc/dropbear/authorized_keys 2>/dev/null
+
+bash /etc/custom_service/start_service.sh &
+exit 0
