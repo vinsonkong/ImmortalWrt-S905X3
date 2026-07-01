@@ -187,13 +187,15 @@ liblucihttp-lua
 # === 主题与外观 ===
 luci-theme-argon
 
+# === 软件包管理 ===
+luci-app-package-manager
+luci-i18n-package-manager-zh-cn
+
 # === 常用 LuCI 应用程序 ===
 luci-app-amlogic
 luci-i18n-amlogic-zh-cn
 luci-app-firewall
 luci-i18n-firewall-zh-cn
-luci-app-opkg
-luci-i18n-opkg-zh-cn
 luci-app-ttyd
 luci-i18n-ttyd-zh-cn
 luci-app-wol
