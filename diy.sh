@@ -41,19 +41,5 @@ rm -f /tmp/lucky.tar.gz
 chmod +x "${BASE_FILES}/usr/bin/lucky"
 echo "✅ Lucky 二进制已注入 /usr/bin/lucky"
 
-# ================= [ 3. 防御性优化：CRLF清理与uhttpd证书占位 ] =================
-echo "🛡️ 3. 执行防御性优化 (防编译 EOF 错误)..."
-
-# 3.1 强制清理所有注入文件的 CRLF 换行符
-find "${BASE_FILES}" -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-echo "✅ 已清理所有注入文件的 CRLF 换行符"
-
-# 3.2 创建非空 uhttpd 证书占位文件 (骗过 postinst 检查，跳过自动生成)
-UHTTPD_CERT="${BASE_FILES}/etc/uhttpd.crt"
-UHTTPD_KEY="${BASE_FILES}/etc/uhttpd.key"
-mkdir -p "${BASE_FILES}/etc"
-echo "dummy cert" > "$UHTTPD_CERT"
-echo "dummy key" > "$UHTTPD_KEY"
-echo "✅ 已创建 uhttpd 证书占位文件"
 
 echo "🎉 diy.sh 全部执行完毕！"
