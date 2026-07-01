@@ -1,4 +1,4 @@
-name: Build ImmortalWrt S905X3 with ImageBuilder
+name: Build immortalwrt s905x3 with ImageBuilder
 
 on:
   workflow_dispatch:
@@ -6,13 +6,9 @@ on:
       immortalwrt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '23.05.7'
+        default: '24.10.6'
         type: choice
         options:
-          - 23.05.0
-          - 23.05.1
-          - 23.05.2
-          - 23.05.3
           - 23.05.4
           - 23.05.5
           - 23.05.6
@@ -24,7 +20,6 @@ on:
           - 24.10.4
           - 24.10.5
           - 24.10.6
-          - 25.12.0
       device_board:
         description: 'Device Board'
         required: true
@@ -32,7 +27,7 @@ on:
       kernel_version:
         description: 'Kernel Branch (ophub/kernel)'
         required: true
-        default: '5.15.y'
+        default: '6.18.y'
         type: choice
         options:
           - 5.10.y
@@ -41,32 +36,24 @@ on:
           - 6.6.y
           - 6.12.y
           - 6.18.y
-          - 5.10.y_5.15.y
-          - 6.1.y_6.6.y
-          - 6.12.y_6.18.y
-          - 6.1.y_6.12.y
-          - 6.1.y_6.18.y
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build for ${{ github.event.inputs.device_board }}
+    name: Build for ${{ inputs.device_board }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Swap File (Prevent Memory Overflow)
+      - name: Create Swap File
         run: |
-          if [ "$(swapon --show=NAME --noheadings)" = "" ]; then
-            echo "No active swap found. Creating 4G swap..."
+          if [ -z "$(swapon --show=NAME --noheadings)" ]; then
+            echo "Creating 4G swap..."
             sudo fallocate -l 4G /mnt/swapfile
             sudo chmod 600 /mnt/swapfile
             sudo mkswap /mnt/swapfile
             sudo swapon /mnt/swapfile
-          else
-            echo "Swap already active:"
-            swapon --show
           fi
           free -h
 
@@ -74,99 +61,167 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
+            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl \
+            coreutils
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
-          VERSION=${{ github.event.inputs.immortalwrt_version }}
+          VERSION=${{ inputs.immortalwrt_version }}
+          BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8"
+          
           if [[ "$VERSION" == "23.05."* ]]; then
-            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.xz"
-            echo "Downloading 23.05.x ImageBuilder (xz format): $BUILDER_URL"
-            wget -q $BUILDER_URL -O imagebuilder.tar.xz
-            tar -xf imagebuilder.tar.xz
+            EXT="tar.xz"
           else
-            BUILDER_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.tar.zst"
-            echo "Downloading 24.10+ ImageBuilder (zstd format): $BUILDER_URL"
-            wget -q $BUILDER_URL -O imagebuilder.tar.zst
-            tar -I zstd -xf imagebuilder.tar.zst
+            EXT="tar.zst"
           fi
+          
+          BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.${EXT}"
+          echo "Downloading: $BUILDER_URL"
+          wget -q "$BUILDER_URL" -O "imagebuilder.${EXT}"
+          
+          tar -xf "imagebuilder.${EXT}"
           mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 openwrt
+
+      - name: Execute diy.sh for Binary Injection
+        run: |
+          if [ -f "./diy.sh" ]; then
+            echo "🔧 开始执行 diy.sh 二进制注入..."
+            chmod +x ./diy.sh
+            cd openwrt
+            ../diy.sh
+            cd ..
+            echo "✅ diy.sh 执行完毕"
+          else
+            echo "⚠️ 未找到 diy.sh，跳过"
+          fi
 
       - name: Inject Custom Files & Packages
         run: |
-          CUSTOM_PKG_DIR="./custom-packages"
-          IB_PKG_DIR="./openwrt/packages"
-          if [ -d "$CUSTOM_PKG_DIR" ] && [ "$(ls -A $CUSTOM_PKG_DIR 2>/dev/null)" ]; then
-            echo "📦 注入自定义 ipk 包..."
-            mkdir -p "$IB_PKG_DIR"
-            cp "$CUSTOM_PKG_DIR"/*.ipk "$IB_PKG_DIR/"
-            echo "✅ 包注入完成: $(ls $IB_PKG_DIR/*.ipk 2>/dev/null | wc -l) 个"
+          echo "📦 开始注入自定义文件与包..."
+          
+          mkdir -p ./openwrt/packages
+          if ls ./custom-packages/*.ipk 1>/dev/null 2>&1; then
+            cp ./custom-packages/*.ipk ./openwrt/packages/
+            echo "✅ 自定义 ipk 已复制到 openwrt/packages/"
+            ls -lh ./openwrt/packages/*.ipk
           else
-            echo "⚠️ 未找到 custom-packages 目录或为空，跳过包注入"
+            echo "⚠️ 无自定义 ipk，跳过"
           fi
           
-          CUSTOM_FILES_DIR="./custom-files"
-          IB_FILES_DIR="./openwrt/files"
-          if [ -d "$CUSTOM_FILES_DIR" ]; then
-            echo "📦 注入 custom-files 到 ImageBuilder..."
-            mkdir -p "$IB_FILES_DIR"
-            cp -r "$CUSTOM_FILES_DIR"/* "$IB_FILES_DIR/"
-            find "$IB_FILES_DIR/usr/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
-            find "$IB_FILES_DIR/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
-            
-            echo "🔐 修复 Dropbear 及配置文件权限..."
-            find "$IB_FILES_DIR/etc/config" -type f -exec chmod 600 {} \; 2>/dev/null || true
-            [ -f "$IB_FILES_DIR/etc/config/dropbear" ] && chmod 600 "$IB_FILES_DIR/etc/config/dropbear"
-            if [ -d "$IB_FILES_DIR/root/.ssh" ]; then
-              chmod 700 "$IB_FILES_DIR/root/.ssh"
-              find "$IB_FILES_DIR/root/.ssh" -type f -name "authorized_keys*" -exec chmod 600 {} \;
-            fi
-            find "$IB_FILES_DIR/etc/dropbear" -type f -name "dropbear_*_host_key" -exec chmod 600 {} \; 2>/dev/null || true
-            
-            echo "✅ 文件注入及权限修复完成"
-            find "$IB_FILES_DIR" -type f | sort
+          mkdir -p ./openwrt/files
+          if [ -d "./custom-files" ] && [ "$(ls -A ./custom-files 2>/dev/null)" ]; then
+            cp -r ./custom-files/* ./openwrt/files/
+            echo "✅ custom-files 已注入"
           else
-            echo "⚠️ 未找到 custom-files 目录，跳过文件注入"
+            echo "⚠️ 无 custom-files，跳过"
           fi
+          
+          echo "🧹 暴力清洗所有注入文件的 CRLF 换行符..."
+          find ./openwrt/files -type f -exec perl -pi -e 's/\r\n/\n/g; s/\r/\n/g' {} + 2>/dev/null || true
+          find ./openwrt/files -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+          
+          echo "🔐 设置文件权限..."
+          chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
+          chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
+          chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
+          chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
+          
+          echo "✅ 注入与清洗完成！"
 
       - name: Build Rootfs with Custom Config
         run: |
           cd openwrt
           
-          # ⭐ 关键修复：添加 ROOTFS_PARTSIZE=1024 解决 ext4 空间溢出问题
-          make image PROFILE=generic \
-            FILES="files" \
-            ROOTFS_PARTSIZE=1024 \
-            PACKAGES="\
-              base-files busybox bash coreutils coreutils-base64 coreutils-nohup coreutils-truncate getopt gawk iconv jq jshn libjson-script pigz pv rename tar unzip whereis which xz xz-utils zstd gzip bzip2 bsdtar acpid attr chattr lsattr openssh-sftp-server git htop iperf3 coremark \
-              block-mount blockd blkid dosfstools dumpe2fs e2freefrag e2fsprogs exfat-mkfs f2fs-tools f2fsck fdisk losetup lsblk lscpu mkf2fs mount-utils parted resize2fs tune2fs uuidgen btrfs-progs xfs-fsck xfs-mkfs ziptool mdadm ntfs-3g \
-              curl wget-ssl uclient-fetch openssl-util liblucihttp liblucihttp-lua ppp ppp-mod-pppoe comgt comgt-ncm uqmi usb-modeswitch wwan kmod-cfg80211 kmod-mac80211 kmod-brcmfmac kmod-brcmutil wpad-basic hostapd-common iw iwinfo wireless-tools \
-              kmod-usb-storage kmod-usb-storage-uas kmod-usb-printer kmod-lp kmod-fs-ext4 kmod-fs-ntfs \
-              docker dockerd containerd runc tini docker-compose luci-lib-docker luci-app-dockerman luci-i18n-dockerman-zh-cn \
-              uhttpd uhttpd-mod-ubus cgi-io ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn php8 php8-cgi php8-mod-curl php8-mod-openssl php8-mod-mysqli php8-mod-pdo-mysql php8-mod-session php8-mod-zip php8-mod-mbstring php8-mod-iconv \
-              luci luci-base luci-compat luci-lib-base luci-lib-ip luci-lib-ipkg luci-lib-jsonc luci-lib-nixio luci-mod-admin-full luci-mod-network luci-mod-status luci-mod-system luci-i18n-base-zh-cn luci-theme-argon \
-              ./packages/luci-app-amlogic.ipk ./packages/luci-i18n-amlogic-zh-cn.ipk ./packages/luci-app-socat.ipk ./packages/luci-i18n-socat-zh-cn.ipk socat ./packages/luci-app-easytier.ipk luci-app-diskman luci-i18n-diskman-zh-cn luci-app-ddns-go luci-i18n-ddns-go-zh-cn luci-app-hd-idle luci-i18n-hd-idle-zh-cn luci-app-p910nd luci-i18n-p910nd-zh-cn luci-app-package-manager \
-              luci-app-zerotier luci-i18n-zerotier-zh-cn luci-app-wol luci-i18n-wol-zh-cn luci-app-firewall luci-i18n-firewall-zh-cn luci-app-aria2 luci-i18n-aria2-zh-cn aria2 \
-              luci-app-samba4 luci-i18n-samba4-zh-cn samba4-server kmod-fs-ksmbd luci-i18n-ksmbd-zh-cn kmod-fs-cifs cifsmount luci-i18n-cifs-mount-zh-cn nfs-kernel-server luci-i18n-nfs-zh-cn minidlna luci-i18n-minidlna-zh-cn \
-              zoneinfo-asia zoneinfo-core \
-              perl perl-http-date perlbase-base perlbase-bytes perlbase-charnames perlbase-class perlbase-config perlbase-cwd perlbase-dynaloader perlbase-errno perlbase-essential perlbase-fcntl perlbase-file perlbase-getopt perlbase-symbol perlbase-tie perlbase-time perlbase-unicode perlbase-utf8 \
-            " \
-            -j$(nproc)
+          # 1. sha256 软链接（Ubuntu coreutils 只提供 sha256sum）
+          if ! command -v sha256 &>/dev/null; then
+            echo "🔗 创建 sha256 -> sha256sum 软链接..."
+            sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
+            echo "✅ sha256 命令已就绪"
+          fi
+          
+          # 2. 仅对 lucky 相关包直接解压注入，其余包保留给 ImageBuilder 原生处理
+          LUCKY_PKGS="lucky luci-app-lucky luci-i18n-lucky-zh-cn"
+          INJECTED_COUNT=0
+          
+          if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
+            echo "📦 检查本地 ipk，分离 lucky 包与其他包..."
+            
+            for ipk in packages/*.ipk; do
+              PKG_NAME=$(basename "$ipk")
+              PKG_BASE=$(echo "$PKG_NAME" | sed -E 's/_[^_]+_[^_]+\.ipk$//')
+              
+              IS_LUCKY=false
+              for lp in $LUCKY_PKGS; do
+                if [ "$PKG_BASE" = "$lp" ]; then
+                  IS_LUCKY=true
+                  break
+                fi
+              done
+              
+              if [ "$IS_LUCKY" = true ]; then
+                TMPDIR=$(mktemp -d)
+                tar -xf "$ipk" -C "$TMPDIR" 2>/dev/null || { 
+                  echo "⚠️ $PKG_NAME 解压失败"; 
+                  rm -rf "$TMPDIR"; 
+                  continue; 
+                }
+                
+                DATA_TAR=$(find "$TMPDIR" -maxdepth 1 -name "data.tar.*" 2>/dev/null | head -1)
+                if [ -n "$DATA_TAR" ] && [ -f "$DATA_TAR" ]; then
+                  tar -xf "$DATA_TAR" -C ../files/ 2>/dev/null || \
+                  tar -xzf "$DATA_TAR" -C ../files/ 2>/dev/null || \
+                  tar -xJf "$DATA_TAR" -C ../files/ 2>/dev/null || true
+                  echo "  ✅ $PKG_NAME → 直接解压注入 files/"
+                  INJECTED_COUNT=$((INJECTED_COUNT + 1))
+                else
+                  echo "  ⚠️ $PKG_NAME 无 data 归档"
+                fi
+                rm -rf "$TMPDIR"
+              else
+                echo "  ℹ️ $PKG_NAME → 保留给 opkg 原生安装"
+              fi
+            done
+            
+            echo "✅ 共注入 $INJECTED_COUNT 个 lucky 相关包"
+          fi
+          
+          # 3. 读取 packages.txt，自动过滤已注入的 lucky 包
+          PACKAGES_LIST=""
+          while IFS= read -r line; do
+            case "$line" in \#*|"") continue ;; esac
+            SKIP=false
+            for lp in $LUCKY_PKGS; do
+              if [ "$line" = "$lp" ]; then
+                SKIP=true
+                break
+              fi
+            done
+            if [ "$SKIP" = false ]; then
+              PACKAGES_LIST="$PACKAGES_LIST $line"
+            fi
+          done < ../packages.txt
+          
+          echo "📦 opkg 将安装: $(echo $PACKAGES_LIST | wc -w) 个包"
+          echo "📋 包列表: $PACKAGES_LIST"
+          
+          # 4. 构建镜像（不手动重建索引，不注册自定义源，完全使用原生机制）
+          make image PROFILE=generic FILES="files" ROOTFS_PARTSIZE=1024 PACKAGES="$PACKAGES_LIST" V=s
 
-      - name: Package Amlogic Firmware with ophub
+      - name: Package Amlogic Firmware
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
           openwrt_path: openwrt/bin/targets/armsr/armv8/*-rootfs.tar.gz
-          openwrt_board: ${{ github.event.inputs.device_board }}
-          openwrt_kernel: ${{ github.event.inputs.kernel_version }}
+          openwrt_board: ${{ inputs.device_board }}
+          openwrt_kernel: ${{ inputs.kernel_version }}
           auto_kernel: true
           builder_name: ImmortalWrt
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-${{ github.event.inputs.immortalwrt_version }}-${{ github.event.inputs.device_board }}
+          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
           path: ${{ env.PACKAGED_OUTPUTPATH }}
 
       - name: Upload Firmware to Release
@@ -175,25 +230,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: IWrt-image-${{ github.event.inputs.immortalwrt_version }}-build${{ github.run_number }}
-          name: IWrt-image S905X3 ${{ github.event.inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          tag_name: IWrt-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: IWrt S905X3 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            自动编译的 ImmortalWrt 固件 (ImageBuilder)
-            - 版本: ${{ github.event.inputs.immortalwrt_version }}
-            - 设备: ${{ github.event.inputs.device_board }}
-            - 内核: ${{ github.event.inputs.kernel_version }}
+            自动编译的 ImmortalWrt 固件 (with ImageBuilder)
+            - 版本: ${{ inputs.immortalwrt_version }}
+            - 设备: ${{ inputs.device_board }}
             
             ### 📁 自定义内容
+            - diy.sh: Navidrome + Lucky 二进制已注入
             - custom-files: 已注入并覆盖系统同名文件
-            - custom-packages: 本地 .ipk 已预装
+            - custom-packages: lucky 系列直接解压注入，其余包由 opkg 原生安装
             
-            ### ⚠️ kmods 安装说明
-            ImageBuilder 使用官方预编译内核，可直接从官方源安装匹配的内核模块：
-            ```bash
-            opkg update
-            opkg install kmod-tun kmod-usb-net-rtl8152
-            ```
-            无需自建 kmods 源，vermagic 与官方仓库完全一致。
+            ### ⚠️ 刷机提示
+            1. 默认 IP: 192.168.30.254
+            2. 若修改 DTB，请编辑 BOOT 分区的 /boot/uEnv.txt
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
