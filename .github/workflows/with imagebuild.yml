@@ -146,7 +146,6 @@ jobs:
             kmod-brcmfmac kmod-brcmutil kmod-cfg80211 kmod-mac80211 \
             lucky luci-app-lucky luci-i18n-lucky-zh-cn \
             ffmpeg libffmpeg-full \
-            luci-i18n-package-manager-zh-cn \
             # luci-i18n-filebrowser-go-zh-cn \
             luci-app-easytier luci-app-zerotier luci-i18n-zerotier-zh-cn \
             # luci-app-ddns-go luci-i18n-ddns-go-zh-cn \
