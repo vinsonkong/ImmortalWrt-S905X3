@@ -11,7 +11,7 @@ bash
 acpid
 attr
 chattr
-coreutils
+# coreutils  ← 已移除！元包易导致依赖失败，下方已单独列出所需子包
 coreutils-base64
 coreutils-nohup
 coreutils-truncate
@@ -123,7 +123,7 @@ kmod-cfg80211
 kmod-mac80211
 
 # === Lucky 大吉面板 ===
-lucky
+# lucky  ← 已移除！diy.sh 已注入二进制，无需此包
 luci-app-lucky
 luci-i18n-lucky-zh-cn
 
