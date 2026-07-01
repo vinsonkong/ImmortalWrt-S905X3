@@ -111,8 +111,24 @@ jobs:
             mkdir -p ./openwrt/files
             cp -r ./custom-files/* ./openwrt/files/
 
-            echo "🧹 强制清理 custom-files 带入的 CRLF 换行符 (防 uhttpd EOF 错误)..."
-            find ./openwrt/files -type f -exec sed -i 's/\r$//' {} +
+            # 👇 👇 👇 新增：精准扫描 CRLF 内鬼文件 👇 👇 👇
+            echo "=================================================="
+            echo "🔍 正在扫描 custom-files 中带有 CRLF (\\r) 的文件..."
+            echo "=================================================="
+            # -r: 递归, -l: 只打印文件名, -I: 忽略二进制文件, $'\r': 匹配回车符
+            CRLF_FILES=$(grep -rlI $'\r' ./custom-files/ || true)
+            
+            if [ -n "$CRLF_FILES" ]; then
+              echo "🚨 警告：发现以下文件包含 Windows 换行符 (CRLF)，它们极有可能导致编译报错："
+              echo "$CRLF_FILES"
+              echo "--------------------------------------------------"
+              echo "💡 建议：请在本地使用 VS Code 或 Notepad++ 将上述文件的换行符转换为 Unix (LF)！"
+            else
+              echo "✅ 完美！custom-files 中未发现 CRLF 文件。"
+            fi
+            echo "=================================================="
+            # 👆 👆 👆 扫描结束 👆 👆 👆
+
             
             chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
             chmod +x ./openwrt/files/etc/hosts-new/updatehosts.sh 2>/dev/null || true
