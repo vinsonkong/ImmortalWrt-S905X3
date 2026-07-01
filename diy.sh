@@ -18,6 +18,24 @@ else
     echo "❌ 无法识别编译环境，退出"; exit 1
 fi
 
+# ================= [ 0. 终极修复：清理 CRLF 换行符 ] =================
+# 🚨 核心修复：必须在 workflow 复制 custom-files 之前，清理其 CRLF！
+# 否则 uci 读取 hostname 时会带入 \r，导致 uhttpd 生成证书时 openssl 命令引号不匹配！
+echo "🧹 0. 强制清理 CRLF 换行符 (修复 uhttpd 证书生成 EOF 错误)..."
+
+# 清理 ../custom-files 目录 (位于 openwrt 的上一级)
+if [ -d "../custom-files" ]; then
+    find "../custom-files" -type f -exec file {} + 2>/dev/null | grep -i "text" | cut -d: -f1 | xargs -r sed -i 's/\r$//' 2>/dev/null || true
+    find "../custom-files" -type f -name "*.sh" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+    find "../custom-files/etc" -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+    echo "✅ 已清理 ../custom-files 中的 CRLF"
+fi
+
+# 清理当前 BASE_FILES 目录
+if [ -d "${BASE_FILES}" ]; then
+    find "${BASE_FILES}" -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+fi
+
 # ================= [ 1. Target 层白名单清理 ] =================
 echo "🚀 1. Target 层白名单清理..."
 if [ "$IS_IMAGEBUILDER" = false ] && [ -n "$TARGET_DIR" ]; then
@@ -56,6 +74,9 @@ fi
 echo "🎨 2. 修改 config_generate (Fallback 兜底)..."
 CONFIG_GENERATE="${BASE_FILES}/bin/config_generate"
 if [ -f "$CONFIG_GENERATE" ]; then
+    # 确保 config_generate 本身也没有 CRLF
+    sed -i 's/\r$//' "$CONFIG_GENERATE"
+    
     sed -i 's/192.168.1.1/192.168.30.254/g' "$CONFIG_GENERATE"
     sed -i 's/ImmortalWrt/X96Max/g' "$CONFIG_GENERATE"
     
@@ -82,26 +103,14 @@ rm -f /tmp/navidrome.tar.gz
 chmod +x "${BASE_FILES}/usr/bin/navidrome"
 echo "✅ Navidrome 二进制已注入至 ${BASE_FILES}/usr/bin/navidrome"
 
-# ================= [ 4. 终极修复：uhttpd 证书生成 Bug ] =================
-echo "🔧 4. 修复 uhttpd 证书生成潜在的引号/EOF 错误..."
-
-# 核心修复 1：创建【非空】的占位文件！
-# uhttpd.init 中的检查逻辑是 [ -s "$key" -a -s "$crt" ]，-s 要求文件大小 > 0
-# 如果是 0 字节空文件，uhttpd 仍会强制执行证书生成并触发 bash 语法错误
+# ================= [ 4. uhttpd 证书生成兜底 ] =================
+echo "🔧 4. 创建 uhttpd 证书占位文件 (双重保险)..."
 UHTTPD_CERT="${BASE_FILES}/etc/uhttpd.crt"
 UHTTPD_KEY="${BASE_FILES}/etc/uhttpd.key"
 mkdir -p "${BASE_FILES}/etc"
+# 写入非空内容，骗过 uhttpd 的 [ -s ] 检查，彻底跳过 postinst 自动生成
 echo "dummy cert" > "$UHTTPD_CERT"
 echo "dummy key" > "$UHTTPD_KEY"
-echo "✅ 已创建非空 uhttpd 证书占位文件，彻底跳过 postinst 自动生成"
-
-# 核心修复 2：强制清理 custom-files 中可能带入的 Windows CRLF 换行符
-# CRLF (\r\n) 会导致 UCI 变量中包含 \r，在拼接 openssl/px5g 命令时破坏引号闭合
-echo "🧹 正在强制清理所有注入文件的 CRLF 换行符..."
-find "${BASE_FILES}" -type f -exec file {} + 2>/dev/null | grep -i "text" | cut -d: -f1 | xargs -r sed -i 's/\r$//' 2>/dev/null || true
-# 兜底：直接清理常见的配置和脚本目录
-find "${BASE_FILES}/etc" -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-find "${BASE_FILES}/usr" -type f -name "*.sh" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-echo "✅ CRLF 换行符清理完毕"
+echo "✅ 已创建非空 uhttpd 证书占位文件"
 
 echo "🎉 diy.sh 执行完毕！"
