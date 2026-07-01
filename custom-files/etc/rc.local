@@ -5,5 +5,5 @@ chown -R root:root /etc/dropbear 2>/dev/null
 chmod 700 /etc/dropbear 2>/dev/null
 chmod 600 /etc/dropbear/authorized_keys 2>/dev/null
 
-bash /etc/custom_service/start_service.sh &
+
 exit 0
