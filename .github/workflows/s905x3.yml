@@ -162,7 +162,7 @@ jobs:
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
+          name: IWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
           path: ${{ env.PACKAGED_OUTPUTPATH }}
 
       - name: Upload Firmware to Release
