@@ -1,0 +1,8 @@
+
+config easytier
+	option enabled '1'
+	option easytierbin '/usr/bin/easytier-core'
+	option etcmd 'config'
+	option log 'info'
+	option et_forward 'etfwlan etfwwan lanfwet'
+
