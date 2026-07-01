@@ -134,19 +134,47 @@ jobs:
         run: |
           cd openwrt
           
-          # 👇 核心修复：创建 sha256 软链接指向 sha256sum
-          # Ubuntu coreutils 只提供 sha256sum，但 ipkg-make-index.sh 硬编码调用 sha256
+          # 创建 sha256 软链接（Ubuntu coreutils 只提供 sha256sum）
           if ! command -v sha256 &>/dev/null; then
             echo "🔗 创建 sha256 -> sha256sum 软链接..."
             sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
             echo "✅ sha256 命令已就绪"
           fi
           
+          # 兼容模式重建本地包索引（绕过 ipkg-make-index.sh 的 sed bug）
           if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
-            echo "📦 检测到本地 ipk，正在重建索引..."
-            ./scripts/ipkg-make-index.sh packages/ > packages/Packages
+            echo "📦 检测到本地 ipk，正在用兼容模式重建索引..."
+            
+            > packages/Packages
+            
+            for ipk in packages/*.ipk; do
+              echo "Processing: $(basename "$ipk")"
+              
+              CONTROL=$(mktemp)
+              tar -xzf "$ipk" ./control.tar.gz -O 2>/dev/null | tar -xzf - ./control -O > "$CONTROL" 2>/dev/null || true
+              
+              if [ -s "$CONTROL" ]; then
+                {
+                  cat "$CONTROL"
+                  FILENAME=$(basename "$ipk")
+                  SIZE=$(stat -c%s "$ipk" 2>/dev/null || stat -f%z "$ipk" 2>/dev/null)
+                  SHA256=$(sha256sum "$ipk" | awk '{print $1}')
+                  MD5=$(md5sum "$ipk" | awk '{print $1}')
+                  echo "Filename: $FILENAME"
+                  echo "Size: $SIZE"
+                  echo "SHA256sum: $SHA256"
+                  echo "MD5Sum: $MD5"
+                  echo ""
+                } >> packages/Packages
+              else
+                echo "⚠️ 无法读取 $(basename "$ipk") 的控制信息，跳过"
+              fi
+              
+              rm -f "$CONTROL"
+            done
+            
             gzip -c packages/Packages > packages/Packages.gz
-            echo "✅ 本地包索引重建完成"
+            echo "✅ 本地包索引重建完成（兼容模式）"
             echo "--- Packages 索引内容预览 ---"
             grep "^Package:" packages/Packages || true
             echo "-----------------------------"
