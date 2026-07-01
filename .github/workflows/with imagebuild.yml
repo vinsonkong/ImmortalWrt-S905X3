@@ -131,7 +131,8 @@ jobs:
           cat -A files/etc/config/system 2>/dev/null || echo "文件不存在"
           echo "========================================================================
           
-          PACKAGES_LIST="acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
+          PACKAGES_LIST=$(cat <<-'EOF'
+            acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
             cgi-io chattr coremark coreutils coreutils-base64 coreutils-nohup coreutils-truncate \
             gawk getopt git gzip htop iconv jq jshn libjson-script openssh-sftp-server \
             perl-http-date perlbase-file perlbase-getopt perlbase-time perlbase-unicode perlbase-utf8 \
@@ -170,7 +171,8 @@ jobs:
             nfs-kernel-server luci-i18n-nfs-zh-cn \
             # minidlna luci-i18n-minidlna-zh-cn \
             zoneinfo-asia zoneinfo-core"
-          
+          EOF
+          )
           make image PROFILE=generic FILES="files" ROOTFS_PARTSIZE=1024 PACKAGES="$PACKAGES_LIST" V=s
 
       - name: Package Amlogic Firmware
