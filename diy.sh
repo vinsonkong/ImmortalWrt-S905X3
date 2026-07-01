@@ -82,19 +82,26 @@ rm -f /tmp/navidrome.tar.gz
 chmod +x "${BASE_FILES}/usr/bin/navidrome"
 echo "✅ Navidrome 二进制已注入至 ${BASE_FILES}/usr/bin/navidrome"
 
-# ================= [ 4. 修复 uhttpd 证书生成 Bug ] =================
+# ================= [ 4. 终极修复：uhttpd 证书生成 Bug ] =================
 echo "🔧 4. 修复 uhttpd 证书生成潜在的引号/EOF 错误..."
-# 核心修复：提前创建证书占位文件，使 uhttpd postinst 跳过自动生成逻辑
+
+# 核心修复 1：创建【非空】的占位文件！
+# uhttpd.init 中的检查逻辑是 [ -s "$key" -a -s "$crt" ]，-s 要求文件大小 > 0
+# 如果是 0 字节空文件，uhttpd 仍会强制执行证书生成并触发 bash 语法错误
 UHTTPD_CERT="${BASE_FILES}/etc/uhttpd.crt"
 UHTTPD_KEY="${BASE_FILES}/etc/uhttpd.key"
 mkdir -p "${BASE_FILES}/etc"
-touch "$UHTTPD_CERT"
-touch "$UHTTPD_KEY"
-echo "✅ 已创建 uhttpd 证书占位文件，跳过 postinst 自动生成"
+echo "dummy cert" > "$UHTTPD_CERT"
+echo "dummy key" > "$UHTTPD_KEY"
+echo "✅ 已创建非空 uhttpd 证书占位文件，彻底跳过 postinst 自动生成"
 
-# 强制清理 custom-files 中可能带入的 Windows CRLF 换行符 (导致语法错误的元凶)
+# 核心修复 2：强制清理 custom-files 中可能带入的 Windows CRLF 换行符
+# CRLF (\r\n) 会导致 UCI 变量中包含 \r，在拼接 openssl/px5g 命令时破坏引号闭合
+echo "🧹 正在强制清理所有注入文件的 CRLF 换行符..."
+find "${BASE_FILES}" -type f -exec file {} + 2>/dev/null | grep -i "text" | cut -d: -f1 | xargs -r sed -i 's/\r$//' 2>/dev/null || true
+# 兜底：直接清理常见的配置和脚本目录
 find "${BASE_FILES}/etc" -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
 find "${BASE_FILES}/usr" -type f -name "*.sh" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-echo "✅ 已清理潜在的 CRLF 换行符"
+echo "✅ CRLF 换行符清理完毕"
 
 echo "🎉 diy.sh 执行完毕！"
