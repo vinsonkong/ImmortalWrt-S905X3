@@ -220,7 +220,7 @@ jobs:
             # minidlna luci-i18n-minidlna-zh-cn \
             zoneinfo-asia zoneinfo-core"
           
-          make image PROFILE=generic FILES="files" ROOTFS_PARTSIZE=1024 PACKAGES="$PACKAGES_LIST"
+          make image PROFILE=generic FILES="files" ROOTFS_PARTSIZE=1024 PACKAGES="$PACKAGES_LIST" V=s
 
       - name: Package Amlogic Firmware
         uses: ophub/amlogic-s9xxx-openwrt@main
