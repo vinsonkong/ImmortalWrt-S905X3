@@ -1,4 +1,3 @@
-
 config zerotier 'global'
 	option fw_allow_input '1'
 	option local_conf_path '/etc/zerotier.conf'
