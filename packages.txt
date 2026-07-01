@@ -205,6 +205,9 @@ luci-app-diskman
 luci-i18n-diskman-zh-cn
 luci-app-hd-idle
 luci-i18n-hd-idle-zh-cn
+luci-i18n-filebrowser-go-zh-cn
+# luci-app-socat
+# luci-i18n-socat-zh-cn
 
 # === 下载工具 ===
 aria2
