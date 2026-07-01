@@ -111,6 +111,14 @@ jobs:
             mkdir -p ./openwrt/files
             cp -r ./custom-files/* ./openwrt/files/
 
+            # 强制清理所有文本文件的 CRLF (无视它原本是什么格式)
+            echo "🧹 强制清洗所有注入文件的 CRLF..."
+            find ./openwrt/files -type f -exec file {} + | grep -i "text" | cut -d: -f1 | xargs -r sed -i 's/\r$//'
+            
+            # 兜底：直接对常见的配置和脚本目录进行暴力清理
+            find ./openwrt/files/etc -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+            find ./openwrt/files/usr -type f -name "*.sh" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+
             # 👇 👇 👇 新增：精准扫描 CRLF 内鬼文件 👇 👇 👇
             echo "=================================================="
             echo "🔍 正在扫描 custom-files 中带有 CRLF (\\r) 的文件..."
