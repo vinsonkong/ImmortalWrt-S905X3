@@ -134,14 +134,14 @@ jobs:
         run: |
           cd openwrt
           
-          # 1. 创建 sha256 软链接（Ubuntu coreutils 只提供 sha256sum）
+          # 1. 创建 sha256 软链接
           if ! command -v sha256 &>/dev/null; then
             echo "🔗 创建 sha256 -> sha256sum 软链接..."
             sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
             echo "✅ sha256 命令已就绪"
           fi
           
-          # 2. 终极修复：重写 ipk 架构为 all + 移除无效依赖 + 重建索引
+          # 2. 预处理 ipk：重写架构 + 剥离依赖（bash -e 安全版）
           if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
             echo "📦 检测到本地 ipk，正在预处理并重写架构..."
             
@@ -151,71 +151,80 @@ jobs:
             for ipk in packages/*.ipk; do
               PKG_NAME=$(basename "$ipk")
               WORK_DIR="/tmp/ipk-fix/$PKG_NAME"
-              mkdir -p "$WORK_DIR"
               
-              # 解压 ipk
-              tar -xzf "$ipk" -C "$WORK_DIR" 2>/dev/null || { echo "⚠️ $PKG_NAME 解压失败，跳过"; continue; }
+              # 👇 关键修复：将整个单包处理逻辑放入子 shell，隔离 bash -e
+              (
+                set +e  # 子 shell 内禁用 errexit
+                mkdir -p "$WORK_DIR"
+                
+                # 解压 ipk
+                tar -xzf "$ipk" -C "$WORK_DIR" 2>/dev/null
+                if [ $? -ne 0 ]; then
+                  echo "⚠️ $PKG_NAME 解压失败，跳过"
+                  exit 0
+                fi
+                
+                # 查找 control 归档
+                CONTROL_TAR=$(find "$WORK_DIR" -maxdepth 1 -name "control.tar.*" 2>/dev/null | head -1)
+                if [ -z "$CONTROL_TAR" ] || [ ! -f "$CONTROL_TAR" ]; then
+                  echo "⚠️ $PKG_NAME 无 control 归档，跳过"
+                  exit 0
+                fi
+                
+                mkdir -p "$WORK_DIR/ctrl"
+                tar -xzf "$CONTROL_TAR" -C "$WORK_DIR/ctrl" 2>/dev/null || \
+                tar -xf "$CONTROL_TAR" -C "$WORK_DIR/ctrl" 2>/dev/null || true
+                
+                CONTROL_FILE="$WORK_DIR/ctrl/control"
+                if [ ! -s "$CONTROL_FILE" ]; then
+                  echo "⚠️ $PKG_NAME 无 control 文件，跳过"
+                  exit 0
+                fi
+                
+                # 核心操作1: 强制重写 Architecture 为 all
+                OLD_ARCH=$(grep "^Architecture:" "$CONTROL_FILE" | awk '{print $2}')
+                sed -i 's/^Architecture:.*/Architecture: all/' "$CONTROL_FILE"
+                
+                # 核心操作2: 移除对 lucky 主程序包的依赖
+                if grep -q "^Depends:.*\blucky\b" "$CONTROL_FILE"; then
+                  sed -i '/^Depends:/s/$^\|, $lucky$,\|$$/\1\2/' "$CONTROL_FILE"
+                  sed -i '/^Depends:/s/, */, /g; s/^Depends: , /Depends: /; s/, *$//' "$CONTROL_FILE"
+                  echo "  🔧 $PKG_NAME: 移除了 lucky 依赖"
+                fi
+                
+                # 重新打包 control.tar.gz
+                cd "$WORK_DIR/ctrl" || exit 0
+                tar -czf "$WORK_DIR/control.tar.gz" ./* 2>/dev/null
+                
+                # 重新打包 ipk
+                DATA_TAR=$(find "$WORK_DIR" -maxdepth 1 -name "data.tar.*" 2>/dev/null | head -1)
+                cd "$WORK_DIR" || exit 0
+                tar -czf "$ipk" ./debian-binary "$DATA_TAR" ./control.tar.gz 2>/dev/null
+                
+                echo "  ✅ $PKG_NAME: Architecture $OLD_ARCH → all"
+              ) || true  # 👈 子 shell 失败也不中断主脚本
               
-              # 查找 control 归档（兼容 .tar.gz / .tar.zst）
-              CONTROL_TAR=$(ls "$WORK_DIR"/control.tar.* 2>/dev/null | head -1)
-              if [ -z "$CONTROL_TAR" ] || [ ! -f "$CONTROL_TAR" ]; then
-                echo "⚠️ $PKG_NAME 无 control 归档，跳过"
-                rm -rf "$WORK_DIR"
-                continue
+              # 子 shell 成功才计数
+              if [ -f "$WORK_DIR/ctrl/control" ] 2>/dev/null || [ "$?" = "0" ]; then
+                FIXED_COUNT=$((FIXED_COUNT + 1))
               fi
-              
-              mkdir -p "$WORK_DIR/ctrl"
-              tar -xzf "$CONTROL_TAR" -C "$WORK_DIR/ctrl" 2>/dev/null || \
-              tar -xf "$CONTROL_TAR" -C "$WORK_DIR/ctrl" 2>/dev/null || true
-              
-              CONTROL_FILE="$WORK_DIR/ctrl/control"
-              if [ ! -s "$CONTROL_FILE" ]; then
-                echo "⚠️ $PKG_NAME 无 control 文件，跳过"
-                rm -rf "$WORK_DIR"
-                continue
-              fi
-              
-              # 核心操作1: 强制重写 Architecture 为 all
-              OLD_ARCH=$(grep "^Architecture:" "$CONTROL_FILE" | awk '{print $2}')
-              sed -i 's/^Architecture:.*/Architecture: all/' "$CONTROL_FILE"
-              
-              # 核心操作2: 移除对 lucky 主程序包的依赖（diy.sh 已注入二进制）
-              if grep -q "^Depends:.*\blucky\b" "$CONTROL_FILE"; then
-                sed -i '/^Depends:/s/$^\|, $lucky$,\|$$/\1\2/' "$CONTROL_FILE"
-                sed -i '/^Depends:/s/, */, /g; s/^Depends: , /Depends: /; s/, *$//' "$CONTROL_FILE"
-                echo "  🔧 $PKG_NAME: 移除了 lucky 依赖"
-              fi
-              
-              # 重新打包 control.tar.gz
-              cd "$WORK_DIR/ctrl"
-              tar -czf "$WORK_DIR/control.tar.gz" ./* 2>/dev/null
-              cd - > /dev/null
-              
-              # 重新打包 ipk（兼容 data.tar.gz / data.tar.zst）
-              DATA_TAR=$(ls "$WORK_DIR"/data.tar.* 2>/dev/null | head -1)
-              cd "$WORK_DIR"
-              tar -czf "$ipk" ./debian-binary "$DATA_TAR" ./control.tar.gz 2>/dev/null
-              cd - > /dev/null
-              
-              echo "  ✅ $PKG_NAME: Architecture $OLD_ARCH → all"
-              FIXED_COUNT=$((FIXED_COUNT + 1))
               rm -rf "$WORK_DIR"
             done
             
             rm -rf /tmp/ipk-fix
             echo "✅ 共预处理 $FIXED_COUNT 个 ipk"
             
-            # 3. 使用 make_index.pl 重建索引
+            # 3. 重建索引
             if [ -f "scripts/make_index.pl" ]; then
               echo "✅ 使用 make_index.pl 生成索引..."
               perl scripts/make_index.pl packages/ > packages/Packages
             else
-              echo "⚠️ make_index.pl 不存在，使用严格格式手动生成..."
+              echo "⚠️ make_index.pl 不存在，手动生成..."
               > packages/Packages
               for ipk in packages/*.ipk; do
                 TMPDIR=$(mktemp -d)
-                tar -xzf "$ipk" ./control.tar.gz -C "$TMPDIR" 2>/dev/null || continue
-                tar -xzf "$TMPDIR/control.tar.gz" ./control -C "$TMPDIR" 2>/dev/null || continue
+                tar -xzf "$ipk" ./control.tar.gz -C "$TMPDIR" 2>/dev/null || { rm -rf "$TMPDIR"; continue; }
+                tar -xzf "$TMPDIR/control.tar.gz" ./control -C "$TMPDIR" 2>/dev/null || { rm -rf "$TMPDIR"; continue; }
                 if [ -s "$TMPDIR/control" ]; then
                   {
                     cat "$TMPDIR/control"
@@ -232,20 +241,20 @@ jobs:
             
             gzip -c packages/Packages > packages/Packages.gz
             
-            # 4. 注册本地源到 repositories.conf
+            # 4. 注册本地源
             CUSTOM_FEED="src/gz local_packages file://$(pwd)/packages"
             if ! grep -q "local_packages" repositories.conf 2>/dev/null; then
               echo "$CUSTOM_FEED" >> repositories.conf
               echo "✅ 已添加本地源到 repositories.conf"
             fi
             
-            echo "--- repositories.conf 内容 ---"
+            echo "--- repositories.conf ---"
             cat repositories.conf
-            echo "--- Packages 索引预览 (含架构) ---"
+            echo "--- Packages 预览 ---"
             grep -E "^(Package|Architecture):" packages/Packages || echo "(空)"
-            echo "---------------------------------"
+            echo "---------------------"
           else
-            echo "ℹ️ 无本地 ipk，跳过预处理与索引重建"
+            echo "ℹ️ 无本地 ipk，跳过"
           fi
           
           # 5. 读取 packages.txt
