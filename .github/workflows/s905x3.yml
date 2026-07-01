@@ -124,7 +124,7 @@ jobs:
           chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
           chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
           
-          echo "✅ 注入完成
+          echo "✅ 注入完成"
 
       - name: Build Rootfs with Custom Config
         run: |
