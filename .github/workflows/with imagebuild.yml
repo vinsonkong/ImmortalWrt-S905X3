@@ -134,24 +134,24 @@ jobs:
         run: |
           cd openwrt
           
-          # 1. sha256 软链接（Ubuntu coreutils 只提供 sha256sum）
+          # 1. sha256 软链接
           if ! command -v sha256 &>/dev/null; then
             echo "🔗 创建 sha256 -> sha256sum 软链接..."
             sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
             echo "✅ sha256 命令已就绪"
           fi
           
-          # 2. 终极双保险：直接篡改 Packages 索引架构 + 索引级依赖剥离
+          # 2. 构建索引 + 直接篡改 Packages 文本（bash -e 安全版）
           if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
             echo "📦 检测到本地 ipk，正在构建索引..."
             
-            # 优先使用 make_index.pl 生成原始索引
+            # 优先使用 make_index.pl
             if [ -f "scripts/make_index.pl" ]; then
               echo "✅ 使用 make_index.pl 生成原始索引..."
               perl scripts/make_index.pl packages/ > packages/Packages 2>/dev/null || true
             fi
             
-            # 如果 make_index.pl 失败或输出为空，回退到手动生成
+            # 回退到手动生成
             if [ ! -s "packages/Packages" ]; then
               echo "⚠️ make_index.pl 输出为空，切换到手动生成..."
               > packages/Packages
@@ -173,18 +173,24 @@ jobs:
               done
             fi
             
-            # 👇 核心修复：直接在 Packages 索引文本中将所有架构统一为 all
-            # 不修改 ipk 二进制文件，避免 tar 重打包因压缩格式不兼容而静默失败
+            # 👇 核心修复1：统一架构为 all（简单替换，无捕获组风险）
             echo "🔧 正在将 Packages 索引中的所有架构统一为 all..."
             sed -i 's/^Architecture:.*/Architecture: all/' packages/Packages
             
-            # 👇 同时在索引中移除对 lucky 主程序的依赖声明
-            sed -i '/^Depends:/s/$^\|, $lucky$,\|$$/\1\2/' packages/Packages
-            sed -i '/^Depends:/s/, */, /g; s/^Depends: , /Depends: /; s/, *$//' packages/Packages
+            # 👇 核心修复2：安全移除 lucky 依赖（分步处理，避免复杂正则）
+            # 步骤a: 将 ", lucky" 或 "lucky, " 替换为空
+            sed -i '/^Depends:/s/, *lucky//g' packages/Packages
+            sed -i '/^Depends:/s/lucky, *//g' packages/Packages
+            # 步骤b: 处理 lucky 作为唯一依赖的情况
+            sed -i '/^Depends: *lucky *$/d' packages/Packages
+            # 步骤c: 清理可能残留的前导/尾随逗号和空格
+            sed -i '/^Depends:/s/^Depends: *, */Depends: /' packages/Packages
+            sed -i '/^Depends:/s/, *$/,/' packages/Packages
+            sed -i '/^Depends:/s/,$//' packages/Packages
             
             gzip -c packages/Packages > packages/Packages.gz
             
-            # 注册本地源到 repositories.conf
+            # 注册本地源
             CUSTOM_FEED="src/gz local_packages file://$(pwd)/packages"
             if ! grep -q "local_packages" repositories.conf 2>/dev/null; then
               echo "$CUSTOM_FEED" >> repositories.conf
