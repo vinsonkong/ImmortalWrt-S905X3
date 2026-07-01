@@ -11,7 +11,7 @@ bash
 acpid
 attr
 chattr
-# coreutils  ← 已移除！元包易导致依赖失败，下方已单独列出所需子包
+coreutils
 coreutils-base64
 coreutils-nohup
 coreutils-truncate
@@ -42,6 +42,7 @@ jshn
 libjson-script
 jq
 iconv
+hostapd-common
 
 # === Perl 运行环境 (部分插件依赖) ===
 perl-http-date
