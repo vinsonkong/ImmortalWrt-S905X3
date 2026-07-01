@@ -123,7 +123,7 @@ kmod-cfg80211
 kmod-mac80211
 
 # === Lucky 大吉面板 ===
-# lucky  ← 已移除！diy.sh 已注入二进制，无需此包
+lucky
 luci-app-lucky
 luci-i18n-lucky-zh-cn
 
