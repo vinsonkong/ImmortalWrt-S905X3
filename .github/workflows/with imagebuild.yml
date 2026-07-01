@@ -95,79 +95,32 @@ jobs:
           else
             echo "⚠️ 未找到 diy.sh，跳过"
           fi
-
+       
       - name: Inject Custom Files & Packages
         run: |
-          if [ -d "./custom-packages" ] && ls ./custom-packages/*.ipk 1> /dev/null 2>&1; then
-            echo "📦 注入自定义 ipk 包..."
-            mkdir -p ./openwrt/packages
-            cp ./custom-packages/*.ipk ./openwrt/packages/
-          else
-            echo "⚠️ 未找到 custom-packages，跳过"
-          fi
+          echo "📦 开始注入自定义文件与包..."
           
-          if [ -d "./custom-files" ]; then
-            echo "📦 注入 custom-files..."
-            mkdir -p ./openwrt/files
-            cp -r ./custom-files/* ./openwrt/files/
-
-            # 强制清理所有文本文件的 CRLF (无视它原本是什么格式)
-            echo "🧹 强制清洗所有注入文件的 CRLF..."
-            find ./openwrt/files -type f -exec file {} + | grep -i "text" | cut -d: -f1 | xargs -r sed -i 's/\r$//'
-            
-            # 兜底：直接对常见的配置和脚本目录进行暴力清理
-            find ./openwrt/files/etc -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-            find ./openwrt/files/usr -type f -name "*.sh" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-
-            # 👇 👇 👇 新增：精准扫描 CRLF 内鬼文件 👇 👇 👇
-            echo "=================================================="
-            echo "🔍 正在扫描 custom-files 中带有 CRLF (\\r) 的文件..."
-            echo "=================================================="
-            # -r: 递归, -l: 只打印文件名, -I: 忽略二进制文件, $'\r': 匹配回车符
-            CRLF_FILES=$(grep -rlI $'\r' ./custom-files/ || true)
-            
-            if [ -n "$CRLF_FILES" ]; then
-              echo "🚨 警告：发现以下文件包含 Windows 换行符 (CRLF)，它们极有可能导致编译报错："
-              echo "$CRLF_FILES"
-              echo "--------------------------------------------------"
-              echo "💡 建议：请在本地使用 VS Code 或 Notepad++ 将上述文件的换行符转换为 Unix (LF)！"
-            else
-              echo "✅ 完美！custom-files 中未发现 CRLF 文件。"
-            fi
-            echo "=================================================="
-            # 👆 👆 👆 扫描结束 👆 👆 👆
-
-            
-      - name: Inject Custom Files & Packages
-        run: |
-          if [ -d "./custom-packages" ] && ls ./custom-packages/*.ipk 1> /dev/null 2>&1; then
-            echo "📦 注入自定义 ipk 包..."
-            mkdir -p ./openwrt/packages
-            cp ./custom-packages/*.ipk ./openwrt/packages/
-          fi
+          # 1. 注入 packages (如果没有则忽略)
+          mkdir -p ./openwrt/packages
+          cp ./custom-packages/*.ipk ./openwrt/packages/ 2>/dev/null || echo "⚠️ 无自定义 ipk，跳过"
           
-          if [ -d "./custom-files" ]; then
-            echo "📦 注入 custom-files..."
-            mkdir -p ./openwrt/files
-            cp -r ./custom-files/* ./openwrt/files/
-            
-            # 👇 终极暴力清洗 1：使用 perl 彻底消灭所有 CRLF (无视文件编码和 BOM)
-            echo "🧹 使用 perl 暴力清洗所有注入文件的 CRLF..."
-            find ./openwrt/files -type f -exec perl -pi -e 's/\r\n/\n/g; s/\r/\n/g' {} +
-            
-            # 👇 终极暴力清洗 2：使用 tr 对核心配置文件进行二次兜底清洗
-            echo "🧹 对 /etc/config 核心文件进行 tr 二次清洗..."
-            for f in ./openwrt/files/etc/config/*; do
-              [ -f "$f" ] && tr -d '\r' < "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-            done
-            
-            # 权限设置
-            chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
-            chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
-            [ -d "./openwrt/files/etc/dropbear" ] && chmod 700 ./openwrt/files/etc/dropbear && chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
-            
-            echo "✅ 文件注入与暴力清洗完成"
-          fi
+          # 2. 注入 files (如果没有则忽略)
+          mkdir -p ./openwrt/files
+          cp -r ./custom-files/* ./openwrt/files/ 2>/dev/null || echo "⚠️ 无 custom-files，跳过"
+          
+          # 3. 暴力清洗 CRLF (解决 uhttpd 编译 EOF 报错的核心)
+          echo "🧹 暴力清洗所有注入文件的 CRLF 换行符..."
+          find ./openwrt/files -type f -exec perl -pi -e 's/\r\n/\n/g; s/\r/\n/g' {} + 2>/dev/null || true
+          find ./openwrt/files -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+          
+          # 4. 设置权限
+          echo "🔐 设置文件权限..."
+          chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
+          chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
+          chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
+          chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
+          
+          echo "✅ 注入与清洗完成！"
 
       - name: Build Rootfs with Custom Config
         run: |
