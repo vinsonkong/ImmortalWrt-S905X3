@@ -138,23 +138,45 @@ jobs:
             # 👆 👆 👆 扫描结束 👆 👆 👆
 
             
-            chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
-            chmod +x ./openwrt/files/etc/hosts-new/updatehosts.sh 2>/dev/null || true
-            chmod 600 ./openwrt/files/etc/config/* 2>/dev/null || true
-            chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
+      - name: Inject Custom Files & Packages
+        run: |
+          if [ -d "./custom-packages" ] && ls ./custom-packages/*.ipk 1> /dev/null 2>&1; then
+            echo "📦 注入自定义 ipk 包..."
+            mkdir -p ./openwrt/packages
+            cp ./custom-packages/*.ipk ./openwrt/packages/
+          fi
+          
+          if [ -d "./custom-files" ]; then
+            echo "📦 注入 custom-files..."
+            mkdir -p ./openwrt/files
+            cp -r ./custom-files/* ./openwrt/files/
             
-            # 🚨 强化：修复 custom-files 可能带入的 Dropbear 错误权限
+            # 👇 终极暴力清洗 1：使用 perl 彻底消灭所有 CRLF (无视文件编码和 BOM)
+            echo "🧹 使用 perl 暴力清洗所有注入文件的 CRLF..."
+            find ./openwrt/files -type f -exec perl -pi -e 's/\r\n/\n/g; s/\r/\n/g' {} +
+            
+            # 👇 终极暴力清洗 2：使用 tr 对核心配置文件进行二次兜底清洗
+            echo "🧹 对 /etc/config 核心文件进行 tr 二次清洗..."
+            for f in ./openwrt/files/etc/config/*; do
+              [ -f "$f" ] && tr -d '\r' < "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            done
+            
+            # 权限设置
+            chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
+            chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
             [ -d "./openwrt/files/etc/dropbear" ] && chmod 700 ./openwrt/files/etc/dropbear && chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
             
-            [ -d "./openwrt/files/root/.ssh" ] && chmod 700 ./openwrt/files/root/.ssh && chmod 600 ./openwrt/files/root/.ssh/* 2>/dev/null || true
-            echo "✅ 文件注入及权限修复完成"
-          else
-            echo "⚠️ 未找到 custom-files，跳过"
+            echo "✅ 文件注入与暴力清洗完成"
           fi
 
       - name: Build Rootfs with Custom Config
         run: |
           cd openwrt
+          
+          # 👇 新增：在编译前，打印 system 配置，肉眼检查是否还有 ^M (CRLF)
+          echo "=== 检查 files/etc/config/system 隐藏字符 (如果有 ^M 说明清洗失败) ==="
+          cat -A files/etc/config/system 2>/dev/null || echo "文件不存在"
+          echo "========================================================================
           
           PACKAGES_LIST="acpid attr base-files bash bc blkid blockd bsdtar busybox bzip2 \
             cgi-io chattr coremark coreutils coreutils-base64 coreutils-nohup coreutils-truncate \
