@@ -1,48 +1,27 @@
+# ==========================================
+# OpenWrt / ImmortalWrt 自定义软件包列表
+# 说明: 以 # 开头的行会被自动忽略
+#       请勿在包名后方添加行内注释
+# ==========================================
+
+# === 核心基础与系统工具 ===
+base-files
+busybox
+bash
 acpid
 attr
-base-files
-bash
-bc
-blkid
-blockd
-bsdtar
-busybox
-bzip2
-cgi-io
 chattr
-coremark
 coreutils
 coreutils-base64
 coreutils-nohup
 coreutils-truncate
 gawk
 getopt
-git
 gzip
-htop
-iconv
-jq
-jshn
-libjson-script
-openssh-sftp-server
-perl-http-date
-perlbase-file
-perlbase-getopt
-perlbase-time
-perlbase-unicode
-perlbase-utf8
-php8
-php8-cgi
-php8-mod-curl
-php8-mod-openssl
-php8-mod-session
-php8-mod-zip
-php8-mod-mbstring
 pigz
 pv
 rename
 tar
-ttyd
 unzip
 uuidgen
 whereis
@@ -51,63 +30,117 @@ xz
 xz-utils
 ziptool
 zstd
+bzip2
+htop
+coremark
+bc
+blkid
+blockd
+bsdtar
+cgi-io
+jshn
+libjson-script
+jq
+iconv
+
+# === Perl 运行环境 (部分插件依赖) ===
+perl-http-date
+perlbase-file
+perlbase-getopt
+perlbase-time
+perlbase-unicode
+perlbase-utf8
+
+# === PHP 运行环境 (Web服务/面板依赖) ===
+php8
+php8-cgi
+php8-mod-curl
+php8-mod-openssl
+php8-mod-session
+php8-mod-zip
+php8-mod-mbstring
+
+# === Git 版本控制 ===
+git
+
+# === 终端与远程管理 ===
+ttyd
+openssh-sftp-server
+
+# === 磁盘管理与文件系统支持 ===
 block-mount
-btrfs-progs
-dosfstools
-dumpe2fs
-e2freefrag
-e2fsprogs
-exfat-mkfs
-f2fs-tools
-f2fsck
-fdisk
-kmod-fs-ext4
-kmod-fs-f2fs
-kmod-fs-ksmbd
-kmod-fs-cifs
-kmod-usb-storage
-kmod-usb-storage-uas
-kmod-usb-printer
+mount-utils
 losetup
 lsattr
 lsblk
 lscpu
-mkf2fs
-mount-utils
-ntfs-3g
 parted
+fdisk
+dosfstools
+e2fsprogs
+dumpe2fs
+e2freefrag
 resize2fs
 tune2fs
+f2fs-tools
+f2fsck
+mkf2fs
+btrfs-progs
+ntfs-3g
+exfat-mkfs
 xfs-fsck
 xfs-mkfs
-comgt
-comgt-ncm
+kmod-fs-ext4
+kmod-fs-f2fs
+kmod-fs-ksmbd
+kmod-fs-cifs
+
+# === USB 设备与存储支持 ===
+kmod-usb-storage
+kmod-usb-storage-uas
+kmod-usb-printer
+
+# === 网络基础与拨号工具 ===
 curl
+wget-ssl
+uclient-fetch
+openssl-util
 iw
 iwinfo
-openssl-util
 ppp
 ppp-mod-pppoe
-uclient-fetch
+comgt
+comgt-ncm
 uqmi
 usb-modeswitch
-wget-ssl
 wpad-basic
 wwan
+
+# === Wi-Fi 无线驱动 (博通/通用) ===
 kmod-brcmfmac
 kmod-brcmutil
 kmod-cfg80211
 kmod-mac80211
+
+# === Lucky 大吉面板 ===
 lucky
 luci-app-lucky
 luci-i18n-lucky-zh-cn
+
+# === 多媒体与流媒体处理 ===
 ffmpeg
 libffmpeg-full
+
+# === 虚拟组网工具 ===
 luci-app-easytier
 luci-app-zerotier
 luci-i18n-zerotier-zh-cn
+
+# === DDNS 动态域名解析 ===
 luci-app-ddns-go
 luci-i18n-ddns-go-zh-cn
+
+# === Docker 容器环境 ===
 containerd
 docker
 docker-compose
@@ -117,19 +150,25 @@ tini
 luci-lib-docker
 luci-app-dockerman
 luci-i18n-dockerman-zh-cn
+
+# === LuCI 核心框架与基础模块 ===
 luci
 luci-base
 luci-compat
-luci-i18n-base-zh-cn
 luci-lib-base
 luci-lib-ip
 luci-lib-ipkg
 luci-lib-jsonc
 luci-lib-nixio
+luci-i18n-base-zh-cn
+
+# === LuCI 系统管理模块 ===
 luci-mod-admin-full
 luci-mod-network
 luci-mod-status
 luci-mod-system
+
+# === LuCI 网络协议支持 ===
 luci-proto-3g
 luci-proto-ipip
 luci-proto-ipv6
@@ -138,11 +177,17 @@ luci-proto-openconnect
 luci-proto-ppp
 luci-proto-qmi
 luci-proto-relay
+
+# === Web 服务器 (uhttpd) ===
 uhttpd
 uhttpd-mod-ubus
 liblucihttp
 liblucihttp-lua
+
+# === 主题与外观 ===
 luci-theme-argon
+
+# === 常用 LuCI 应用程序 ===
 luci-app-amlogic
 luci-i18n-amlogic-zh-cn
 luci-app-firewall
@@ -157,9 +202,13 @@ luci-app-diskman
 luci-i18n-diskman-zh-cn
 luci-app-hd-idle
 luci-i18n-hd-idle-zh-cn
+
+# === 下载工具 ===
 aria2
 luci-app-aria2
 luci-i18n-aria2-zh-cn
+
+# === 局域网文件共享 (Samba/NFS/DLNA) ===
 samba4-server
 luci-app-samba4
 luci-i18n-samba4-zh-cn
@@ -170,5 +219,7 @@ nfs-kernel-server
 luci-i18n-nfs-zh-cn
 minidlna
 luci-i18n-minidlna-zh-cn
+
+# === 时区数据 ===
 zoneinfo-asia
 zoneinfo-core
