@@ -18,24 +18,6 @@ else
     echo "❌ 无法识别编译环境，退出"; exit 1
 fi
 
-# ================= [ 0. 终极修复：清理 CRLF 换行符 ] =================
-# 🚨 核心修复：必须在 workflow 复制 custom-files 之前，清理其 CRLF！
-# 否则 uci 读取 hostname 时会带入 \r，导致 uhttpd 生成证书时 openssl 命令引号不匹配！
-echo "🧹 0. 强制清理 CRLF 换行符 (修复 uhttpd 证书生成 EOF 错误)..."
-
-# 清理 ../custom-files 目录 (位于 openwrt 的上一级)
-if [ -d "../custom-files" ]; then
-    find "../custom-files" -type f -exec file {} + 2>/dev/null | grep -i "text" | cut -d: -f1 | xargs -r sed -i 's/\r$//' 2>/dev/null || true
-    find "../custom-files" -type f -name "*.sh" -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-    find "../custom-files/etc" -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-    echo "✅ 已清理 ../custom-files 中的 CRLF"
-fi
-
-# 清理当前 BASE_FILES 目录
-if [ -d "${BASE_FILES}" ]; then
-    find "${BASE_FILES}" -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
-fi
-
 # ================= [ 1. Target 层白名单清理 ] =================
 echo "🚀 1. Target 层白名单清理..."
 if [ "$IS_IMAGEBUILDER" = false ] && [ -n "$TARGET_DIR" ]; then
@@ -74,7 +56,7 @@ fi
 echo "🎨 2. 修改 config_generate (Fallback 兜底)..."
 CONFIG_GENERATE="${BASE_FILES}/bin/config_generate"
 if [ -f "$CONFIG_GENERATE" ]; then
-    # 确保 config_generate 本身也没有 CRLF
+    # 清理可能存在的 CRLF
     sed -i 's/\r$//' "$CONFIG_GENERATE"
     
     sed -i 's/192.168.1.1/192.168.30.254/g' "$CONFIG_GENERATE"
@@ -90,9 +72,136 @@ else
     echo "⚠️ 未找到 config_generate，跳过（ImageBuilder 正常现象）"
 fi
 
-# ================= [ 3. Navidrome 二进制文件下载 ] =================
-echo "🎵 3. 注入 Navidrome 二进制文件..."
+# ================= [ 3. 静态注入所有 /etc/config 基础配置 ] =================
+echo "🔧 3. 静态注入所有 /etc/config 基础配置..."
+mkdir -p "${BASE_FILES}/etc/config"
+mkdir -p "${BASE_FILES}/etc/dropbear"
+
+# ================= [ 3.1 网络配置 ] =================
+# ⚠️ 注意：UCI 配置文件必须使用 Tab 缩进，此处已严格使用 Tab 键
+cat > "${BASE_FILES}/etc/config/network" <<'EOF'
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.0.0.0'
+
+config globals 'globals'
+	option ula_prefix 'fddc:52f6:ea41::/48'
+	option packet_steering '1'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth0'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '192.168.30.254'
+	option netmask '255.255.255.0'
+	list dns '223.5.5.5'
+	list dns '8.8.8.8'
+	option gateway '192.168.30.1'
+
+config interface 'lan6'
+	option proto 'dhcpv6'
+	option device '@lan'
+	option reqaddress 'try'
+	option reqprefix 'auto'
+	option norelease '1'
+	option sourcefilter '0'
+	option delegate '0'
+
+config interface 'docker'
+	option device 'docker0'
+	option proto 'none'
+	option auto '0'
+
+config device
+	option type 'bridge'
+	option name 'docker0'
+
+config interface 'wwan'
+	option proto 'dhcp'
+
+config interface 'EasyTier'
+	option proto 'none'
+	option device 'easytier'
+	option ifname 'easytier'
+EOF
+
+# ================= [ 3.2 DHCP 配置 ] =================
+cat > "${BASE_FILES}/etc/config/dhcp" <<'EOF'
+config dnsmasq
+	option domainneeded '1'
+	option localise_queries '1'
+	option rebind_protection '1'
+	option rebind_localhost '1'
+	option local '/lan/'
+	option domain 'lan'
+	option expandhosts '1'
+	option authoritative '1'
+	option readethers '1'
+	option leasefile '/tmp/dhcp.leases'
+	option resolvfile '/tmp/resolv.conf.d/resolv.conf.auto'
+	option nonwildcard '1'
+	option localservice '1'
+	option ednspacket_max '1232'
+
+config dhcp 'lan'
+	option interface 'lan'
+	option ignore '1'
+	option dhcpv6 'disabled'
+	option ra 'disabled'
+	option ndp 'disabled'
+
+config dhcp 'wan'
+	option interface 'wan'
+	option ignore '1'
+
+config odhcpd 'odhcpd'
+	option maindhcp '0'
+	option leasefile '/tmp/hosts/odhcpd'
+	option leasetrigger '/usr/sbin/odhcpd-update'
+	option loglevel '4'
+EOF
+
+# ================= [ 3.3 Dropbear SSH 配置与公钥 ] =================
+cat > "${BASE_FILES}/etc/config/dropbear" <<'EOF'
+config dropbear
+	option PasswordAuth 'on'
+	option RootPasswordAuth 'on'
+	option RootLogin '1'
+	option Port '22'
+EOF
+
+cat > "${BASE_FILES}/etc/dropbear/authorized_keys" <<'EOF'
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDg995BH9wmXnqi+voUaQT0oSYi+guKytDzJBMe0psHZDC1APuG5T1dfRdQzK2STWx3gq/b9cG8H9wm6KtSiQsTjQkvfVyuLSe4u9f0BChBEbUcfpvjt51Lnkobyo5Ppnj9l3v8TMehdVMcMluNciF8HxTJwrtuPiKcfLeqqUvzSU0wUdvkdq+rirusEhK45mzBZBmCDUq6fECxdEcKKCFmOUHM6CWdXJnAWk1ehchy+EGxMri5fG6uMJh4Y43vjVBYavN0aqW37ASkUe9LXuokYm0W2gBVzoZuCHBw09roPEeZvJYhSjdVrfmYXbi1qoyaHMjT0zSTSt6ov/WFfI+n x96max
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE4un4qvoUbhkmaOvIEvRWZ5qlSrrqzRpUb8BsKn65bn x96max+
+EOF
+
+# 静态构建阶段：强制设置 Dropbear 目录及文件的权限
+chmod 700 "${BASE_FILES}/etc/dropbear"
+chmod 600 "${BASE_FILES}/etc/dropbear/authorized_keys"
+
+# ================= [ 3.4 rc.local (动态逻辑) ] =================
+cat > "${BASE_FILES}/etc/rc.local" <<'EOF'
+#!/bin/sh
+# 修复 Dropbear 文件夹及公钥的权限和归属 (防止 SSH 拒绝密钥登录)
+chown -R root:root /etc/dropbear 2>/dev/null
+chmod 700 /etc/dropbear 2>/dev/null
+chmod 600 /etc/dropbear/authorized_keys 2>/dev/null
+
+exit 0
+EOF
+chmod +x "${BASE_FILES}/etc/rc.local"
+echo "✅ 所有基础配置已静态注入完毕！"
+
+# ================= [ 4. Navidrome 二进制文件下载 ] =================
+echo "🎵 4. 注入 Navidrome 二进制文件..."
 NAVIDROME_VERSION="0.59.0"
+# S905X3 / armsr armv8 均为 aarch64 架构
 NAVIDROME_ARCH="arm64"
 
 mkdir -p "${BASE_FILES}/usr/bin"
@@ -101,16 +210,22 @@ wget -q "https://github.com/navidrome/navidrome/releases/download/v${NAVIDROME_V
 tar -xzf /tmp/navidrome.tar.gz -C "${BASE_FILES}/usr/bin/" navidrome
 rm -f /tmp/navidrome.tar.gz
 chmod +x "${BASE_FILES}/usr/bin/navidrome"
-echo "✅ Navidrome 二进制已注入至 ${BASE_FILES}/usr/bin/navidrome"
 
-# ================= [ 4. uhttpd 证书生成兜底 ] =================
-echo "🔧 4. 创建 uhttpd 证书占位文件 (双重保险)..."
+echo "✅ Navidrome 二进制及目录已注入"
+
+# ================= [ 5. 防御性优化：CRLF清理与uhttpd证书占位 ] =================
+echo "🛡️ 5. 执行防御性优化 (防编译 EOF 错误)..."
+
+# 5.1 强制清理所有注入文件的 CRLF 换行符 (防止 uhttpd 证书生成引号不匹配)
+find "${BASE_FILES}" -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+echo "✅ 已清理所有注入文件的 CRLF 换行符"
+
+# 5.2 创建非空 uhttpd 证书占位文件 (骗过 postinst 的 -s 检查，跳过自动生成)
 UHTTPD_CERT="${BASE_FILES}/etc/uhttpd.crt"
 UHTTPD_KEY="${BASE_FILES}/etc/uhttpd.key"
 mkdir -p "${BASE_FILES}/etc"
-# 写入非空内容，骗过 uhttpd 的 [ -s ] 检查，彻底跳过 postinst 自动生成
 echo "dummy cert" > "$UHTTPD_CERT"
 echo "dummy key" > "$UHTTPD_KEY"
-echo "✅ 已创建非空 uhttpd 证书占位文件"
+echo "✅ 已创建 uhttpd 证书占位文件"
 
-echo "🎉 diy.sh 执行完毕！"
+echo "🎉 diy.sh 全部执行完毕！"
