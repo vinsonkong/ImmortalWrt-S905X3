@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Create Swap File
         run: |
@@ -62,7 +62,6 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update -qq
-          # 👇 核心修复：添加 coreutils 以提供 sha256 命令，供 ipkg-make-index.sh 使用
           sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
             libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl \
             coreutils
@@ -102,7 +101,6 @@ jobs:
         run: |
           echo "📦 开始注入自定义文件与包..."
           
-          # 1. 注入 packages
           mkdir -p ./openwrt/packages
           if ls ./custom-packages/*.ipk 1>/dev/null 2>&1; then
             cp ./custom-packages/*.ipk ./openwrt/packages/
@@ -112,7 +110,6 @@ jobs:
             echo "⚠️ 无自定义 ipk，跳过"
           fi
           
-          # 2. 注入 files
           mkdir -p ./openwrt/files
           if [ -d "./custom-files" ] && [ "$(ls -A ./custom-files 2>/dev/null)" ]; then
             cp -r ./custom-files/* ./openwrt/files/
@@ -121,12 +118,10 @@ jobs:
             echo "⚠️ 无 custom-files，跳过"
           fi
           
-          # 3. 暴力清洗 CRLF
           echo "🧹 暴力清洗所有注入文件的 CRLF 换行符..."
           find ./openwrt/files -type f -exec perl -pi -e 's/\r\n/\n/g; s/\r/\n/g' {} + 2>/dev/null || true
           find ./openwrt/files -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
           
-          # 4. 设置权限
           echo "🔐 设置文件权限..."
           chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
           chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
@@ -139,7 +134,6 @@ jobs:
         run: |
           cd openwrt
           
-          # 重建本地 packages 目录索引
           if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
             echo "📦 检测到本地 ipk，正在重建索引..."
             ./scripts/ipkg-make-index.sh packages/ > packages/Packages
@@ -152,7 +146,6 @@ jobs:
             echo "ℹ️ 无本地 ipk，跳过索引重建"
           fi
           
-          # 使用纯 Bash while 循环安全读取 packages.txt
           PACKAGES_LIST=""
           while IFS= read -r line; do
             case "$line" in
