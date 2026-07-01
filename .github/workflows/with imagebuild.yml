@@ -134,6 +134,14 @@ jobs:
         run: |
           cd openwrt
           
+          # 👇 核心修复：创建 sha256 软链接指向 sha256sum
+          # Ubuntu coreutils 只提供 sha256sum，但 ipkg-make-index.sh 硬编码调用 sha256
+          if ! command -v sha256 &>/dev/null; then
+            echo "🔗 创建 sha256 -> sha256sum 软链接..."
+            sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
+            echo "✅ sha256 命令已就绪"
+          fi
+          
           if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
             echo "📦 检测到本地 ipk，正在重建索引..."
             ./scripts/ipkg-make-index.sh packages/ > packages/Packages
