@@ -134,89 +134,86 @@ jobs:
         run: |
           cd openwrt
           
-          # 1. sha256 软链接
+          # 1. sha256 软链接（Ubuntu coreutils 只提供 sha256sum）
           if ! command -v sha256 &>/dev/null; then
             echo "🔗 创建 sha256 -> sha256sum 软链接..."
             sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
             echo "✅ sha256 命令已就绪"
           fi
           
-          # 2. 构建索引 + 直接篡改 Packages 文本（bash -e 安全版）
+          # 2. 终极方案：直接解压本地 ipk 到 files/ 目录，完全绕过 opkg
           if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
-            echo "📦 检测到本地 ipk，正在构建索引..."
+            echo "📦 检测到本地 ipk，正在直接解压注入到 rootfs..."
             
-            # 优先使用 make_index.pl
-            if [ -f "scripts/make_index.pl" ]; then
-              echo "✅ 使用 make_index.pl 生成原始索引..."
-              perl scripts/make_index.pl packages/ > packages/Packages 2>/dev/null || true
-            fi
+            INJECT_COUNT=0
+            INJECTED_PKGS=""
             
-            # 回退到手动生成
-            if [ ! -s "packages/Packages" ]; then
-              echo "⚠️ make_index.pl 输出为空，切换到手动生成..."
-              > packages/Packages
-              for ipk in packages/*.ipk; do
-                TMPDIR=$(mktemp -d)
-                tar -xzf "$ipk" ./control.tar.gz -C "$TMPDIR" 2>/dev/null || { rm -rf "$TMPDIR"; continue; }
-                tar -xzf "$TMPDIR/control.tar.gz" ./control -C "$TMPDIR" 2>/dev/null || { rm -rf "$TMPDIR"; continue; }
-                if [ -s "$TMPDIR/control" ]; then
-                  {
-                    cat "$TMPDIR/control"
-                    echo "Filename: $(basename "$ipk")"
-                    echo "Size: $(stat -c%s "$ipk")"
-                    echo "SHA256sum: $(sha256sum "$ipk" | awk '{print $1}')"
-                    echo "MD5Sum: $(md5sum "$ipk" | awk '{print $1}')"
-                    echo ""
-                  } >> packages/Packages
+            for ipk in packages/*.ipk; do
+              PKG_NAME=$(basename "$ipk")
+              TMPDIR=$(mktemp -d)
+              
+              # 解压 ipk 外层
+              tar -xf "$ipk" -C "$TMPDIR" 2>/dev/null || { 
+                echo "⚠️ $PKG_NAME 解压失败，跳过"; 
+                rm -rf "$TMPDIR"; 
+                continue; 
+              }
+              
+              # 查找 data 归档（兼容 gz/zst/xz）
+              DATA_TAR=$(find "$TMPDIR" -maxdepth 1 -name "data.tar.*" 2>/dev/null | head -1)
+              
+              if [ -n "$DATA_TAR" ] && [ -f "$DATA_TAR" ]; then
+                # 直接解压到 files/ 目录（保留权限和符号链接）
+                tar -xf "$DATA_TAR" -C ../files/ 2>/dev/null || \
+                tar -xzf "$DATA_TAR" -C ../files/ 2>/dev/null || \
+                tar -xJf "$DATA_TAR" -C ../files/ 2>/dev/null || true
+                
+                # 提取纯包名用于后续过滤
+                PKG=$(echo "$PKG_NAME" | sed -E 's/_[^_]+_[^_]+\.ipk$//')
+                INJECTED_PKGS="$INJECTED_PKGS $PKG"
+                
+                echo "  ✅ $PKG_NAME → files/"
+                INJECT_COUNT=$((INJECT_COUNT + 1))
+              else
+                echo "  ⚠️ $PKG_NAME 无 data 归档，跳过"
+              fi
+              
+              rm -rf "$TMPDIR"
+            done
+            
+            echo "✅ 共注入 $INJECT_COUNT 个本地包到 rootfs"
+            
+            # 从 packages.txt 中移除已手动注入的包，避免 opkg 再次尝试安装报错
+            FILTERED_LIST=""
+            while IFS= read -r line; do
+              case "$line" in \#*|"") continue ;; esac
+              SKIP=false
+              for injected in $INJECTED_PKGS; do
+                if [ "$line" = "$injected" ]; then
+                  SKIP=true
+                  break
                 fi
-                rm -rf "$TMPDIR"
               done
-            fi
+              if [ "$SKIP" = false ]; then
+                FILTERED_LIST="$FILTERED_LIST $line"
+              fi
+            done < ../packages.txt
             
-            # 👇 核心修复1：统一架构为 all（简单替换，无捕获组风险）
-            echo "🔧 正在将 Packages 索引中的所有架构统一为 all..."
-            sed -i 's/^Architecture:.*/Architecture: all/' packages/Packages
-            
-            # 👇 核心修复2：安全移除 lucky 依赖（分步处理，避免复杂正则）
-            # 步骤a: 将 ", lucky" 或 "lucky, " 替换为空
-            sed -i '/^Depends:/s/, *lucky//g' packages/Packages
-            sed -i '/^Depends:/s/lucky, *//g' packages/Packages
-            # 步骤b: 处理 lucky 作为唯一依赖的情况
-            sed -i '/^Depends: *lucky *$/d' packages/Packages
-            # 步骤c: 清理可能残留的前导/尾随逗号和空格
-            sed -i '/^Depends:/s/^Depends: *, */Depends: /' packages/Packages
-            sed -i '/^Depends:/s/, *$/,/' packages/Packages
-            sed -i '/^Depends:/s/,$//' packages/Packages
-            
-            gzip -c packages/Packages > packages/Packages.gz
-            
-            # 注册本地源
-            CUSTOM_FEED="src/gz local_packages file://$(pwd)/packages"
-            if ! grep -q "local_packages" repositories.conf 2>/dev/null; then
-              echo "$CUSTOM_FEED" >> repositories.conf
-              echo "✅ 已添加本地源到 repositories.conf"
-            fi
-            
-            echo "--- repositories.conf 内容 ---"
-            cat repositories.conf
-            echo "--- Packages 索引预览 (修复后) ---"
-            grep -E "^(Package|Architecture|Depends):" packages/Packages | head -40 || echo "(空)"
-            echo "---------------------------------"
+            PACKAGES_LIST="$FILTERED_LIST"
+            echo "🔧 已从 opkg 安装列表中移除本地注入包:$INJECTED_PKGS"
           else
-            echo "ℹ️ 无本地 ipk，跳过索引构建"
+            echo "ℹ️ 无本地 ipk，使用原始 packages.txt"
+            PACKAGES_LIST=""
+            while IFS= read -r line; do
+              case "$line" in \#*|"") continue ;; esac
+              PACKAGES_LIST="$PACKAGES_LIST $line"
+            done < ../packages.txt
           fi
           
-          # 3. 读取 packages.txt
-          PACKAGES_LIST=""
-          while IFS= read -r line; do
-            case "$line" in \#*|"") continue ;; esac
-            PACKAGES_LIST="$PACKAGES_LIST $line"
-          done < ../packages.txt
-          
-          echo "📦 即将安装: $(echo $PACKAGES_LIST | wc -w) 个包"
+          echo "📦 opkg 将安装: $(echo $PACKAGES_LIST | wc -w) 个包"
           echo "📋 包列表: $PACKAGES_LIST"
           
-          # 4. 构建镜像
+          # 3. 构建镜像（本地包已在 files/ 中，不再通过 PACKAGES 参数安装）
           make image PROFILE=generic FILES="files" ROOTFS_PARTSIZE=1024 PACKAGES="$PACKAGES_LIST" V=s
 
       - name: Package Amlogic Firmware
@@ -250,7 +247,7 @@ jobs:
             ### 📁 自定义内容
             - diy.sh: Navidrome + Lucky 二进制已注入
             - custom-files: 已注入并覆盖系统同名文件
-            - custom-packages: 本地 .ipk 已预装（索引架构重写+依赖剥离）
+            - custom-packages: 本地 .ipk 已直接解压注入 rootfs（绕过 opkg）
             
             ### ⚠️ 刷机提示
             1. 默认 IP: 192.168.30.254
