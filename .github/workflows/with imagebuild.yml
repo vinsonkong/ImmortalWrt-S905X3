@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Create Swap File
         run: |
@@ -83,10 +83,10 @@ jobs:
           tar -xf "imagebuilder.${EXT}"
           mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 openwrt
 
-      - name: Execute diy.sh for Static Config Injection
+      - name: Execute diy.sh for Binary Injection
         run: |
           if [ -f "./diy.sh" ]; then
-            echo "🔧 开始执行 diy.sh 静态配置注入..."
+            echo "🔧 开始执行 diy.sh 二进制注入..."
             chmod +x ./diy.sh
             cd openwrt
             ../diy.sh
@@ -100,15 +100,26 @@ jobs:
         run: |
           echo "📦 开始注入自定义文件与包..."
           
-          # 1. 注入 packages (如果没有则忽略)
+          # 1. 注入 packages
           mkdir -p ./openwrt/packages
-          cp ./custom-packages/*.ipk ./openwrt/packages/ 2>/dev/null || echo "⚠️ 无自定义 ipk，跳过"
+          if ls ./custom-packages/*.ipk 1>/dev/null 2>&1; then
+            cp ./custom-packages/*.ipk ./openwrt/packages/
+            echo "✅ 自定义 ipk 已复制到 openwrt/packages/"
+            ls -lh ./openwrt/packages/*.ipk
+          else
+            echo "⚠️ 无自定义 ipk，跳过"
+          fi
           
-          # 2. 注入 files (如果没有则忽略)
+          # 2. 注入 files
           mkdir -p ./openwrt/files
-          cp -r ./custom-files/* ./openwrt/files/ 2>/dev/null || echo "⚠️ 无 custom-files，跳过"
+          if [ -d "./custom-files" ] && [ "$(ls -A ./custom-files 2>/dev/null)" ]; then
+            cp -r ./custom-files/* ./openwrt/files/
+            echo "✅ custom-files 已注入"
+          else
+            echo "⚠️ 无 custom-files，跳过"
+          fi
           
-          # 3. 暴力清洗 CRLF (解决 uhttpd 编译 EOF 报错的核心)
+          # 3. 暴力清洗 CRLF
           echo "🧹 暴力清洗所有注入文件的 CRLF 换行符..."
           find ./openwrt/files -type f -exec perl -pi -e 's/\r\n/\n/g; s/\r/\n/g' {} + 2>/dev/null || true
           find ./openwrt/files -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
@@ -126,13 +137,21 @@ jobs:
         run: |
           cd openwrt
           
-          # 检查 system 配置隐藏字符
-          echo "=== 检查 files/etc/config/system 隐藏字符 (如果有 ^M 说明清洗失败) ==="
-          cat -A files/etc/config/system 2>/dev/null || echo "文件不存在"
-          echo "========================================================================"
+          # 👇 核心修复：重建本地 packages 目录索引
+          # 让 ImageBuilder 能正确识别 custom-packages 中的 lucky 等第三方 ipk
+          if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
+            echo "📦 检测到本地 ipk，正在重建索引..."
+            ./scripts/ipkg-make-index.sh packages/ > packages/Packages
+            gzip -c packages/Packages > packages/Packages.gz
+            echo "✅ 本地包索引重建完成"
+            echo "--- Packages 索引内容预览 ---"
+            grep "^Package:" packages/Packages || true
+            echo "-----------------------------"
+          else
+            echo "ℹ️ 无本地 ipk，跳过索引重建"
+          fi
           
-          # 使用纯 Bash while 循环读取 packages.txt
-          # 全程无正则、无 $() 嵌套，彻底规避 YAML 解析 Bug
+          # 使用纯 Bash while 循环安全读取 packages.txt
           PACKAGES_LIST=""
           while IFS= read -r line; do
             case "$line" in
@@ -142,6 +161,7 @@ jobs:
           done < ../packages.txt
           
           echo "📦 即将安装的软件包数量: $(echo $PACKAGES_LIST | wc -w)"
+          echo "📋 包列表: $PACKAGES_LIST"
           
           make image PROFILE=generic FILES="files" ROOTFS_PARTSIZE=1024 PACKAGES="$PACKAGES_LIST" V=s
 
@@ -174,10 +194,9 @@ jobs:
             - 设备: ${{ inputs.device_board }}
             
             ### 📁 自定义内容
-            - diy.sh: 静态配置已注入
-            - Dropbear: 已强化 /etc/dropbear 目录归属(root:root)及严格权限(700/600)
+            - diy.sh: Navidrome + Lucky 二进制已注入
             - custom-files: 已注入并覆盖系统同名文件
-            - custom-packages: 本地 .ipk 已预装
+            - custom-packages: 本地 .ipk 已预装（含索引重建）
             
             ### ⚠️ 刷机提示
             1. 默认 IP: 192.168.30.254
