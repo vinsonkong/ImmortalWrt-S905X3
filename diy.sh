@@ -30,16 +30,18 @@ chmod +x "${BASE_FILES}/usr/bin/navidrome"
 echo "✅ Navidrome 二进制已注入"
 
 # ================= [ 2. Lucky 大吉面板二进制下载 ] =================
-echo "🍀 2. 注入 Lucky 大吉面板二进制..."
-LUCKY_VERSION="2.27.2"
-LUCKY_ARCH="arm64"
 
-echo "⬇️ 正在下载 Lucky v${LUCKY_VERSION} (${LUCKY_ARCH})..."
-wget -q "https://github.com/gdy666/lucky/releases/download/v${LUCKY_VERSION}/lucky_${LUCKY_VERSION}_linux_${LUCKY_ARCH}.tar.gz" -O /tmp/lucky.tar.gz
-tar -xzf /tmp/lucky.tar.gz -C "${BASE_FILES}/usr/bin/" lucky
-rm -f /tmp/lucky.tar.gz
-chmod +x "${BASE_FILES}/usr/bin/lucky"
-echo "✅ Lucky 二进制已注入 /usr/bin/lucky"
+# echo "🍀 2. 注入 Lucky 大吉面板二进制..."
+# LUCKY_VERSION="2.27.2"
+# LUCKY_ARCH="arm64"
+
+# echo "⬇️ 正在下载 Lucky v${LUCKY_VERSION} (${LUCKY_ARCH})..."
+# wget -q "https://github.com/gdy666/lucky/releases/download/v${LUCKY_VERSION}/lucky_${LUCKY_VERSION}_linux_${LUCKY_ARCH}.tar.gz" -O /tmp/lucky.tar.gz
+# tar -xzf /tmp/lucky.tar.gz -C "${BASE_FILES}/usr/bin/" lucky
+# rm -f /tmp/lucky.tar.gz
+# chmod +x "${BASE_FILES}/usr/bin/lucky"
+# echo "✅ Lucky 二进制已注入 /usr/bin/lucky"
+
 
 # ================= [ 3. 防御性优化：CRLF清理与uhttpd证书占位 ] =================
 echo "🛡️ 3. 执行防御性优化 (防编译 EOF 错误)..."
