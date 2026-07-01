@@ -134,65 +134,72 @@ jobs:
         run: |
           cd openwrt
           
-          # 创建 sha256 软链接（Ubuntu coreutils 只提供 sha256sum）
+          # 1. 创建 sha256 软链接（Ubuntu coreutils 只提供 sha256sum）
           if ! command -v sha256 &>/dev/null; then
             echo "🔗 创建 sha256 -> sha256sum 软链接..."
             sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
             echo "✅ sha256 命令已就绪"
           fi
           
-          # 兼容模式重建本地包索引（绕过 ipkg-make-index.sh 的 sed bug）
+          # 2. 使用 opkg 原生方式重建索引并注册本地源
           if [ -d "packages" ] && ls packages/*.ipk 1>/dev/null 2>&1; then
-            echo "📦 检测到本地 ipk，正在用兼容模式重建索引..."
+            echo "📦 检测到本地 ipk，正在用 opkg 原生方式重建索引..."
             
-            > packages/Packages
-            
-            for ipk in packages/*.ipk; do
-              echo "Processing: $(basename "$ipk")"
-              
-              CONTROL=$(mktemp)
-              tar -xzf "$ipk" ./control.tar.gz -O 2>/dev/null | tar -xzf - ./control -O > "$CONTROL" 2>/dev/null || true
-              
-              if [ -s "$CONTROL" ]; then
-                {
-                  cat "$CONTROL"
-                  FILENAME=$(basename "$ipk")
-                  SIZE=$(stat -c%s "$ipk" 2>/dev/null || stat -f%z "$ipk" 2>/dev/null)
-                  SHA256=$(sha256sum "$ipk" | awk '{print $1}')
-                  MD5=$(md5sum "$ipk" | awk '{print $1}')
-                  echo "Filename: $FILENAME"
-                  echo "Size: $SIZE"
-                  echo "SHA256sum: $SHA256"
-                  echo "MD5Sum: $MD5"
-                  echo ""
-                } >> packages/Packages
-              else
-                echo "⚠️ 无法读取 $(basename "$ipk") 的控制信息，跳过"
-              fi
-              
-              rm -f "$CONTROL"
-            done
+            # 优先使用 ImageBuilder 自带的 make_index.pl（完全兼容 opkg 格式）
+            if [ -f "scripts/make_index.pl" ]; then
+              echo "✅ 使用 make_index.pl 生成索引..."
+              perl scripts/make_index.pl packages/ > packages/Packages
+            else
+              echo "⚠️ make_index.pl 不存在，使用严格格式手动生成..."
+              > packages/Packages
+              for ipk in packages/*.ipk; do
+                TMPDIR=$(mktemp -d)
+                tar -xzf "$ipk" ./control.tar.gz -C "$TMPDIR" 2>/dev/null || continue
+                tar -xzf "$TMPDIR/control.tar.gz" ./control -C "$TMPDIR" 2>/dev/null || continue
+                
+                if [ -s "$TMPDIR/control" ]; then
+                  {
+                    cat "$TMPDIR/control"
+                    echo "Filename: $(basename "$ipk")"
+                    echo "Size: $(stat -c%s "$ipk")"
+                    echo "SHA256sum: $(sha256sum "$ipk" | awk '{print $1}')"
+                    echo "MD5Sum: $(md5sum "$ipk" | awk '{print $1}')"
+                    echo ""
+                  } >> packages/Packages
+                fi
+                rm -rf "$TMPDIR"
+              done
+            fi
             
             gzip -c packages/Packages > packages/Packages.gz
-            echo "✅ 本地包索引重建完成（兼容模式）"
+            
+            # 将本地 packages 目录注册为 opkg 自定义源
+            CUSTOM_FEED="src/gz local_packages file://$(pwd)/packages"
+            if ! grep -q "local_packages" repositories.conf 2>/dev/null; then
+              echo "$CUSTOM_FEED" >> repositories.conf
+              echo "✅ 已添加本地源到 repositories.conf"
+            fi
+            
+            echo "--- repositories.conf 内容 ---"
+            cat repositories.conf
             echo "--- Packages 索引内容预览 ---"
-            grep "^Package:" packages/Packages || true
+            grep "^Package:" packages/Packages || echo "(空)"
             echo "-----------------------------"
           else
             echo "ℹ️ 无本地 ipk，跳过索引重建"
           fi
           
+          # 3. 读取 packages.txt
           PACKAGES_LIST=""
           while IFS= read -r line; do
-            case "$line" in
-              \#*|"") continue ;;
-            esac
+            case "$line" in \#*|"") continue ;; esac
             PACKAGES_LIST="$PACKAGES_LIST $line"
           done < ../packages.txt
           
-          echo "📦 即将安装的软件包数量: $(echo $PACKAGES_LIST | wc -w)"
+          echo "📦 即将安装: $(echo $PACKAGES_LIST | wc -w) 个包"
           echo "📋 包列表: $PACKAGES_LIST"
           
+          # 4. 构建镜像
           make image PROFILE=generic FILES="files" ROOTFS_PARTSIZE=1024 PACKAGES="$PACKAGES_LIST" V=s
 
       - name: Package Amlogic Firmware
