@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Create Swap File
         run: |
@@ -63,7 +63,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
-            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl
+            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
@@ -95,7 +95,7 @@ jobs:
           else
             echo "⚠️ 未找到 diy.sh，跳过"
           fi
-       
+
       - name: Inject Custom Files & Packages
         run: |
           echo "📦 开始注入自定义文件与包..."
@@ -126,15 +126,23 @@ jobs:
         run: |
           cd openwrt
           
-          # 👇 新增：在编译前，打印 system 配置，肉眼检查是否还有 ^M (CRLF)
+          # 检查 system 配置隐藏字符
           echo "=== 检查 files/etc/config/system 隐藏字符 (如果有 ^M 说明清洗失败) ==="
           cat -A files/etc/config/system 2>/dev/null || echo "文件不存在"
-          echo "========================================================================
+          echo "========================================================================"
           
-          PACKAGES_LIST=$(grep -v '^\s*#' ../packages.txt | grep -v '^\s*$' | tr '\n' ' ')
+          # 使用纯 Bash while 循环读取 packages.txt
+          # 全程无正则、无 $() 嵌套，彻底规避 YAML 解析 Bug
+          PACKAGES_LIST=""
+          while IFS= read -r line; do
+            case "$line" in
+              \#*|"") continue ;;
+            esac
+            PACKAGES_LIST="$PACKAGES_LIST $line"
+          done < ../packages.txt
           
           echo "📦 即将安装的软件包数量: $(echo $PACKAGES_LIST | wc -w)"
-
+          
           make image PROFILE=generic FILES="files" ROOTFS_PARTSIZE=1024 PACKAGES="$PACKAGES_LIST" V=s
 
       - name: Package Amlogic Firmware
@@ -145,7 +153,6 @@ jobs:
           openwrt_kernel: ${{ inputs.kernel_version }}
           auto_kernel: true
           builder_name: ImmortalWrt
-
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
