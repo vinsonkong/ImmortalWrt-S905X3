@@ -1,0 +1,189 @@
+name: N5105 SquashFS with ImageBuilder
+
+on:
+  workflow_dispatch:
+    inputs:
+      immortalwrt_version:
+        description: 'ImmortalWrt Version'
+        required: true
+        default: '24.10.6'
+        type: choice
+        options:
+          - 23.05.4
+          - 23.05.5
+          - 23.05.6
+          - 23.05.7
+          - 24.10.0
+          - 24.10.1
+          - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
+      kernel_version:
+        description: 'Kernel Branch'
+        required: true
+        default: '6.18.y'
+        type: choice
+        options:
+          - 5.10.y
+          - 5.15.y
+          - 6.1.y
+          - 6.6.y
+          - 6.12.y
+          - 6.18.y
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build N5105 SquashFS
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Swap File
+        run: |
+          if [ -z "$(swapon --show=NAME --noheadings)" ]; then
+            echo "Creating 4G swap..."
+            sudo fallocate -l 4G /mnt/swapfile
+            sudo chmod 600 /mnt/swapfile
+            sudo mkswap /mnt/swapfile
+            sudo swapon /mnt/swapfile
+          fi
+          free -h
+
+      - name: Install dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
+            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl \
+            coreutils
+
+      - name: Download & Extract ImmortalWrt ImageBuilder (x86_64)
+        run: |
+          VERSION=${{ inputs.immortalwrt_version }}
+          BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/x86/64"
+          
+          if [[ "$VERSION" == "23.05."* ]]; then
+            EXT="tar.xz"
+          else
+            EXT="tar.zst"
+          fi
+          
+          BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-x86-64.Linux-x86_64.${EXT}"
+          echo "Downloading: $BUILDER_URL"
+          wget -q "$BUILDER_URL" -O "imagebuilder.${EXT}"
+          
+          tar -xf "imagebuilder.${EXT}"
+          mv immortalwrt-imagebuilder-*-x86-64.Linux-x86_64 openwrt
+
+      - name: Execute diyX86.sh for Binary Injection
+        run: |
+          if [ -f "./diyX86.sh" ]; then
+            echo "🔧 开始执行 diyX86.sh 二进制注入..."
+            chmod +x ./diyX86.sh
+            cd openwrt
+            ../diyX86.sh
+            cd ..
+            echo "✅ diyX86.sh 执行完毕"
+          else
+            echo "⚠️ 未找到 diyX86.sh，跳过"
+          fi
+
+      - name: Inject Custom Files & Packages (X86)
+        run: |
+          echo "📦 开始注入自定义文件与包..."
+          
+          mkdir -p ./openwrt/packages
+          if ls ./custom-packagesX86/*.ipk 1>/dev/null 2>&1; then
+            cp ./custom-packagesX86/*.ipk ./openwrt/packages/
+            echo "✅ 自定义 ipk 已复制到 openwrt/packages/"
+            ls -lh ./openwrt/packages/*.ipk
+          else
+            echo "⚠️ 无 custom-packagesX86 中的 ipk，跳过"
+          fi
+          
+          mkdir -p ./openwrt/files
+          if [ -d "./custom-fileX86" ] && [ "$(ls -A ./custom-fileX86 2>/dev/null)" ]; then
+            cp -r ./custom-fileX86/* ./openwrt/files/
+            echo "✅ custom-fileX86 已注入"
+          else
+            echo "⚠️ 无 custom-fileX86，跳过"
+          fi
+                    
+          echo "🔐 设置文件权限..."
+          chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
+          chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
+          chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
+          chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
+          
+          echo "✅ 注入完成"
+
+      - name: Build SquashFS Rootfs with Custom Config
+        run: |
+          cd openwrt
+          
+          # sha256 软链接
+          if ! command -v sha256 &>/dev/null; then
+            echo "🔗 创建 sha256 -> sha256sum 软链接..."
+            sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
+            echo "✅ sha256 命令已就绪"
+          fi
+          
+          # 读取 packagesX86.txt
+          PACKAGES_LIST=""
+          if [ -f "../packagesX86.txt" ]; then
+            while IFS= read -r line; do
+              case "$line" in \#*|"") continue ;; esac
+              PACKAGES_LIST="$PACKAGES_LIST $line"
+            done < ../packagesX86.txt
+          else
+            echo "⚠️ 未找到 packagesX86.txt"
+          fi
+          
+          echo "📦 opkg 将安装: $(echo $PACKAGES_LIST | wc -w) 个包"
+          echo "📋 包列表: $PACKAGES_LIST"
+          
+          # 构建 x86_64 SquashFS 镜像
+          make image PROFILE=generic \
+            FILES="files" \
+            ROOTFS_PARTSIZE=1024 \
+            PACKAGES="$PACKAGES_LIST" \
+            CONFIG_TARGET_ROOTFS_SQUASHFS=y \
+            V=s
+
+      - name: Upload Firmware to Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IWrt-N5105-${{ inputs.immortalwrt_version }}-squashfs
+          path: openwrt/bin/targets/x86/64/*squashfs*.img*
+
+      - name: Upload Firmware to Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: n5105-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: N5105 ${{ inputs.immortalwrt_version }} SquashFS (Build ${{ github.run_number }})
+          body: |
+            自动编译的 ImmortalWrt x86_64 固件 (SquashFS)
+            - 版本: ${{ inputs.immortalwrt_version }}
+            - 设备: N5105 (x86_64)
+            - 文件系统: SquashFS
+            
+            ### 📁 自定义内容
+            - diyX86.sh: 二进制注入脚本
+            - custom-fileX86: 已注入并覆盖系统同名文件
+            - custom-packagesX86: 由 ImageBuilder 原生 opkg 机制安装
+            - packagesX86.txt: 软件包列表
+            
+            ### ⚠️ 刷机提示
+            1. 默认 IP: 192.168.30.254
+            2. 使用 Rufus/balenaEtcher 写入 U 盘或硬盘
+            3. BIOS 中关闭 Secure Boot
+          files: |
+            openwrt/bin/targets/x86/64/*squashfs*.img*
