@@ -1,0 +1,146 @@
+# ==========================================
+# OpenWrt / ImmortalWrt N5105 (x86_64) 软件包列表
+# ==========================================
+
+# === 1. 核心基础与系统工具 ===
+base-files
+busybox
+bash
+acpid
+ca-bundle
+coreutils
+pigz
+tar
+unzip
+zstd
+htop
+jq
+zoneinfo-asia
+zoneinfo-core
+
+# === 2. N5105 专属内核与硬件驱动 ===
+kmod-igc
+kmod-igb
+kmod-r8125
+kmod-e1000e
+kmod-i915
+i915-firmware-dmc
+intel-gpu-firmware
+kmod-9pnet
+kmod-9pvirtio
+kmod-vhost-net
+
+# === 3. 磁盘管理与文件系统 ===
+block-mount
+fdisk
+parted
+dosfstools
+e2fsprogs
+f2fs-tools
+kmod-fs-ext4
+kmod-fs-f2fs
+kmod-fs-exfat
+kmod-fs-ntfs3
+
+# === 4. USB 设备支持 ===
+kmod-usb3
+kmod-usb-storage
+kmod-usb-storage-uas
+
+# === 5. 网络基础、拨号与多线多拨 ===
+curl
+wget-ssl
+uclient-fetch
+openssl-util
+ppp
+ppp-mod-pppoe
+ppp-mod-pptp
+ppp-mod-l2tp
+mwan3
+luci-app-mwan3
+luci-app-syncdial
+
+# === 6. Docker 容器环境 ===
+docker
+dockerd
+containerd
+runc
+tini
+docker-compose
+luci-lib-docker
+luci-app-dockerman
+luci-i18n-dockerman-zh-cn
+
+# === 7. 虚拟组网与内网穿透 ===
+luci-app-easytier
+luci-app-zerotier
+luci-i18n-zerotier-zh-cn
+luci-app-tailscale
+socat
+luci-app-socat
+luci-i18n-socat-zh-cn
+
+# === 8. 局域网共享与打印 ===
+samba4-server
+luci-app-samba4
+luci-i18n-samba4-zh-cn
+nfs-kernel-server
+luci-i18n-nfs-zh-cn
+kmod-usb-printer
+luci-app-usb-printer
+luci-i18n-usb-printer-zh-cn
+
+# === 9. LuCI 核心框架与系统管理 ===
+luci
+luci-base
+luci-compat
+luci-i18n-base-zh-cn
+luci-theme-argon
+luci-mod-admin-full
+luci-mod-network
+luci-mod-status
+luci-mod-system
+luci-app-package-manager
+luci-i18n-package-manager-zh-cn
+
+# === 10. 核心 LuCI 应用程序 ===
+luci-app-firewall
+luci-i18n-firewall-zh-cn
+luci-app-upnp
+luci-i18n-upnp-zh-cn
+luci-app-sqm
+luci-app-ttyd
+luci-i18n-ttyd-zh-cn
+luci-app-wol
+luci-i18n-wol-zh-cn
+luci-app-ddns-go
+luci-i18n-ddns-go-zh-cn
+luci-app-cron
+luci-app-ramfree
+luci-app-uhttpd
+
+# === 11. 流量监控与统计 ===
+luci-app-statistics
+collectd-mod-ping
+collectd-mod-uptime
+wrtbwmon
+luci-app-wrtbwmon
+
+# === 12. 下载工具 ===
+aria2
+luci-app-aria2
+luci-i18n-aria2-zh-cn
+
+# === 13. Lucky 大吉面板 ===
+lucky
+luci-app-lucky
+luci-i18n-lucky-zh-cn
+
+# === 14. PHP 运行环境 ===
+php8
+php8-cgi
+php8-mod-curl
+php8-mod-openssl
+php8-mod-session
+php8-mod-zip
+php8-mod-mbstring
