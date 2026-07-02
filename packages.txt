@@ -218,7 +218,7 @@ luci-i18n-aria2-zh-cn
 samba4-server
 luci-app-samba4
 luci-i18n-samba4-zh-cn
-luci-i18n-ksmbd-zh-cn
+# luci-i18n-ksmbd-zh-cn
 cifsmount
 luci-i18n-cifs-mount-zh-cn
 nfs-kernel-server
