@@ -138,8 +138,8 @@ luci-app-zerotier
 luci-i18n-zerotier-zh-cn
 
 # === DDNS 动态域名解析 ===
-luci-app-ddns-go
-luci-i18n-ddns-go-zh-cn
+# luci-app-ddns-go
+# luci-i18n-ddns-go-zh-cn
 
 # === Docker 容器环境 ===
 containerd
@@ -205,7 +205,7 @@ luci-app-diskman
 luci-i18n-diskman-zh-cn
 luci-app-hd-idle
 luci-i18n-hd-idle-zh-cn
-luci-i18n-filebrowser-go-zh-cn
+# luci-i18n-filebrowser-go-zh-cn
 # luci-app-socat
 # luci-i18n-socat-zh-cn
 
