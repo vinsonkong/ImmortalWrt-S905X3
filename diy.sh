@@ -48,8 +48,6 @@ TARGET_ARCH="aarch64"       # 根据设备修改
 echo ">>> 开始下载 EasyTier ${EASYTIER_VERSION} (${TARGET_ARCH})..."
 
 # 1. 构建下载链接
-# 关键修正：严格匹配网页解析的真实文件名格式：easytier-linux-{arch}-{version}.zip
-# 注意：这里直接使用 ${EASYTIER_VERSION} (包含v)，拼接后为 ...-aarch64-v2.6.4.zip
 DOWNLOAD_URL="https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}-${EASYTIER_VERSION}.zip"
 
 # 2. 创建临时目录
