@@ -48,10 +48,9 @@ TARGET_ARCH="aarch64"       # 根据设备修改
 echo ">>> 开始下载 EasyTier ${EASYTIER_VERSION} (${TARGET_ARCH})..."
 
 # 1. 构建下载链接
-# 关键修正：根据网页解析，文件名格式应为 easytier-linux-{arch}{version}.zip (中间无额外横杠)
-# 使用 sed 去掉版本号前的 'v'，或者直接调整拼接方式
-VERSION_NO_V=$(echo ${EASYTIER_VERSION} | sed 's/^v//')
-DOWNLOAD_URL="https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}${EASYTIER_VERSION}.zip"
+# 关键修正：严格匹配网页解析的真实文件名格式：easytier-linux-{arch}-{version}.zip
+# 注意：这里直接使用 ${EASYTIER_VERSION} (包含v)，拼接后为 ...-aarch64-v2.6.4.zip
+DOWNLOAD_URL="https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}-${EASYTIER_VERSION}.zip"
 
 # 2. 创建临时目录
 mkdir -p /tmp/easytier-dl
@@ -63,7 +62,7 @@ if wget -q --show-progress -O /tmp/easytier-dl/easytier.zip "$DOWNLOAD_URL"; the
 else
     echo "⚠️ 官方下载失败，正在尝试镜像..."
     # 使用 ghproxy.com 加速（国内常用）
-    MIRROR_URL="https://ghproxy.com/https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}${EASYTIER_VERSION}.zip"
+    MIRROR_URL="https://ghproxy.com/https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}-${EASYTIER_VERSION}.zip"
     if wget -q --show-progress -O /tmp/easytier-dl/easytier.zip "$MIRROR_URL"; then
         echo "✅ 镜像下载成功"
     else
@@ -77,7 +76,7 @@ fi
 if unzip -l /tmp/easytier-dl/easytier.zip > /dev/null 2>&1; then
     unzip -o /tmp/easytier-dl/easytier.zip -d /tmp/easytier-dl/
     
-    # 查找文件（网页解析确认文件名包含架构后缀）
+    # 查找文件（文件名通常包含架构后缀）
     CORE_BIN=$(find /tmp/easytier-dl -name "easytier-core*" -type f | head -n1)
     CLI_BIN=$(find /tmp/easytier-dl -name "easytier-cli*" -type f | head -n1)
     
@@ -104,6 +103,7 @@ else
     rm -rf /tmp/easytier-dl
     exit 1
 fi
+
 
 
 
