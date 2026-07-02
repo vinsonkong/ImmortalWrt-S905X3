@@ -42,50 +42,69 @@ chmod +x "${BASE_FILES}/usr/bin/lucky"
 echo "✅ Lucky 二进制已注入 /usr/bin/lucky"
 
 # ========== EasyTier 二进制下载集成 ==========
-EASYTIER_VERSION="v2.6.4"  # 可修改为指定版本，留空则自动获取最新版
-TARGET_ARCH="aarch64"       # 根据目标设备修改: x86_64 / aarch64 / armv7 / mipsel 等
+EASYTIER_VERSION="v2.6.4"  # 保持 v 前缀
+TARGET_ARCH="aarch64"       # 根据设备修改
 
 echo ">>> 开始下载 EasyTier ${EASYTIER_VERSION} (${TARGET_ARCH})..."
 
-# 1. 确定下载链接
-if [ -z "$EASYTIER_VERSION" ]; then
-    EASYTIER_VERSION=$(curl -s https://api.github.com/repos/EasyTier/EasyTier/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
-fi
-DOWNLOAD_URL="https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}-${EASYTIER_VERSION}.zip"
+# 1. 构建下载链接
+# 关键修正：根据网页解析，文件名格式应为 easytier-linux-{arch}{version}.zip (中间无额外横杠)
+# 使用 sed 去掉版本号前的 'v'，或者直接调整拼接方式
+VERSION_NO_V=$(echo ${EASYTIER_VERSION} | sed 's/^v//')
+DOWNLOAD_URL="https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}${EASYTIER_VERSION}.zip"
 
-# 2. 创建临时目录并下载
+# 2. 创建临时目录
 mkdir -p /tmp/easytier-dl
-wget -q --show-progress -O /tmp/easytier-dl/easytier.zip "$DOWNLOAD_URL" || {
-    echo "!!! GitHub 下载失败，尝试使用镜像加速..."
-    wget -q --show-progress -O /tmp/easytier-dl/easytier.zip "https://ghfast.top/$DOWNLOAD_URL"
-}
 
-# 3. 解压并安装到固件根文件系统
-if [ -f /tmp/easytier-dl/easytier.zip ]; then
+# 3. 下载逻辑（带重试和镜像）
+echo "⬇️ 正在下载: ${DOWNLOAD_URL}"
+if wget -q --show-progress -O /tmp/easytier-dl/easytier.zip "$DOWNLOAD_URL"; then
+    echo "✅ 下载成功"
+else
+    echo "⚠️ 官方下载失败，正在尝试镜像..."
+    # 使用 ghproxy.com 加速（国内常用）
+    MIRROR_URL="https://ghproxy.com/https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}${EASYTIER_VERSION}.zip"
+    if wget -q --show-progress -O /tmp/easytier-dl/easytier.zip "$MIRROR_URL"; then
+        echo "✅ 镜像下载成功"
+    else
+        echo "❌ 所有源均下载失败，请检查网络"
+        rm -rf /tmp/easytier-dl
+        exit 1
+    fi
+fi
+
+# 4. 解压与安装
+if unzip -l /tmp/easytier-dl/easytier.zip > /dev/null 2>&1; then
     unzip -o /tmp/easytier-dl/easytier.zip -d /tmp/easytier-dl/
     
-    # 查找解压后的 easytier-core 二进制文件
-    CORE_BIN=$(find /tmp/easytier-dl -name "easytier-core" -type f | head -n1)
-    CLI_BIN=$(find /tmp/easytier-dl -name "easytier-cli" -type f | head -n1)
+    # 查找文件（网页解析确认文件名包含架构后缀）
+    CORE_BIN=$(find /tmp/easytier-dl -name "easytier-core*" -type f | head -n1)
+    CLI_BIN=$(find /tmp/easytier-dl -name "easytier-cli*" -type f | head -n1)
     
     if [ -n "$CORE_BIN" ]; then
-        mkdir -p files/usr/bin
-        cp -f "$CORE_BIN" files/usr/bin/easytier-core
-        chmod +x files/usr/bin/easytier-core
-        echo ">>> ✅ easytier-core 已安装到 files/usr/bin/"
+        mkdir -p "${BASE_FILES}/usr/bin"
+        cp -f "$CORE_BIN" "${BASE_FILES}/usr/bin/easytier-core"
+        chmod +x "${BASE_FILES}/usr/bin/easytier-core"
+        echo ">>> ✅ easytier-core 已安装"
+    else
+        echo "❌ 未找到 easytier-core 文件，请检查压缩包结构"
+        exit 1
     fi
-    
+
     if [ -n "$CLI_BIN" ]; then
-        cp -f "$CLI_BIN" files/usr/bin/easytier-cli
-        chmod +x files/usr/bin/easytier-cli
-        echo ">>> ✅ easytier-cli 已安装到 files/usr/bin/"
+        cp -f "$CLI_BIN" "${BASE_FILES}/usr/bin/easytier-cli"
+        chmod +x "${BASE_FILES}/usr/bin/easytier-cli"
+        echo ">>> ✅ easytier-cli 已安装"
     fi
-    
-    # 清理临时文件
+
+    # 清理
     rm -rf /tmp/easytier-dl
 else
-    echo "!!! ❌ EasyTier 下载失败，请检查网络或版本号"
+    echo "❌ 下载的文件不是有效的 ZIP 格式"
+    rm -rf /tmp/easytier-dl
+    exit 1
 fi
+
 
 
 echo "🎉 diy.sh 全部执行完毕！"
