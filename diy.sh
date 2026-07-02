@@ -18,7 +18,7 @@ fi
 
 # ================= [ 1. Navidrome 二进制文件下载 ] =================
 echo "🎵 1. 注入 Navidrome 二进制文件..."
-NAVIDROME_VERSION="0.59.0"
+NAVIDROME_VERSION="0.62.0"
 NAVIDROME_ARCH="arm64"
 
 mkdir -p "${BASE_FILES}/usr/bin"
@@ -41,9 +41,7 @@ rm -f /tmp/lucky.tar.gz
 chmod +x "${BASE_FILES}/usr/bin/lucky"
 echo "✅ Lucky 二进制已注入 /usr/bin/lucky"
 
-# ==========================================
-# EasyTier 二进制下载集成
-# ==========================================
+# ========== EasyTier 二进制下载集成 ==========
 EASYTIER_VERSION="v2.6.4"  # 可修改为指定版本，留空则自动获取最新版
 TARGET_ARCH="aarch64"       # 根据目标设备修改: x86_64 / aarch64 / armv7 / mipsel 等
 
