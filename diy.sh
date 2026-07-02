@@ -45,7 +45,7 @@ echo "✅ Lucky 二进制已注入 /usr/bin/lucky"
 # EasyTier 二进制下载集成
 # ==========================================
 EASYTIER_VERSION="v2.6.4"  # 可修改为指定版本，留空则自动获取最新版
-TARGET_ARCH="arm64"       # 根据目标设备修改: x86_64 / aarch64 / armv7 / mipsel 等
+TARGET_ARCH="aarch64"       # 根据目标设备修改: x86_64 / aarch64 / armv7 / mipsel 等
 
 echo ">>> 开始下载 EasyTier ${EASYTIER_VERSION} (${TARGET_ARCH})..."
 
