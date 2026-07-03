@@ -174,7 +174,7 @@ jobs:
           tag_name: s905x3-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
           name: S905X3 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            自动编译的 ImmortalWrt 固件 (with ImageBuilder)
+            ImmortalWrt 固件 (with ImageBuilder)
             - 版本: ${{ inputs.immortalwrt_version }}
             - 设备: ${{ inputs.device_board }}
             
@@ -184,7 +184,7 @@ jobs:
             - custom-packages: 由 ImageBuilder 原生 opkg 机制安装
             
             ### ⚠️ 刷机提示
-            1. 默认 IP: 192.168.30.254
+            1. 默认 IP: 192.168.30.100
             2. 若修改 DTB，请编辑 BOOT 分区的 /boot/uEnv.txt
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
