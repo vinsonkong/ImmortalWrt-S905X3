@@ -21,7 +21,6 @@ on:
         required: true
         default: 'jcg_q30'
 
-# ✅ 统一在此处定义自定义资源路径变量
 env:
   CUSTOM_FILES_DIR: "custom-filesjcq"
   CUSTOM_PACKAGES_DIR: "custom-packages"
@@ -82,11 +81,9 @@ jobs:
       - name: Execute DIY Script
         run: |
           if [ -f "./${{ env.DIY_SCRIPT }}" ]; then
-            echo "🔧 开始执行 ${{ env.DIY_SCRIPT }} 二进制注入..."
+            echo "🔧 开始执行 ${{ env.DIY_SCRIPT }} ..."
             chmod +x "./${{ env.DIY_SCRIPT }}"
-            cd openwrt
-            "../${{ env.DIY_SCRIPT }}"
-            cd ..
+            cd openwrt && "../${{ env.DIY_SCRIPT }}" && cd ..
             echo "✅ ${{ env.DIY_SCRIPT }} 执行完毕"
           else
             echo "⚠️ 未找到 ${{ env.DIY_SCRIPT }}，跳过"
@@ -94,95 +91,100 @@ jobs:
 
       - name: Inject Custom Files & Packages
         run: |
-          echo "📦 开始注入自定义文件与包..."
-          echo "📂 文件目录: ${{ env.CUSTOM_FILES_DIR }}"
-          echo "📦 插件目录: ${{ env.CUSTOM_PACKAGES_DIR }}"
+          echo "📦 注入自定义资源..."
+          mkdir -p ./openwrt/packages ./openwrt/files
           
-          mkdir -p ./openwrt/packages
           if [ -d "./${{ env.CUSTOM_PACKAGES_DIR }}" ] && ls ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk 1>/dev/null 2>&1; then
             cp ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk ./openwrt/packages/
-            echo "✅ 自定义 ipk 已复制到 openwrt/packages/"
-          else
-            echo "⚠️ 无 ${{ env.CUSTOM_PACKAGES_DIR }} 或无 ipk 文件，跳过"
+            echo "✅ 自定义 ipk 已复制"
           fi
           
-          mkdir -p ./openwrt/files
           if [ -d "./${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A ./${{ env.CUSTOM_FILES_DIR }} 2>/dev/null)" ]; then
             cp -r ./${{ env.CUSTOM_FILES_DIR }}/* ./openwrt/files/
-            echo "✅ ${{ env.CUSTOM_FILES_DIR }} 已注入"
-          else
-            echo "⚠️ 无 ${{ env.CUSTOM_FILES_DIR }} 或目录为空，跳过"
+            echo "✅ 自定义文件已注入"
           fi
           
-          echo "🔐 设置文件权限..."
           find ./openwrt/files -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
-          chmod -R +x ./openwrt/files/etc/init.d 2>/dev/null || true
-          chmod -R +x ./openwrt/files/etc/uci-defaults 2>/dev/null || true
-          chmod -R +x ./openwrt/files/etc/sh 2>/dev/null || true
+          chmod -R +x ./openwrt/files/etc/init.d ./openwrt/files/etc/uci-defaults ./openwrt/files/etc/sh 2>/dev/null || true
           chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
           chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
-          
-          echo "✅ 注入完成"
 
       - name: Build Firmware with Custom Config
+        id: build_firmware
         run: |
           cd openwrt
           
-          # ✅ 核心修复：将 make info 输出到临时文件，彻底避免 Broken pipe 错误
+          # Profile 智能探测
           INPUT_PROFILE="${{ inputs.target_profile }}"
-          FINAL_PROFILE=""
           INFO_FILE="/tmp/ib_profiles.txt"
-          
-          echo "🔍 正在获取可用 Profile 列表..."
           make info > "$INFO_FILE" 2>&1 || true
           
-          echo "🔍 正在验证 Profile: $INPUT_PROFILE ..."
           if grep -q "^$INPUT_PROFILE:" "$INFO_FILE"; then
             FINAL_PROFILE="$INPUT_PROFILE"
-            echo "✅ 精确匹配成功: $FINAL_PROFILE"
           else
-            echo "⚠️ 精确匹配失败，尝试模糊搜索包含 '$INPUT_PROFILE' 的 Profile..."
-            MATCHED=$(grep -iE "^${INPUT_PROFILE}(-pro|-ubootmod)?" "$INFO_FILE" | head -n 1 | cut -d':' -f1)
-            if [ -n "$MATCHED" ]; then
-              FINAL_PROFILE="$MATCHED"
-              echo "✅ 模糊匹配成功，实际使用 Profile: $FINAL_PROFILE"
-            else
-              echo "❌ 致命错误：在当前 ImmortalWrt ImageBuilder 中找不到任何与 '$INPUT_PROFILE' 相关的设备！"
-              echo "📋 当前可用的所有 mediatek/filogic Profile 列表："
-              grep -E "^[a-zA-Z0-9_-]+:" "$INFO_FILE" || true
-              rm -f "$INFO_FILE"
-              exit 1
-            fi
+            FINAL_PROFILE=$(grep -iE "^${INPUT_PROFILE}(-pro|-ubootmod)?" "$INFO_FILE" | head -n 1 | cut -d':' -f1)
           fi
           rm -f "$INFO_FILE"
+          
+          if [ -z "$FINAL_PROFILE" ]; then
+            echo "❌ 找不到匹配的 Profile: $INPUT_PROFILE"
+            exit 1
+          fi
+          echo "✅ 使用 Profile: $FINAL_PROFILE"
           
           # 读取包列表
           PACKAGES_LIST=""
           if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
             while IFS= read -r line; do
               case "$line" in \#*|"") continue ;; esac
-              PACKAGES_LIST="$PACKAGES_LIST $line"
+              pkg=$(echo "$line" | xargs)
+              [ -n "$pkg" ] && PACKAGES_LIST="$PACKAGES_LIST $pkg"
             done < "../${{ env.PACKAGES_LIST_FILE }}"
-            echo "📋 从 ${{ env.PACKAGES_LIST_FILE }} 读取包列表"
           else
-            PACKAGES_LIST="luci luci-app-ttyd curl wget"
-            echo "⚠️ 未找到 ${{ env.PACKAGES_LIST_FILE }}，使用默认包列表"
+            PACKAGES_LIST="luci luci-app-ttyd curl wget-ssl"
           fi
           
-          echo "📦 opkg 将安装: $(echo $PACKAGES_LIST | wc -w) 个包"
-          echo "🚀 开始编译固件..."
+          echo "📦 包列表: $PACKAGES_LIST"
+          echo "🚀 开始编译..."
           
+          # ✅ 关键：使用 set -e 确保编译失败时立即退出
+          set -e
           make image PROFILE="$FINAL_PROFILE" FILES="files" PACKAGES="$PACKAGES_LIST" V=s
 
+      # ✅ 新增：编译产物诊断步骤
+      - name: Diagnose Build Output
+        if: always()
+        run: |
+          echo "🔍 检查编译产物..."
+          FIRMWARE_DIR="openwrt/bin/targets/mediatek/filogic"
+          
+          if [ -d "$FIRMWARE_DIR" ]; then
+            echo "📂 目录内容:"
+            ls -lah "$FIRMWARE_DIR/"
+            
+            SYSUPGRADE_COUNT=$(find "$FIRMWARE_DIR" -name "*sysupgrade.bin" 2>/dev/null | wc -l)
+            echo "📊 sysupgrade.bin 数量: $SYSUPGRADE_COUNT"
+            
+            if [ "$SYSUPGRADE_COUNT" -eq 0 ]; then
+              echo "⚠️ 未找到 sysupgrade.bin，可能原因:"
+              echo "   1. 编译过程中出现依赖冲突（请查看上方 Build 步骤日志中的 Collected errors）"
+              echo "   2. Profile 名称不匹配导致生成了其他命名格式的固件"
+              echo "   3. 闪存空间不足导致镜像生成被跳过"
+            fi
+          else
+            echo "❌ 固件输出目录不存在，编译可能在早期阶段就已失败"
+          fi
+
       - name: Upload Firmware to Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.target_profile }}
           path: openwrt/bin/targets/mediatek/filogic/*sysupgrade.bin
 
       - name: Upload Firmware to Release
-        uses: softprops/action-gh-release@v2
         if: success()
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -198,11 +200,9 @@ jobs:
             - 自定义文件: ${{ env.CUSTOM_FILES_DIR }}
             - 自定义插件: ${{ env.CUSTOM_PACKAGES_DIR }}
             - 包列表: ${{ env.PACKAGES_LIST_FILE }}
-            - 📂 `/etc/sh/` 目录下的脚本已自动赋予可执行权限
             
             ### ⚠️ 刷机提示
-            1. 请使用 U-Boot 网页端或 Breed 刷入 `sysupgrade.bin`。
-            2. ImmortalWrt 默认 IP 通常为 192.168.1.1，密码为 password。
-            3. 若需保留配置，请在后台“备份/升级”页面勾选“保留配置”。
+            1. 请使用 U-Boot 网页端刷入 `sysupgrade.bin`
+            2. 默认 IP: 192.168.1.1 / 密码: password
           files: |
             openwrt/bin/targets/mediatek/filogic/*sysupgrade.bin
