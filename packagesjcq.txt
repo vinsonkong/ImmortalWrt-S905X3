@@ -1,4 +1,4 @@
-# === JCG Q30 Pro 官方固件基础包列表 ===
+# === JCG Q30 Pro ImmortalWrt 定制包列表 ===
 
 # Web 管理界面 (必装)
 luci
@@ -25,21 +25,26 @@ dropbear
 opkg
 ca-bundle
 ca-certificates
-libustream-mbedtls
 resolveip
 
 # WiFi 驱动 (MT7981 Filogic 平台核心)
 kmod-mt7981-firmware
-wpad-basic-mbedtls
 hostapd-common
 iwinfo
 
-# 自定义添加
+# ⚠️ 关键修复区：SSL/WiFi 后端与自定义插件
+# 保持默认 mbedtls 后端（不要添加 openssl 相关包）
+libustream-mbedtls
+wpad-basic-mbedtls
+
+# 自定义添加工具与插件
 bash
 wwan
 curl
-wget
+wget-ssl
 openssh-sftp-server
+
+# LuCI 应用及中文语言包
 luci-app-upnp
 luci-i18n-upnp-zh-cn
 luci-app-firewall
@@ -51,6 +56,3 @@ lucky
 luci-app-lucky
 luci-i18n-lucky-zh-cn
 luci-i18n-nfs-zh-cn
-
-
-
