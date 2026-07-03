@@ -136,8 +136,8 @@ libffmpeg-full
 luci-app-easytier
 luci-app-zerotier
 luci-i18n-zerotier-zh-cn
-luci-app-tailscale
-luci-i18n-tailscale-zh-cn
+# luci-app-tailscale
+# luci-i18n-tailscale-zh-cn
 
 # === DDNS 动态域名解析 ===
 # luci-app-ddns-go
