@@ -1,25 +1,20 @@
-name: Build OpenWrt JCG Q30
+name: Build ImmortalWrt JCG Q30
 
 on:
   workflow_dispatch:
     inputs:
-      openwrt_version:
-        description: 'OpenWrt Version'
+      immortalwrt_version:
+        description: 'ImmortalWrt Version'
         required: true
-        default: '23.05.5'
+        default: '24.10.2'
         type: choice
         options:
           - 23.05.4
           - 23.05.5
           - 23.05.6
-          - 23.05.7
           - 24.10.0
           - 24.10.1
           - 24.10.2
-          - 24.10.3
-          - 24.10.4
-          - 24.10.5
-          - 24.10.6
       target_profile:
         description: 'Target Profile (Device)'
         required: true
@@ -35,7 +30,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build for ${{ inputs.target_profile }}
+    name: Build ImmortalWrt for ${{ inputs.target_profile }}
 
     steps:
       - name: Checkout
@@ -60,18 +55,21 @@ jobs:
           sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
             libssl-dev gettext unzip zlib1g-dev wget file zstd xz-utils curl perl coreutils
 
-      - name: Download & Extract OpenWrt ImageBuilder
+      - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
-          VERSION=${{ inputs.openwrt_version }}
-          BASE_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/mediatek/filogic"
+          VERSION=${{ inputs.immortalwrt_version }}
+          # ✅ ImmortalWrt 下载地址与命名规则
+          BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/mediatek/filogic"
           
+          # ImmortalWrt 24.10+ 使用 .tar.zst，23.05 使用 .tar.xz
           if [[ "$VERSION" == "24."* ]]; then
             EXT="tar.zst"
           else
             EXT="tar.xz"
           fi
           
-          BUILDER_URL="${BASE_URL}/openwrt-imagebuilder-${VERSION}-mediatek-filogic.Linux-x86_64.${EXT}"
+          # ✅ ImmortalWrt ImageBuilder 文件名前缀为 immortalwrt-imagebuilder
+          BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-mediatek-filogic.Linux-x86_64.${EXT}"
           echo "Downloading: $BUILDER_URL"
           wget -q "$BUILDER_URL" -O "imagebuilder.${EXT}"
           
@@ -81,7 +79,7 @@ jobs:
             tar -xf "imagebuilder.${EXT}"
           fi
           
-          mv openwrt-imagebuilder-*-mediatek-filogic.Linux-x86_64 openwrt
+          mv immortalwrt-imagebuilder-*-mediatek-filogic.Linux-x86_64 openwrt
 
       - name: Execute DIY Script
         run: |
@@ -134,7 +132,7 @@ jobs:
         run: |
           cd openwrt
           
-          # ✅ 核心修复：自动探测并匹配正确的 Profile 名称
+          # ✅ 核心：自动探测并匹配正确的 Profile 名称（兼容 ImmortalWrt 命名）
           INPUT_PROFILE="${{ inputs.target_profile }}"
           FINAL_PROFILE=""
           
@@ -144,14 +142,14 @@ jobs:
             echo "✅ 精确匹配成功: $FINAL_PROFILE"
           else
             echo "⚠️ 精确匹配失败，尝试模糊搜索包含 '$INPUT_PROFILE' 的 Profile..."
-            # 优先匹配带 pro 或 ubootmod 后缀的名称
-            MATCHED=$(make info | grep -E "^${INPUT_PROFILE}(-pro|-ubootmod)?" | head -n 1 | cut -d':' -f1)
+            # ImmortalWrt 常见变体：jcg_q30-pro, jcg_q30-ubootmod, jcg-q30-pro
+            MATCHED=$(make info | grep -iE "^${INPUT_PROFILE}(-pro|-ubootmod)?" | head -n 1 | cut -d':' -f1)
             if [ -n "$MATCHED" ]; then
               FINAL_PROFILE="$MATCHED"
               echo "✅ 模糊匹配成功，实际使用 Profile: $FINAL_PROFILE"
             else
-              echo "❌ 致命错误：在当前 ImageBuilder 中找不到任何与 '$INPUT_PROFILE' 相关的设备！"
-              echo "📋 当前可用的所有 Profile 列表："
+              echo "❌ 致命错误：在当前 ImmortalWrt ImageBuilder 中找不到任何与 '$INPUT_PROFILE' 相关的设备！"
+              echo "📋 当前可用的所有 mediatek/filogic Profile 列表："
               make info | grep -E "^[a-zA-Z0-9_-]+:" || true
               exit 1
             fi
@@ -166,6 +164,7 @@ jobs:
             done < "../${{ env.PACKAGES_LIST_FILE }}"
             echo "📋 从 ${{ env.PACKAGES_LIST_FILE }} 读取包列表"
           else
+            # ImmortalWrt 默认已包含较多中文组件，此处仅补充基础工具
             PACKAGES_LIST="luci luci-app-ttyd curl wget"
             echo "⚠️ 未找到 ${{ env.PACKAGES_LIST_FILE }}，使用默认包列表"
           fi
@@ -178,7 +177,7 @@ jobs:
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OpenWrt-${{ inputs.openwrt_version }}-${{ inputs.target_profile }}
+          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.target_profile }}
           path: openwrt/bin/targets/mediatek/filogic/*sysupgrade.bin
 
       - name: Upload Firmware to Release
@@ -187,11 +186,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ inputs.target_profile }}-${{ inputs.openwrt_version }}-build${{ github.run_number }}
-          name: JCG Q30 ${{ inputs.openwrt_version }} (Build ${{ github.run_number }})
+          tag_name: iwrt-${{ inputs.target_profile }}-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: ImmortalWrt JCG Q30 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            OpenWrt 固件 (JCG Q30 Pro)
-            - 版本: ${{ inputs.openwrt_version }}
+            ImmortalWrt 固件 (JCG Q30 Pro)
+            - 版本: ${{ inputs.immortalwrt_version }}
             - 设备: ${{ inputs.target_profile }}
             
             ### 📁 自定义内容
@@ -203,6 +202,7 @@ jobs:
             
             ### ⚠️ 刷机提示
             1. 请使用 U-Boot 网页端或 Breed 刷入 `sysupgrade.bin`。
-            2. 若需保留配置，请在后台“备份/升级”页面勾选“保留配置”。
+            2. ImmortalWrt 默认 IP 通常为 192.168.1.1，密码为 password。
+            3. 若需保留配置，请在后台“备份/升级”页面勾选“保留配置”。
           files: |
             openwrt/bin/targets/mediatek/filogic/*sysupgrade.bin
