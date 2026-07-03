@@ -147,11 +147,10 @@ jobs:
           echo "📦 包列表: $PACKAGES_LIST"
           echo "🚀 开始编译..."
           
-          # ✅ 关键：使用 set -e 确保编译失败时立即退出
           set -e
           make image PROFILE="$FINAL_PROFILE" FILES="files" PACKAGES="$PACKAGES_LIST" V=s
 
-      # ✅ 新增：编译产物诊断步骤
+      # ✅ 修复：同时检测 .bin 和 .itb 格式的 sysupgrade 文件
       - name: Diagnose Build Output
         if: always()
         run: |
@@ -162,26 +161,31 @@ jobs:
             echo "📂 目录内容:"
             ls -lah "$FIRMWARE_DIR/"
             
-            SYSUPGRADE_COUNT=$(find "$FIRMWARE_DIR" -name "*sysupgrade.bin" 2>/dev/null | wc -l)
-            echo "📊 sysupgrade.bin 数量: $SYSUPGRADE_COUNT"
+            SYSUPGRADE_COUNT=$(find "$FIRMWARE_DIR" $ -name "*sysupgrade.bin" -o -name "*sysupgrade.itb" $ 2>/dev/null | wc -l)
+            echo "📊 sysupgrade 固件数量: $SYSUPGRADE_COUNT"
             
             if [ "$SYSUPGRADE_COUNT" -eq 0 ]; then
-              echo "⚠️ 未找到 sysupgrade.bin，可能原因:"
-              echo "   1. 编译过程中出现依赖冲突（请查看上方 Build 步骤日志中的 Collected errors）"
-              echo "   2. Profile 名称不匹配导致生成了其他命名格式的固件"
-              echo "   3. 闪存空间不足导致镜像生成被跳过"
+              echo "⚠️ 未找到 sysupgrade 固件，请检查上方 Build 步骤日志"
+            else
+              echo "✅ 固件生成成功！"
             fi
           else
             echo "❌ 固件输出目录不存在，编译可能在早期阶段就已失败"
           fi
 
+      # ✅ 修复：上传所有关键固件文件（包含 itb、fip、preloader）
       - name: Upload Firmware to Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.target_profile }}
-          path: openwrt/bin/targets/mediatek/filogic/*sysupgrade.bin
+          path: |
+            openwrt/bin/targets/mediatek/filogic/*sysupgrade.*
+            openwrt/bin/targets/mediatek/filogic/*-bl31-uboot.fip
+            openwrt/bin/targets/mediatek/filogic/*-preloader.bin
+            openwrt/bin/targets/mediatek/filogic/*.manifest
 
+      # ✅ 修复：Release 同样适配多格式固件
       - name: Upload Firmware to Release
         if: success()
         uses: softprops/action-gh-release@v2
@@ -202,7 +206,11 @@ jobs:
             - 包列表: ${{ env.PACKAGES_LIST_FILE }}
             
             ### ⚠️ 刷机提示
-            1. 请使用 U-Boot 网页端刷入 `sysupgrade.bin`
-            2. 默认 IP: 192.168.1.1 / 密码: password
+            1. NAND 设备升级请使用 `*sysupgrade.itb` 文件
+            2. 如需更新引导，请使用对应的 `preloader.bin` 和 `bl31-uboot.fip`
+            3. 默认 IP: 192.168.1.1 / 密码: password
           files: |
-            openwrt/bin/targets/mediatek/filogic/*sysupgrade.bin
+            openwrt/bin/targets/mediatek/filogic/*sysupgrade.*
+            openwrt/bin/targets/mediatek/filogic/*-bl31-uboot.fip
+            openwrt/bin/targets/mediatek/filogic/*-preloader.bin
+
