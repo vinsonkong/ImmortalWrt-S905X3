@@ -75,7 +75,7 @@ jobs:
       - name: Execute diy.sh for Binary Injection
         run: |
           if [ -f "./diyjcq.sh" ]; then
-            echo "🔧 开始执行 diy.sh 二进制注入..."
+            echo "🔧 开始执行 diyjcq.sh 二进制注入..."
             chmod +x ./diyjcq.sh
             cd openwrt
             ../diyjcq.sh
@@ -91,8 +91,8 @@ jobs:
           
           # 1. 处理自定义 ipk 包
           mkdir -p ./openwrt/packages
-          if ls ./custom-packagesjcq/*.ipk 1>/dev/null 2>&1; then
-            cp ./custom-packagesjcq/*.ipk ./openwrt/packages/
+          if ls ./custom-packages/*.ipk 1>/dev/null 2>&1; then
+            cp ./custom-packages/*.ipk ./openwrt/packages/
             echo "✅ 自定义 ipk 已复制到 openwrt/packages/"
           else
             echo "⚠️ 无自定义 ipk，跳过"
