@@ -1,6 +1,6 @@
 
 config system
-	option hostname 'X96max'
+	option hostname 'X96maxPlus'
 	option timezone 'CST-8'
 	option ttylogin '0'
 	option log_size '128'
