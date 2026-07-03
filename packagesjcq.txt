@@ -1,6 +1,11 @@
 # === JCG Q30 Pro ImmortalWrt 定制包列表 ===
 
-# Web 管理界面 (必装)
+# ⚠️ 核心修复：强制卸载 openssl 变体，防止第三方插件拉取导致冲突
+-libustream-openssl
+-wpad-openssl
+-wpad-basic-openssl
+
+# Web 管理界面
 luci
 luci-base
 luci-mod-admin-full
@@ -19,25 +24,22 @@ odhcpd-ipv6only
 ppp
 ppp-mod-pppoe
 
-# 基础系统工具
+# 基础系统工具 (保持 mbedtls)
 busybox
 dropbear
 opkg
 ca-bundle
 ca-certificates
+libustream-mbedtls
 resolveip
 
-# WiFi 驱动 (MT7981 Filogic 平台核心)
+# WiFi 驱动 (保持 mbedtls)
 kmod-mt7981-firmware
+wpad-basic-mbedtls
 hostapd-common
 iwinfo
 
-# ⚠️ 关键修复区：SSL/WiFi 后端与自定义插件
-# 保持默认 mbedtls 后端（不要添加 openssl 相关包）
-libustream-mbedtls
-wpad-basic-mbedtls
-
-# 自定义添加工具与插件
+# 自定义添加
 bash
 wwan
 curl
@@ -55,4 +57,5 @@ luci-i18n-zerotier-zh-cn
 lucky
 luci-app-lucky
 luci-i18n-lucky-zh-cn
+luci-app-nfs
 luci-i18n-nfs-zh-cn
