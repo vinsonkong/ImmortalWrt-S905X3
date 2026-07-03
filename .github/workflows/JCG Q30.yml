@@ -12,9 +12,14 @@ on:
           - 23.05.4
           - 23.05.5
           - 23.05.6
+          - 23.05.7
           - 24.10.0
           - 24.10.1
           - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
       target_profile:
         description: 'Target Profile (Device)'
         required: true
@@ -23,7 +28,7 @@ on:
 # ✅ 统一在此处定义自定义资源路径变量
 env:
   CUSTOM_FILES_DIR: "custom-filesjcq"
-  CUSTOM_PACKAGES_DIR: "custom-packages"
+  CUSTOM_PACKAGES_DIR: "custom-packagesjcq"
   PACKAGES_LIST_FILE: "packagesjcq.txt"
   DIY_SCRIPT: "diyjcq.sh"
 
@@ -129,6 +134,30 @@ jobs:
         run: |
           cd openwrt
           
+          # ✅ 核心修复：自动探测并匹配正确的 Profile 名称
+          INPUT_PROFILE="${{ inputs.target_profile }}"
+          FINAL_PROFILE=""
+          
+          echo "🔍 正在验证 Profile: $INPUT_PROFILE ..."
+          if make info | grep -q "^$INPUT_PROFILE:"; then
+            FINAL_PROFILE="$INPUT_PROFILE"
+            echo "✅ 精确匹配成功: $FINAL_PROFILE"
+          else
+            echo "⚠️ 精确匹配失败，尝试模糊搜索包含 '$INPUT_PROFILE' 的 Profile..."
+            # 优先匹配带 pro 或 ubootmod 后缀的名称
+            MATCHED=$(make info | grep -E "^${INPUT_PROFILE}(-pro|-ubootmod)?" | head -n 1 | cut -d':' -f1)
+            if [ -n "$MATCHED" ]; then
+              FINAL_PROFILE="$MATCHED"
+              echo "✅ 模糊匹配成功，实际使用 Profile: $FINAL_PROFILE"
+            else
+              echo "❌ 致命错误：在当前 ImageBuilder 中找不到任何与 '$INPUT_PROFILE' 相关的设备！"
+              echo "📋 当前可用的所有 Profile 列表："
+              make info | grep -E "^[a-zA-Z0-9_-]+:" || true
+              exit 1
+            fi
+          fi
+          
+          # 读取包列表
           PACKAGES_LIST=""
           if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
             while IFS= read -r line; do
@@ -142,9 +171,9 @@ jobs:
           fi
           
           echo "📦 opkg 将安装: $(echo $PACKAGES_LIST | wc -w) 个包"
-          echo "📋 包列表: $PACKAGES_LIST"
+          echo "🚀 开始编译固件..."
           
-          make image PROFILE=${{ inputs.target_profile }} FILES="files" PACKAGES="$PACKAGES_LIST" V=s
+          make image PROFILE="$FINAL_PROFILE" FILES="files" PACKAGES="$PACKAGES_LIST" V=s
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
