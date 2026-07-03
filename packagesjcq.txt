@@ -8,6 +8,7 @@ luci-mod-network
 luci-mod-status
 luci-mod-system
 luci-theme-argon
+luci-i18n-base-zh-cn
 
 # 核心网络服务
 dnsmasq-full
@@ -35,7 +36,21 @@ iwinfo
 
 # 自定义添加
 bash
-
+wwan
+curl
+wget
+openssh-sftp-server
+luci-app-upnp
+luci-i18n-upnp-zh-cn
+luci-app-firewall
+luci-i18n-firewall-zh-cn
+luci-app-easytier
+luci-app-zerotier
+luci-i18n-zerotier-zh-cn
+lucky
+luci-app-lucky
+luci-i18n-lucky-zh-cn
+luci-i18n-nfs-zh-cn
 
 
 
