@@ -119,7 +119,7 @@ jobs:
           fi
                     
           echo "🔐 设置文件权限..."
-          chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d 2>/dev/null || true
+          chmod -R +x ./openwrt/files/usr/bin ./openwrt/files/etc/init.d ./openwrt/files/etc/sh 2>/dev/null || true
           chmod +x ./openwrt/files/etc/rc.local 2>/dev/null || true
           chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
           chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
