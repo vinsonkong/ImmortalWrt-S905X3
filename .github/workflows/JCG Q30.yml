@@ -6,20 +6,15 @@ on:
       immortalwrt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '23.05.7'
+        default: '24.10.2'
         type: choice
         options:
           - 23.05.4
           - 23.05.5
           - 23.05.6
-          - 23.05.7
           - 24.10.0
           - 24.10.1
           - 24.10.2
-          - 24.10.3
-          - 24.10.4
-          - 24.10.5
-          - 24.10.6
       target_profile:
         description: 'Target Profile (Device)'
         required: true
@@ -28,7 +23,7 @@ on:
 # ✅ 统一在此处定义自定义资源路径变量
 env:
   CUSTOM_FILES_DIR: "custom-filesjcq"
-  CUSTOM_PACKAGES_DIR: "custom-packages"
+  CUSTOM_PACKAGES_DIR: "custom-packagesjcq"
   PACKAGES_LIST_FILE: "packagesjcq.txt"
   DIY_SCRIPT: "diyjcq.sh"
 
@@ -63,17 +58,14 @@ jobs:
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
           VERSION=${{ inputs.immortalwrt_version }}
-          # ✅ ImmortalWrt 下载地址与命名规则
           BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/mediatek/filogic"
           
-          # ImmortalWrt 24.10+ 使用 .tar.zst，23.05 使用 .tar.xz
           if [[ "$VERSION" == "24."* ]]; then
             EXT="tar.zst"
           else
             EXT="tar.xz"
           fi
           
-          # ✅ ImmortalWrt ImageBuilder 文件名前缀为 immortalwrt-imagebuilder
           BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-mediatek-filogic.Linux-x86_64.${EXT}"
           echo "Downloading: $BUILDER_URL"
           wget -q "$BUILDER_URL" -O "imagebuilder.${EXT}"
@@ -105,7 +97,6 @@ jobs:
           echo "📂 文件目录: ${{ env.CUSTOM_FILES_DIR }}"
           echo "📦 插件目录: ${{ env.CUSTOM_PACKAGES_DIR }}"
           
-          # 1. 处理自定义 ipk 包
           mkdir -p ./openwrt/packages
           if [ -d "./${{ env.CUSTOM_PACKAGES_DIR }}" ] && ls ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk 1>/dev/null 2>&1; then
             cp ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk ./openwrt/packages/
@@ -114,7 +105,6 @@ jobs:
             echo "⚠️ 无 ${{ env.CUSTOM_PACKAGES_DIR }} 或无 ipk 文件，跳过"
           fi
           
-          # 2. 处理自定义文件
           mkdir -p ./openwrt/files
           if [ -d "./${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A ./${{ env.CUSTOM_FILES_DIR }} 2>/dev/null)" ]; then
             cp -r ./${{ env.CUSTOM_FILES_DIR }}/* ./openwrt/files/
@@ -137,28 +127,33 @@ jobs:
         run: |
           cd openwrt
           
-          # ✅ 核心：自动探测并匹配正确的 Profile 名称（兼容 ImmortalWrt 命名）
+          # ✅ 核心修复：将 make info 输出到临时文件，彻底避免 Broken pipe 错误
           INPUT_PROFILE="${{ inputs.target_profile }}"
           FINAL_PROFILE=""
+          INFO_FILE="/tmp/ib_profiles.txt"
+          
+          echo "🔍 正在获取可用 Profile 列表..."
+          make info > "$INFO_FILE" 2>&1 || true
           
           echo "🔍 正在验证 Profile: $INPUT_PROFILE ..."
-          if make info | grep -q "^$INPUT_PROFILE:"; then
+          if grep -q "^$INPUT_PROFILE:" "$INFO_FILE"; then
             FINAL_PROFILE="$INPUT_PROFILE"
             echo "✅ 精确匹配成功: $FINAL_PROFILE"
           else
             echo "⚠️ 精确匹配失败，尝试模糊搜索包含 '$INPUT_PROFILE' 的 Profile..."
-            # ImmortalWrt 常见变体：jcg_q30-pro, jcg_q30-ubootmod, jcg-q30-pro
-            MATCHED=$(make info | grep -iE "^${INPUT_PROFILE}(-pro|-ubootmod)?" | head -n 1 | cut -d':' -f1)
+            MATCHED=$(grep -iE "^${INPUT_PROFILE}(-pro|-ubootmod)?" "$INFO_FILE" | head -n 1 | cut -d':' -f1)
             if [ -n "$MATCHED" ]; then
               FINAL_PROFILE="$MATCHED"
               echo "✅ 模糊匹配成功，实际使用 Profile: $FINAL_PROFILE"
             else
               echo "❌ 致命错误：在当前 ImmortalWrt ImageBuilder 中找不到任何与 '$INPUT_PROFILE' 相关的设备！"
               echo "📋 当前可用的所有 mediatek/filogic Profile 列表："
-              make info | grep -E "^[a-zA-Z0-9_-]+:" || true
+              grep -E "^[a-zA-Z0-9_-]+:" "$INFO_FILE" || true
+              rm -f "$INFO_FILE"
               exit 1
             fi
           fi
+          rm -f "$INFO_FILE"
           
           # 读取包列表
           PACKAGES_LIST=""
@@ -169,7 +164,6 @@ jobs:
             done < "../${{ env.PACKAGES_LIST_FILE }}"
             echo "📋 从 ${{ env.PACKAGES_LIST_FILE }} 读取包列表"
           else
-            # ImmortalWrt 默认已包含较多中文组件，此处仅补充基础工具
             PACKAGES_LIST="luci luci-app-ttyd curl wget"
             echo "⚠️ 未找到 ${{ env.PACKAGES_LIST_FILE }}，使用默认包列表"
           fi
