@@ -1,0 +1,12 @@
+
+config gowebdav 'config'
+	option root_dir '/mnt'
+	option read_only '0'
+	option use_https '0'
+	option enable '1'
+	option username 'vinsonkong'
+	option password '14371250kong'
+	option allow_wan '1'
+	option listen_port '39334'
+
+

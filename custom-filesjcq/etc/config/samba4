@@ -1,0 +1,18 @@
+
+config samba
+	option workgroup 'WORKGROUP'
+	option charset 'UTF-8'
+	option description 'Samba on OpenWRT'
+	option allow_legacy_protocols '1'
+
+config sambashare
+	option name 'x96maxQ2'
+	option path '/mnt/mmcblk2p4'
+	option read_only 'no'
+	option force_root '1'
+	option users 'vinsonkong'
+	option guest_ok 'yes'
+	option inherit_owner 'yes'
+	option create_mask '0666'
+	option dir_mask '0777'
+

@@ -1,0 +1,21 @@
+
+config share
+	option enabled '0'
+	option path '/mnt'
+	option clients '*'
+	option options 'rw,sync,root_squash,all_squash,insecure,no_subtree_check'
+
+config mount
+	option enabled '0'
+	option source '10.0.30.100:/mnt/mmcblk2p4'
+	option target '/mnt/q2'
+	option options 'rw,nolock'
+	option delay '5'
+
+config mount
+	option enabled '1'
+	option source '10.0.30.100:/mnt/mmcblk2p4'
+	option target '/mnt/q2'
+	option options 'rw,nolock'
+	option delay '5'
+

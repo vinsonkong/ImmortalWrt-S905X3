@@ -1,0 +1,7 @@
+
+config filebrowser 'config'
+	option enabled '1'
+	option listen_port '39511'
+	option root_path '/'
+	option disable_exec '1'
+
