@@ -7,7 +7,7 @@ luci-mod-admin-full
 luci-mod-network
 luci-mod-status
 luci-mod-system
-luci-theme-bootstrap
+luci-theme-argon
 
 # 核心网络服务
 dnsmasq-full
@@ -32,3 +32,10 @@ kmod-mt7981-firmware
 wpad-basic-mbedtls
 hostapd-common
 iwinfo
+
+# 自定义添加
+bash
+
+
+
+
