@@ -1,0 +1,16 @@
+instance_name = "vinson"
+hostname = "JCQ-Q30"
+ipv4 = "10.0.30.11"
+
+[network_identity]
+network_name = "vinsonkong"
+network_secret = "14371250kong"
+
+[[peer]]
+uri = "tcp://ramon2009.dpdns.org:11010"
+
+[[peer]]
+uri = "tcp://39.108.52.138:11010"
+
+[[peer]]
+uri = "tcp://et1.fuis.top:11010"
