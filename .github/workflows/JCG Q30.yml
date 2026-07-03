@@ -74,15 +74,15 @@ jobs:
 
       - name: Execute diy.sh for Binary Injection
         run: |
-          if [ -f "./diy.sh" ]; then
+          if [ -f "./diyjcq.sh" ]; then
             echo "🔧 开始执行 diy.sh 二进制注入..."
-            chmod +x ./diy.sh
+            chmod +x ./diyjcq.sh
             cd openwrt
-            ../diy.sh
+            ../diyjcq.sh
             cd ..
-            echo "✅ diy.sh 执行完毕"
+            echo "✅ diyjcq.sh 执行完毕"
           else
-            echo "⚠️ 未找到 diy.sh，跳过"
+            echo "⚠️ 未找到 diyjcq.sh，跳过"
           fi
 
       - name: Inject Custom Files & Packages
@@ -91,8 +91,8 @@ jobs:
           
           # 1. 处理自定义 ipk 包
           mkdir -p ./openwrt/packages
-          if ls ./custom-packages/*.ipk 1>/dev/null 2>&1; then
-            cp ./custom-packages/*.ipk ./openwrt/packages/
+          if ls ./custom-packagesjcq/*.ipk 1>/dev/null 2>&1; then
+            cp ./custom-packagesjcq/*.ipk ./openwrt/packages/
             echo "✅ 自定义 ipk 已复制到 openwrt/packages/"
           else
             echo "⚠️ 无自定义 ipk，跳过"
@@ -100,11 +100,11 @@ jobs:
           
           # 2. 处理自定义文件 (custom-files)
           mkdir -p ./openwrt/files
-          if [ -d "./custom-files" ] && [ "$(ls -A ./custom-files 2>/dev/null)" ]; then
-            cp -r ./custom-files/* ./openwrt/files/
-            echo "✅ custom-files 已注入"
+          if [ -d "./custom-filesjcq" ] && [ "$(ls -A ./custom-files 2>/dev/null)" ]; then
+            cp -r ./custom-filesjcq/* ./openwrt/files/
+            echo "✅ custom-filesjcq 已注入"
           else
-            echo "⚠️ 无 custom-files，跳过"
+            echo "⚠️ 无 custom-filesjcq，跳过"
           fi
           
           echo "🔐 设置文件权限..."
@@ -126,13 +126,13 @@ jobs:
         run: |
           cd openwrt
           
-          # 读取 packages.txt (如果存在)
+          # 读取 packagesjcq.txt (如果存在)
           PACKAGES_LIST=""
-          if [ -f "../packages.txt" ]; then
+          if [ -f "../packagesjcq.txt" ]; then
             while IFS= read -r line; do
               case "$line" in \#*|"") continue ;; esac
               PACKAGES_LIST="$PACKAGES_LIST $line"
-            done < ../packages.txt
+            done < ../packagesjcq.txt
           else
             # 默认预装基础包
             PACKAGES_LIST="luci luci-app-ttyd curl wget"
@@ -164,9 +164,9 @@ jobs:
             - 设备: ${{ inputs.target_profile }}
             
             ### 📁 自定义内容
-            - diy.sh: 若存在则已执行
-            - custom-files: 已注入并覆盖系统同名文件
-            - custom-packages: 由 ImageBuilder 原生 opkg 机制安装
+            - diyjcq.sh: 若存在则已执行
+            - custom-filesjcq: 已注入并覆盖系统同名文件
+            - custom-packagesjcq: 由 ImageBuilder 原生 opkg 机制安装
             - 📂 `/etc/sh/` 目录下的脚本已自动赋予可执行权限
             
             ### ⚠️ 刷机提示
