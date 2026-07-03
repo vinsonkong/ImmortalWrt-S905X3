@@ -20,6 +20,13 @@ on:
         required: true
         default: 'jcg_q30'
 
+# ✅ 统一在此处定义自定义资源路径变量
+env:
+  CUSTOM_FILES_DIR: "custom-filesjcq"
+  CUSTOM_PACKAGES_DIR: "custom-packages"
+  PACKAGES_LIST_FILE: "packagesjcq.txt"
+  DIY_SCRIPT: "diyjcq.sh"
+
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -53,7 +60,6 @@ jobs:
           VERSION=${{ inputs.openwrt_version }}
           BASE_URL="https://downloads.openwrt.org/releases/${VERSION}/targets/mediatek/filogic"
           
-          # OpenWrt 24.10+ 使用 .tar.zst，旧版本使用 .tar.xz
           if [[ "$VERSION" == "24."* ]]; then
             EXT="tar.zst"
           else
@@ -72,51 +78,48 @@ jobs:
           
           mv openwrt-imagebuilder-*-mediatek-filogic.Linux-x86_64 openwrt
 
-      - name: Execute diy.sh for Binary Injection
+      - name: Execute DIY Script
         run: |
-          if [ -f "./diyjcq.sh" ]; then
-            echo "🔧 开始执行 diyjcq.sh 二进制注入..."
-            chmod +x ./diyjcq.sh
+          if [ -f "./${{ env.DIY_SCRIPT }}" ]; then
+            echo "🔧 开始执行 ${{ env.DIY_SCRIPT }} 二进制注入..."
+            chmod +x "./${{ env.DIY_SCRIPT }}"
             cd openwrt
-            ../diyjcq.sh
+            "../${{ env.DIY_SCRIPT }}"
             cd ..
-            echo "✅ diyjcq.sh 执行完毕"
+            echo "✅ ${{ env.DIY_SCRIPT }} 执行完毕"
           else
-            echo "⚠️ 未找到 diyjcq.sh，跳过"
+            echo "⚠️ 未找到 ${{ env.DIY_SCRIPT }}，跳过"
           fi
 
       - name: Inject Custom Files & Packages
         run: |
           echo "📦 开始注入自定义文件与包..."
+          echo "📂 文件目录: ${{ env.CUSTOM_FILES_DIR }}"
+          echo "📦 插件目录: ${{ env.CUSTOM_PACKAGES_DIR }}"
           
           # 1. 处理自定义 ipk 包
           mkdir -p ./openwrt/packages
-          if ls ./custom-packages/*.ipk 1>/dev/null 2>&1; then
-            cp ./custom-packages/*.ipk ./openwrt/packages/
+          if [ -d "./${{ env.CUSTOM_PACKAGES_DIR }}" ] && ls ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk 1>/dev/null 2>&1; then
+            cp ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk ./openwrt/packages/
             echo "✅ 自定义 ipk 已复制到 openwrt/packages/"
           else
-            echo "⚠️ 无自定义 ipk，跳过"
+            echo "⚠️ 无 ${{ env.CUSTOM_PACKAGES_DIR }} 或无 ipk 文件，跳过"
           fi
           
-          # 2. 处理自定义文件 (custom-files)
+          # 2. 处理自定义文件
           mkdir -p ./openwrt/files
-          if [ -d "./custom-filesjcq" ] && [ "$(ls -A ./custom-files 2>/dev/null)" ]; then
-            cp -r ./custom-filesjcq/* ./openwrt/files/
-            echo "✅ custom-filesjcq 已注入"
+          if [ -d "./${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A ./${{ env.CUSTOM_FILES_DIR }} 2>/dev/null)" ]; then
+            cp -r ./${{ env.CUSTOM_FILES_DIR }}/* ./openwrt/files/
+            echo "✅ ${{ env.CUSTOM_FILES_DIR }} 已注入"
           else
-            echo "⚠️ 无 custom-filesjcq，跳过"
+            echo "⚠️ 无 ${{ env.CUSTOM_FILES_DIR }} 或目录为空，跳过"
           fi
           
           echo "🔐 设置文件权限..."
-          # 自动给所有 .sh 文件加执行权限
           find ./openwrt/files -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
-          
-          # 给特定的系统脚本目录加执行权限
           chmod -R +x ./openwrt/files/etc/init.d 2>/dev/null || true
           chmod -R +x ./openwrt/files/etc/uci-defaults 2>/dev/null || true
-          chmod -R +x ./openwrt/files/etc/sh 2>/dev/null || true  # 专门为您指定的 /etc/sh 目录赋权
-          
-          # 保护 SSH 密钥权限
+          chmod -R +x ./openwrt/files/etc/sh 2>/dev/null || true
           chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
           chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
           
@@ -126,22 +129,21 @@ jobs:
         run: |
           cd openwrt
           
-          # 读取 packagesjcq.txt (如果存在)
           PACKAGES_LIST=""
-          if [ -f "../packagesjcq.txt" ]; then
+          if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
             while IFS= read -r line; do
               case "$line" in \#*|"") continue ;; esac
               PACKAGES_LIST="$PACKAGES_LIST $line"
-            done < ../packagesjcq.txt
+            done < "../${{ env.PACKAGES_LIST_FILE }}"
+            echo "📋 从 ${{ env.PACKAGES_LIST_FILE }} 读取包列表"
           else
-            # 默认预装基础包
             PACKAGES_LIST="luci luci-app-ttyd curl wget"
+            echo "⚠️ 未找到 ${{ env.PACKAGES_LIST_FILE }}，使用默认包列表"
           fi
           
           echo "📦 opkg 将安装: $(echo $PACKAGES_LIST | wc -w) 个包"
           echo "📋 包列表: $PACKAGES_LIST"
           
-          # 构建固件
           make image PROFILE=${{ inputs.target_profile }} FILES="files" PACKAGES="$PACKAGES_LIST" V=s
 
       - name: Upload Firmware to Artifact
@@ -164,9 +166,10 @@ jobs:
             - 设备: ${{ inputs.target_profile }}
             
             ### 📁 自定义内容
-            - diyjcq.sh: 若存在则已执行
-            - custom-filesjcq: 已注入并覆盖系统同名文件
-            - custom-packagesjcq: 由 ImageBuilder 原生 opkg 机制安装
+            - DIY脚本: ${{ env.DIY_SCRIPT }}
+            - 自定义文件: ${{ env.CUSTOM_FILES_DIR }}
+            - 自定义插件: ${{ env.CUSTOM_PACKAGES_DIR }}
+            - 包列表: ${{ env.PACKAGES_LIST_FILE }}
             - 📂 `/etc/sh/` 目录下的脚本已自动赋予可执行权限
             
             ### ⚠️ 刷机提示
