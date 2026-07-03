@@ -6,12 +6,13 @@ on:
       immortalwrt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '24.10.2'
+        default: '23.05.7'
         type: choice
         options:
           - 23.05.4
           - 23.05.5
           - 23.05.6
+          - 23.05.7
           - 24.10.0
           - 24.10.1
           - 24.10.2
@@ -23,7 +24,7 @@ on:
 # ✅ 统一在此处定义自定义资源路径变量
 env:
   CUSTOM_FILES_DIR: "custom-filesjcq"
-  CUSTOM_PACKAGES_DIR: "custom-packagesjcq"
+  CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packagesjcq.txt"
   DIY_SCRIPT: "diyjcq.sh"
 
