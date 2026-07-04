@@ -37,7 +37,7 @@ on:
           - 6.12.y
           - 6.18.y
 
-# ✅ 全局环境变量：在此处统一管理自定义资源路径
+# ✅ 全局环境变量：统一管理自定义资源路径
 env:
   DIY_SCRIPT: "diy.sh"
   CUSTOM_FILES_DIR: "custom-files"
@@ -78,7 +78,6 @@ jobs:
           VERSION="${{ inputs.immortalwrt_version }}"
           BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8"
           
-          # 根据版本自动选择压缩格式
           [[ "$VERSION" == "23.05."* ]] && EXT="tar.xz" || EXT="tar.zst"
           
           BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.${EXT}"
@@ -86,7 +85,6 @@ jobs:
           wget -q --show-progress "$BUILDER_URL" -O "imagebuilder.${EXT}"
           
           tar -xf "imagebuilder.${EXT}"
-          # 安全重命名，防止通配符匹配多个目录
           mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 "${{ env.BUILDER_DIR }}"
           
           if [ ! -d "${{ env.BUILDER_DIR }}" ]; then
@@ -109,31 +107,40 @@ jobs:
       - name: Inject Custom Files & Packages
         run: |
           echo "📦 Injecting custom resources..."
-          mkdir -p "${{ env.BUILDER_DIR }}/packages" "${{ env.BUILDER_DIR }}/files"
-          
-          # 1. 注入自定义 IPK
+          BUILDER_FILES="${{ env.BUILDER_DIR }}/files"
+          mkdir -p "$BUILDER_FILES" "${{ env.BUILDER_DIR }}/packages"
+
+          # 1. 注入自定义文件并立即修复权限（原子操作）
+          if [ -d "${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_FILES_DIR }}" 2>/dev/null)" ]; then
+            cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "$BUILDER_FILES/"
+            
+            echo "🔐 Fixing permissions for ALL injected init.d scripts..."
+            find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
+            
+            # 显式校验 easytier
+            if [ -f "$BUILDER_FILES/etc/init.d/easytier" ]; then
+              echo "✅ easytier found and marked executable"
+            else
+              echo "⚠️ easytier not found in injected files! Please check repo path structure."
+            fi
+          else
+            echo "⏭️ No custom files to inject"
+          fi
+
+          # 2. 注入自定义 IPK
           if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ] && find "${{ env.CUSTOM_PACKAGES_DIR }}" -name "*.ipk" -print -quit | grep -q .; then
             cp -v "${{ env.CUSTOM_PACKAGES_DIR }}"/*.ipk "${{ env.BUILDER_DIR }}/packages/"
             echo "✅ Custom IPKs injected"
           else
             echo "⏭️ No custom IPKs found"
           fi
+
+          # 3. 其他通用权限修复
+          find "$BUILDER_FILES/usr/bin" "$BUILDER_FILES/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
+          [ -f "$BUILDER_FILES/etc/rc.local" ] && chmod +x "$BUILDER_FILES/etc/rc.local"
+          [ -d "$BUILDER_FILES/etc/dropbear" ] && chmod 700 "$BUILDER_FILES/etc/dropbear"
+          find "$BUILDER_FILES/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
           
-          # 2. 注入自定义文件
-          if [ -d "${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_FILES_DIR }}" 2>/dev/null)" ]; then
-            cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "${{ env.BUILDER_DIR }}/files/"
-            echo "✅ Custom files injected"
-          else
-            echo "⏭️ No custom files found"
-          fi
-          
-          # 3. 统一权限修复
-          echo "🔐 Fixing permissions..."
-          FILES_DIR="${{ env.BUILDER_DIR }}/files"
-          find "$FILES_DIR/usr/bin" "$FILES_DIR/etc/init.d" "$FILES_DIR/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
-          [ -f "$FILES_DIR/etc/rc.local" ] && chmod +x "$FILES_DIR/etc/rc.local"
-          [ -d "$FILES_DIR/etc/dropbear" ] && chmod 700 "$FILES_DIR/etc/dropbear"
-          find "$FILES_DIR/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
           echo "✅ Injection completed"
 
       - name: Build Rootfs with ImageBuilder
