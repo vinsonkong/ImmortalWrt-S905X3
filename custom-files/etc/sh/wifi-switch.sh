@@ -3,7 +3,7 @@
 # ======= 配置区 ==========
 # 测试外网的目标
 TARGET_IP="223.5.5.5"
-# 上游网络逻辑接口名称 (无线中继/STA模式通常为 wwan)
+# 上游网络逻辑接口名称
 UPSTREAM_IF="wwan"
 # 热点列表（必须与 /etc/config/wireless 中的 section 名称一致）
 IFACES="wifinet1 wifinet2 wifinet3"
@@ -30,10 +30,18 @@ log_msg() {
     fi
 }
 
-# 3. 外网检测函数 (强制从上游接口发包)
+# 3. 外网检测
 check_internet() {
-    # -I 指定源接口，防止多线环境路由干扰导致误判
-    ping -I "$UPSTREAM_IF" -c 2 -W 3 "$TARGET_IP" >/dev/null 2>&1
+    # 获取逻辑接口(wwan)对应的真实 IPv4 地址
+    local src_ip=$(ubus call network.interface.$UPSTREAM_IF status 2>/dev/null | grep '"address"' | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1)
+    
+    # 如果没有获取到 IP，说明接口未连接，直接判定为断网
+    if [ -z "$src_ip" ]; then
+        return 1
+    fi
+
+    # 使用真实 IP 作为源地址进行 ping
+    ping -I "$src_ip" -c 2 -W 3 "$TARGET_IP" >/dev/null 2>&1
     return $?
 }
 
@@ -67,16 +75,22 @@ get_next() {
     echo "$next"
 }
 
-# 6. 等待上游接口连接成功 (检测是否获取到IPv4地址)
+# 6. 等待上游接口连接成功 (✅ 同步修复：摒弃 jsonfilter，改用 grep 检测状态和IP)
 wait_for_connection() {
     local elapsed=0
     while [ $elapsed -lt $WAIT_IP_TIMEOUT ]; do
-        # 检查上游接口状态 (使用配置的 UPSTREAM_IF)
-        if ifstatus "$UPSTREAM_IF" 2>/dev/null | grep -q '"up": true'; then
-            if ifstatus "$UPSTREAM_IF" 2>/dev/null | grep -q '"ipv4-address"'; then
-                return 0 # 成功获取到IP
-            fi
+        # 获取当前接口状态 JSON
+        local status_json=$(ubus call network.interface.$UPSTREAM_IF status 2>/dev/null)
+        
+        # 检查接口是否 up
+        local is_up=$(echo "$status_json" | grep -c '"up": true')
+        # 检查是否获取到 IPv4 地址 (复用您的成功命令)
+        local has_ip=$(echo "$status_json" | grep '"address"' | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n 1)
+        
+        if [ "$is_up" -gt 0 ] && [ -n "$has_ip" ]; then
+            return 0 # 成功获取到IP
         fi
+        
         sleep 2
         elapsed=$((elapsed + 2))
     done
@@ -87,7 +101,7 @@ wait_for_connection() {
 
 # 步骤 1：检测当前网络是否能联外网
 if check_internet; then
-    # 能联外网，退出脚本
+    log_msg "当前网络 ($UPSTREAM_IF) 畅通，无需切换。"
     exit 0
 fi
 
