@@ -197,13 +197,7 @@ jobs:
             | Version | `${{ inputs.immortalwrt_version }}` |
             | Device | `${{ inputs.device_board }}` |
             | Kernel | `${{ inputs.kernel_version }}` |
-            
-            ### 📁 Customizations
-            - **DIY Script**: `${{ env.DIY_SCRIPT }}`
-            - **Custom Files**: `${{ env.CUSTOM_FILES_DIR }}`
-            - **Custom Packages**: `${{ env.CUSTOM_PACKAGES_DIR }}`
-            - **Package List**: `${{ env.PACKAGES_LIST_FILE }}`
-            
+                        
             ### ⚠️ Flash Instructions
             1. Default IP: `192.168.30.100`
             2. To modify DTB, edit `/boot/uEnv.txt` in BOOT partition
