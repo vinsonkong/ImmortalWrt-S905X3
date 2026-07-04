@@ -1,0 +1,28 @@
+{
+    "ipv6": [
+        {
+            "txt": "x96maxIPV6",
+            "url": "http://[2408:8256:d085:30b0:17:2eff:fe4b:e910]:39380/ipv6/#private"
+        },
+        {
+            "txt": "x96maxDHCPV6",
+            "url": "http://[2408:8256:d085:30b0::10]:39380/ipv6/#private"
+        },
+        {
+            "txt": "x96max+     --------vinsonkong2014.eu.org",
+            "url": "http://vinsonkong2014.eu.org:39380/#"
+        },
+        {
+            "txt": "X96MAXPLUSQ2IPV6",
+            "url": "http://[2408:8256:d085:30b0:60c3:a5ff:feb6:a996]:39380/ipv6/#private"
+        },
+        {
+            "txt": "X96MAXPLUSQ2DHCPV6",
+            "url": "http://[2408:8256:d085:30b0::100]:39380/ipv6/#private"
+        },
+        {
+            "txt": "地址",
+            "url": ""
+        }
+    ]
+}
