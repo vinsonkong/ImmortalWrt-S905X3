@@ -1,0 +1,205 @@
+name: build s905x3 with ImageBuilder
+
+on:
+  workflow_dispatch:
+    inputs:
+      immortalwrt_version:
+        description: 'ImmortalWrt Version'
+        required: true
+        default: '24.10.6'
+        type: choice
+        options:
+          - 23.05.4
+          - 23.05.5
+          - 23.05.6
+          - 23.05.7
+          - 24.10.0
+          - 24.10.1
+          - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
+      device_board:
+        description: 'Device Board'
+        required: true
+        default: 's905x3'
+      kernel_version:
+        description: 'Kernel Branch (ophub/kernel)'
+        required: true
+        default: '6.18.y'
+        type: choice
+        options:
+          - 5.10.y
+          - 5.15.y
+          - 6.1.y
+          - 6.6.y
+          - 6.12.y
+          - 6.18.y
+
+# ✅ 全局环境变量：在此处统一管理自定义资源路径
+env:
+  DIY_SCRIPT: "diy.sh"
+  CUSTOM_FILES_DIR: "custom-files"
+  CUSTOM_PACKAGES_DIR: "custom-packages"
+  PACKAGES_LIST_FILE: "packages.txt"
+  BUILDER_DIR: "openwrt"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build for ${{ inputs.device_board }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Swap File
+        run: |
+          if [ -z "$(swapon --show=NAME --noheadings)" ]; then
+            echo "⚡ Creating 4G swap..."
+            sudo fallocate -l 4G /mnt/swapfile
+            sudo chmod 600 /mnt/swapfile
+            sudo mkswap /mnt/swapfile
+            sudo swapon /mnt/swapfile
+          fi
+          free -h
+
+      - name: Install Dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
+            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl coreutils
+
+      - name: Download & Extract ImmortalWrt ImageBuilder
+        run: |
+          VERSION="${{ inputs.immortalwrt_version }}"
+          BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8"
+          
+          # 根据版本自动选择压缩格式
+          [[ "$VERSION" == "23.05."* ]] && EXT="tar.xz" || EXT="tar.zst"
+          
+          BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.${EXT}"
+          echo "📥 Downloading: $BUILDER_URL"
+          wget -q --show-progress "$BUILDER_URL" -O "imagebuilder.${EXT}"
+          
+          tar -xf "imagebuilder.${EXT}"
+          # 安全重命名，防止通配符匹配多个目录
+          mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 "${{ env.BUILDER_DIR }}"
+          
+          if [ ! -d "${{ env.BUILDER_DIR }}" ]; then
+            echo "❌ ImageBuilder extraction failed!" && exit 1
+          fi
+          echo "✅ ImageBuilder ready at ./${{ env.BUILDER_DIR }}"
+
+      - name: Execute DIY Script
+        run: |
+          if [ -f "${{ env.DIY_SCRIPT }}" ]; then
+            echo "🔧 Executing ${{ env.DIY_SCRIPT }}..."
+            chmod +x "${{ env.DIY_SCRIPT }}"
+            cd "${{ env.BUILDER_DIR }}"
+            "../${{ env.DIY_SCRIPT }}"
+            echo "✅ DIY script completed"
+          else
+            echo "⏭️ ${{ env.DIY_SCRIPT }} not found, skipping"
+          fi
+
+      - name: Inject Custom Files & Packages
+        run: |
+          echo "📦 Injecting custom resources..."
+          mkdir -p "${{ env.BUILDER_DIR }}/packages" "${{ env.BUILDER_DIR }}/files"
+          
+          # 1. 注入自定义 IPK
+          if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ] && find "${{ env.CUSTOM_PACKAGES_DIR }}" -name "*.ipk" -print -quit | grep -q .; then
+            cp -v "${{ env.CUSTOM_PACKAGES_DIR }}"/*.ipk "${{ env.BUILDER_DIR }}/packages/"
+            echo "✅ Custom IPKs injected"
+          else
+            echo "⏭️ No custom IPKs found"
+          fi
+          
+          # 2. 注入自定义文件
+          if [ -d "${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_FILES_DIR }}" 2>/dev/null)" ]; then
+            cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "${{ env.BUILDER_DIR }}/files/"
+            echo "✅ Custom files injected"
+          else
+            echo "⏭️ No custom files found"
+          fi
+          
+          # 3. 统一权限修复
+          echo "🔐 Fixing permissions..."
+          FILES_DIR="${{ env.BUILDER_DIR }}/files"
+          find "$FILES_DIR/usr/bin" "$FILES_DIR/etc/init.d" "$FILES_DIR/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
+          [ -f "$FILES_DIR/etc/rc.local" ] && chmod +x "$FILES_DIR/etc/rc.local"
+          [ -d "$FILES_DIR/etc/dropbear" ] && chmod 700 "$FILES_DIR/etc/dropbear"
+          find "$FILES_DIR/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
+          echo "✅ Injection completed"
+
+      - name: Build Rootfs with ImageBuilder
+        run: |
+          cd "${{ env.BUILDER_DIR }}"
+          
+          # sha256 兼容处理
+          command -v sha256 &>/dev/null || sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
+          
+          # 读取包列表（过滤注释和空行）
+          PACKAGES=""
+          if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
+            PACKAGES=$(grep -vE '^\s*#|^\s*$' "../${{ env.PACKAGES_LIST_FILE }}" | tr '\n' ' ')
+            echo "📋 Packages from ${{ env.PACKAGES_LIST_FILE }}: $(echo $PACKAGES | wc -w) items"
+          else
+            echo "⏭️ ${{ env.PACKAGES_LIST_FILE }} not found, building with defaults"
+          fi
+          
+          echo "🚀 Starting ImageBuilder..."
+          make image PROFILE=generic \
+            FILES="files" \
+            ROOTFS_PARTSIZE=1024 \
+            PACKAGES="$PACKAGES" \
+            V=s
+
+      - name: Package Amlogic Firmware
+        uses: ophub/amlogic-s9xxx-openwrt@main
+        with:
+          openwrt_path: ${{ env.BUILDER_DIR }}/bin/targets/armsr/armv8/*-rootfs.tar.gz
+          openwrt_board: ${{ inputs.device_board }}
+          openwrt_kernel: ${{ inputs.kernel_version }}
+          auto_kernel: true
+          builder_name: ImmortalWrt
+
+      - name: Upload Firmware to Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IWrt-${{ inputs.immortalwrt_version }}-${{ inputs.device_board }}
+          path: ${{ env.PACKAGED_OUTPUTPATH }}
+
+      - name: Upload Firmware to Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: s905x3-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: S905X3 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          body: |
+            ## ImmortalWrt Firmware (ImageBuilder)
+            
+            | Item | Value |
+            |------|-------|
+            | Version | `${{ inputs.immortalwrt_version }}` |
+            | Device | `${{ inputs.device_board }}` |
+            | Kernel | `${{ inputs.kernel_version }}` |
+            
+            ### 📁 Customizations
+            - **DIY Script**: `${{ env.DIY_SCRIPT }}`
+            - **Custom Files**: `${{ env.CUSTOM_FILES_DIR }}`
+            - **Custom Packages**: `${{ env.CUSTOM_PACKAGES_DIR }}`
+            - **Package List**: `${{ env.PACKAGES_LIST_FILE }}`
+            
+            ### ⚠️ Flash Instructions
+            1. Default IP: `192.168.30.100`
+            2. To modify DTB, edit `/boot/uEnv.txt` in BOOT partition
+          files: |
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
