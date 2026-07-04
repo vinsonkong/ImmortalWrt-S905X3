@@ -1,76 +1,72 @@
 #!/bin/bash
-
 # === 配置区 ===
-HOSTS_FILE="/etc/hosts-new/hosts.combined"        # ✅ 标准路径，必须位于 /etc/
-LOG_FILE="/var/log/hosts-update.log"
+HOSTS_FILE="/etc/hosts-new/hosts.combined"
+LOG_FILE="/var/log/hosts-update.log"  # OpenWrt下为tmpfs，需持久化请改/root/
 LOCK_FILE="/tmp/hosts-update.lock"
 
-# 多源 hosts 文件 URL 列表（优先使用国内可访问镜像）
+# 多源hosts列表（按国内访问友好度排序）
 HOSTS_SOURCES=(
+    "https://api.1doc.top/github/github-hosts.txt"
+    "https://githubhosts.linkedbus.com"
     "https://hosts.gitcdn.top/hosts.txt"
     "https://raw.hellogithub.com/hosts"
-    "https://raw.githubusercontent.com/maxiaof/github-hosts/master/hosts"  # ✅ 替代 StevenBlack，更稳定
+    "https://raw.githubusercontent.com/maxiaof/github-hosts/master/hosts"
+    "https://raw.githubusercontent.com/oopsunix/hosts/main/hosts_github"
 )
 
-# === 日志函数 ===
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
-    logger -t "hosts-update" "$1"  # ✅ 使用 logger 写入系统日志
-}
+# === 工具函数 ===
+log() { echo "[$(date '+%F %T')] $1" | tee -a "$LOG_FILE" | logger -t "hosts-update"; }
+cleanup() { rm -f "$LOCK_FILE" "${TMP_FILES[@]}"; }
+trap cleanup EXIT
 
-# === 锁机制：防止并发执行 ===
+# === 锁机制（含过期检测）===
 if [ -f "$LOCK_FILE" ]; then
-    log "❌ 锁文件存在，脚本已在运行，跳过本次更新"
-    exit 1
+    age=$(( $(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || echo 0) ))
+    [ "$age" -gt 3600 ] && { log "⚠️ 过期锁文件(${age}s)，强制清除"; rm -f "$LOCK_FILE"; } || \
+        { log "❌ 脚本运行中，跳过"; exit 1; }
 fi
-trap "rm -f $LOCK_FILE" EXIT
 touch "$LOCK_FILE"
 
-# === 创建 hosts 存储目录 ===
-if [ -z "$HOSTS_FILE" ]; then
-    echo "Error: HOSTS_FILE is not set."
-    exit 1
-fi
-mkdir -p "$(dirname "$HOSTS_FILE")"
+# === 前置校验 ===
+[ -z "$HOSTS_FILE" ] && { echo "HOSTS_FILE未设置" >&2; exit 1; }
+mkdir -p "$(dirname "$HOSTS_FILE")" || { log "❌ 目录创建失败"; exit 1; }
 
-# === 遍历下载并合并所有 hosts 源 ===
-TEMP_FILE=$(mktemp)
-for source in "${HOSTS_SOURCES[@]}"; do
-    log "📥 正在下载: $source"
-    curl -sL --connect-timeout 10 --max-time 30 "$source" >> "$TEMP_FILE"
-    if [ $? -ne 0 ]; then
-        log "⚠️ 下载失败: $source"
+# === 下载+格式校验+合并 ===
+MERGED_TMP=$(mktemp); TMP_FILES=("$MERGED_TMP")
+success=0
+for src in "${HOSTS_SOURCES[@]}"; do
+    src_tmp=$(mktemp); TMP_FILES+=("$src_tmp")
+    if curl -sL --connect-timeout 10 --max-time 30 --fail "$src" -o "$src_tmp" && \
+       grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+[[:space:]]+[a-zA-Z]' "$src_tmp"; then
+        cat "$src_tmp" >> "$MERGED_TMP"
+        success=$((success + 1))
+        log "✅ $src ($(wc -l < "$src_tmp")行)"
+    else
+        log "⚠️ 失败/格式无效: $src"
     fi
 done
 
-# === 去重、过滤空行与注释行 ===
-awk 'NF && !/^#/ && !/^$/ { print }' "$TEMP_FILE" | sort -u > "$HOSTS_FILE"
-rm -f "$TEMP_FILE"
+[ "$success" -eq 0 ] && { log "❌ 无有效源，终止"; exit 1; }
 
-# === 检查文件是否为空 ===
-if [ ! -s "$HOSTS_FILE" ]; then
-    log "❌ 合并后的 hosts 文件为空，终止更新"
-    exit 1
-fi
+# 去重过滤并写入目标文件
+awk 'NF && !/^#/ && !/^$/' "$MERGED_TMP" | sort -u > "$HOSTS_FILE"
+[ ! -s "$HOSTS_FILE" ] && { log "❌ 合并结果为空"; exit 1; }
+log "ℹ️ 合并完成: $(wc -l < "$HOSTS_FILE")条 (来自${success}个源)"
 
-# === 检查是否已添加该路径到 dnsmasq ===
-if ! uci show dhcp | grep -q "addnhosts='$HOSTS_FILE'"; then
-    log "✅ 正在设置 addnhosts 路径: $HOSTS_FILE"
-    uci add_list dhcp.@dnsmasq[0].addnhosts="$HOSTS_FILE"  # ✅ 明确指定第一个 dnsmasq 实例
+# === UCI配置（防重复）===
+section=$(uci show dhcp 2>/dev/null | grep '=dnsmasq$' | head -1 | cut -d. -f2 | cut -d= -f1)
+[ -z "$section" ] && { log "❌ 未找到dnsmasq配置"; exit 1; }
+
+if ! uci get dhcp."$section".addnhosts 2>/dev/null | tr ' ' '\n' | grep -qx "$HOSTS_FILE"; then
+    uci add_list dhcp."$section".addnhosts="$HOSTS_FILE"
     uci commit dhcp
+    log "✅ 已添加addnhosts"
 else
-    log "ℹ️ 路径已存在，跳过 uci 修改"
+    log "ℹ️ addnhosts已存在"
 fi
 
-# === 重启 dnsmasq 服务 ===
-log "🔄 重启 dnsmasq 服务"
+# === 重启并验证dnsmasq ===
 /etc/init.d/dnsmasq restart
-
-# === 验证服务状态 ===
-if /etc/init.d/dnsmasq status > /dev/null 2>&1; then
-    log "✅ 更新成功，dnsmasq 运行正常"
-else
-    log "❌ dnsmasq 启动失败，请检查配置"
-fi
-
-log "🎉 多源 hosts 更新完成"
+sleep 2
+/etc/init.d/dnsmasq status &>/dev/null && log "✅ dnsmasq正常" || { log "❌ dnsmasq启动失败"; exit 1; }
+log "🎉 更新完成"
