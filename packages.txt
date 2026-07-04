@@ -212,6 +212,13 @@ luci-i18n-filebrowser-go-zh-cn
 # luci-i18n-socat-zh-cn
 luci-app-upnp
 luci-i18n-upnp-zh-cn
+syncthing
+luci-app-syncthing
+luci-i18n-syncthing-zh-cn
+openlist
+luci-app-openlist
+luci-i18n-openlist-zh-cn
+
 
 # === 下载工具 ===
 aria2
