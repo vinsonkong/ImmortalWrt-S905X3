@@ -1,4 +1,3 @@
-cat > diyjcq.sh << 'SCRIPT_EOF'
 #!/bin/bash
 set -e
 
@@ -17,58 +16,6 @@ else
     echo "❌ 无法识别编译环境，退出"; exit 1
 fi
 
-# =========================================================
-# [修复版] 强制 ImmortalWrt 23.05 IB 输出 bin 格式固件
-# =========================================================
-if [ "$IS_IMAGEBUILDER" = true ]; then
-    echo "🔧 [DIY] 开始修改 ImageBuilder 镜像生成规则..."
-
-    IMAGE_MK="target/linux/mediatek/image/filogic.mk"
-
-    if [ ! -f "$IMAGE_MK" ]; then
-        echo "❌ 未找到 $IMAGE_MK，请检查 IB 版本"
-        exit 1
-    fi
-
-    cp "$IMAGE_MK" "${IMAGE_MK}.bak"
-
-    # ✅ 关键修复：使用 $'\t' 确保注入的是真正的 Tab 字符而非空格
-    TAB=$'\t'
-    
-    sed -i "/define Device\/jcg_q30/,/endef/{
-        /IMAGE\/sysupgrade.itb/d
-        /UBINIZE_OPTS/d
-        /UBI_VOLUME/d
-        /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
-    }" "$IMAGE_MK"
-
-    # 兜底方案同样使用 Tab
-    if ! grep -q "sysupgrade.bin.*append-kernel.*append-rootfs" "$IMAGE_MK"; then
-        echo "⚠️ sed 精确匹配失败，尝试 awk 兜底替换..."
-        awk -v tab="$TAB" '
-        /define Device\/jcg_q30/ { in_jcg=1 }
-        in_jcg && /endef/ {
-            print tab "IMAGE/sysupgrade.bin := append-kernel | pad-to $(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size"
-            in_jcg=0
-        }
-        { print }
-        ' "$IMAGE_MK" > "${IMAGE_MK}.tmp" && mv "${IMAGE_MK}.tmp" "$IMAGE_MK"
-    fi
-
-    echo "🔍 验证 jcg_q30 设备定义:"
-    sed -n '/define Device\/jcg_q30/,/endef/p' "$IMAGE_MK"
-
-    # ✅ 新增：验证注入的行是否以 Tab 开头
-    if grep -P "^\tIMAGE/sysupgrade.bin" "$IMAGE_MK" > /dev/null; then
-        echo "✅ [DIY] bin 格式规则注入成功（已确认 Tab 缩进）"
-    else
-        echo "❌ [DIY] bin 格式规则缩进不正确！"
-        cat -A "$IMAGE_MK" | grep "sysupgrade.bin" || true
-        exit 1
-    fi
-else
-    echo "ℹ️ 当前为源码编译环境，跳过 IB 镜像格式修改"
-fi
 
 # ================= [ 2. Lucky 大吉面板二进制下载 ] =================
 echo "🍀 2. 注入 Lucky 大吉面板二进制..."
@@ -167,6 +114,4 @@ else
 fi
 
 echo "🎉 diyjcq.sh 全部执行完毕！"
-SCRIPT_EOF
 
-chmod +x diyjcq.sh
