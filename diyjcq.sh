@@ -16,6 +16,53 @@ else
     echo "❌ 无法识别编译环境，退出"; exit 1
 fi
 
+# =========================================================
+# [新增] 强制 ImmortalWrt 23.05 IB 输出 bin 格式固件
+# =========================================================
+if [ "$IS_IMAGEBUILDER" = true ]; then
+    echo "🔧 [DIY] 开始修改 ImageBuilder 镜像生成规则..."
+
+    IMAGE_MK="target/linux/mediatek/image/filogic.mk"
+
+    if [ ! -f "$IMAGE_MK" ]; then
+        echo "❌ 未找到 $IMAGE_MK，请检查 IB 版本"
+        exit 1
+    fi
+
+    cp "$IMAGE_MK" "${IMAGE_MK}.bak"
+
+    sed -i '/define Device\/jcg_q30/,/endef/{
+        /IMAGE\/sysupgrade.itb/d
+        /UBINIZE_OPTS/d
+        /UBI_VOLUME/d
+        /KERNEL.*:=/a\  IMAGE/sysupgrade.bin := append-kernel | pad-to $$$$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
+    }' "$IMAGE_MK"
+
+    if ! grep -q "sysupgrade.bin.*append-kernel.*append-rootfs" "$IMAGE_MK"; then
+        echo "⚠️ sed 精确匹配失败，尝试 awk 兜底替换..."
+        awk '
+        /define Device\/jcg_q30/ { in_jcg=1 }
+        in_jcg && /endef/ {
+            print "  IMAGE/sysupgrade.bin := append-kernel | pad-to $(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size"
+            in_jcg=0
+        }
+        { print }
+        ' "$IMAGE_MK" > "${IMAGE_MK}.tmp" && mv "${IMAGE_MK}.tmp" "$IMAGE_MK"
+    fi
+
+    echo "🔍 验证 jcg_q30 设备定义:"
+    sed -n '/define Device\/jcg_q30/,/endef/p' "$IMAGE_MK"
+
+    if grep -q "sysupgrade.bin" "$IMAGE_MK"; then
+        echo "✅ [DIY] bin 格式规则注入成功"
+    else
+        echo "❌ [DIY] bin 格式规则注入失败！"
+        exit 1
+    fi
+else
+    echo "ℹ️ 当前为源码编译环境，跳过 IB 镜像格式修改"
+fi
+
 # ================= [ 2. Lucky 大吉面板二进制下载 ] =================
 echo "🍀 2. 注入 Lucky 大吉面板二进制..."
 LUCKY_VERSION="2.27.2"
@@ -112,7 +159,4 @@ else
     exit 1
 fi
 
-
-
-
-echo "🎉 diy.sh 全部执行完毕！"
+echo "🎉 diyjcq.sh 全部执行完毕！"
