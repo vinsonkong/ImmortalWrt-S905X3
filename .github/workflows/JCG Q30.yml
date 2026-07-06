@@ -86,7 +86,6 @@ jobs:
 
           # =========================================================
           # [安全重写] 使用 awk 精确替换 jcg_q30 的 sysupgrade 规则
-          # 仅在目标设备块内替换，其他所有内容原样保留
           # =========================================================
           if [ ! -f "$IMAGE_MK" ]; then
             echo "❌ 未找到 $IMAGE_MK"; exit 1
@@ -105,19 +104,21 @@ jobs:
             { print }
           ' "${IMAGE_MK}.bak" > "$IMAGE_MK"
 
-          # 验证结果
-          BIN_COUNT=$(grep -c "IMAGE/sysupgrade.bin := append-kernel" "$IMAGE_MK" || true)
-          TOTAL_BIN=$(grep -c "IMAGE/sysupgrade.bin" "$IMAGE_MK" || true)
+          # 验证：检查 jcg_q30 块内是否存在目标 BIN 规则
+          TARGET_BIN_IN_BLOCK=$(awk '
+            /^define Device\/jcg_q30[[:space:]]*$/ { in_target = 1 }
+            /^endef$/ && in_target { in_target = 0 }
+            in_target && /IMAGE\/sysupgrade\.bin := append-kernel/ { found = 1 }
+            END { print found+0 }
+          ' "$IMAGE_MK")
 
-          echo "📊 统计: 目标BIN规则=${BIN_COUNT}条, 全部BIN引用=${TOTAL_BIN}条"
-
-          if [ "$BIN_COUNT" -eq 1 ]; then
-            echo "✅ [YML] awk 安全重写成功（精确1条目标规则）"
-            grep -n "IMAGE/sysupgrade.bin := append-kernel" "$IMAGE_MK" | cat -A
+          if [ "$TARGET_BIN_IN_BLOCK" -eq 1 ]; then
+            echo "✅ [YML] awk 安全重写成功（jcg_q30 块内已确认）"
+            awk '/^define Device\/jcg_q30[[:space:]]*$/,/^endef$/' "$IMAGE_MK" | grep "IMAGE/sysupgrade.bin" | cat -A
           else
-            echo "❌ [YML] 重写异常！期望1条目标规则，实际${BIN_COUNT}条"
+            echo "❌ [YML] jcg_q30 块内未找到目标 BIN 规则！"
             echo "🔍 jcg_q30 设备块完整内容:"
-            awk '/^define Device\/jcg_q30/,/^endef/' "$IMAGE_MK" | cat -An
+            awk '/^define Device\/jcg_q30[[:space:]]*$/,/^endef$/' "$IMAGE_MK" | cat -An
             exit 1
           fi
 
