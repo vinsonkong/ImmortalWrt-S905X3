@@ -4,10 +4,7 @@
 TITLE="x96max"
 INTERFACE="br-lan"
 STATE="/tmp/last_ipv6.txt"
-JSON_FILE1="/mnt/mmcblk2p4/webguide/addr/ipv6.json"
-LINK1="/mnt/mmcblk2p4/webguide/addr/get.txt"
-LINK2="/mnt/q2/webguide/addr/get.txt"
-JSON_FILE2="/mnt/q2/webguide/addr/ipv6.json"
+JSON_FILE="/www/webguide/addr/ipv6.json"
 
 
 # 加载 jshn.sh 库
@@ -56,12 +53,12 @@ fi
 #echo "检测到IPv6地址变化: ${OLD:-无} -> $NEW"
 
 # 读取JSON文件
-if [[ ! -f "$JSON_FILE1" ]]; then
-    echo "错误：JSON文件不存在 $JSON_FILE1" >&2
+if [[ ! -f "$JSON_FILE" ]]; then
+    echo "错误：JSON文件不存在 $JSON_FILE" >&2
     exit 1
 fi
 
-json_content=$(cat "$JSON_FILE1")
+json_content=$(cat "$JSON_FILE")
 if [[ -z "$json_content" ]]; then
     echo "错误：JSON文件为空" >&2
     exit 1
@@ -69,40 +66,11 @@ fi
 
 # 使用sed直接替换JSON文件中的IPv6地址
 # 注意：JSON文件中的反斜杠转义需要处理
-sed -i "/x96maxDHCPV6/{n; s#\"url\": \"http://\[.*\]#\"url\": \"http://\[$DHCPV6\]#g}" "$JSON_FILE1"
-sed -i "/x96maxipv6/{n; s#\"url\": \"http://\[.*\]#\"url\": \"http://\[$NEW\]#g}" "$JSON_FILE1"
-sed -i "/x96maxDHCPV6/{n; s#\"url\": \"http://\[.*\]#\"url\": \"http://\[$DHCPV6\]#g}" "$JSON_FILE2"
-sed -i "/x96maxipv6/{n; s#\"url\": \"http://\[.*\]#\"url\": \"http://\[$NEW\]#g}" "$JSON_FILE2"
+sed -i "/x96maxDHCPV6/{n; s#\"url\": \"http://\[.*\]#\"url\": \"http://\[$DHCPV6\]#g}" "$JSON_FILE"
+sed -i "/x96maxipv6/{n; s#\"url\": \"http://\[.*\]#\"url\": \"http://\[$NEW\]#g}" "$JSON_FILE"
 
-
-
-
-# 验证替换结果
-COUNT=$(grep -c "\[$NEW\]" "$JSON_FILE1")
-echo "成功替换了 $COUNT 处IPv6地址"
 
 # 保存新地址
 echo "$NEW" > "$STATE"
 echo "IPv6地址已更新并记录: $NEW"
-
-
-echo 更新时间∶  > "$LINK1"
-date -r "$STATE" "+%Y-%m-%d %H:%M:%S"  >> "$LINK1"
-echo "$TITLE"IPV6 >> "$LINK1"
-echo "$NEW" >> "$LINK1"
-echo "$TITLE"DHCPV6 >> "$LINK1"
-echo "$DHCPV6" >> "$LINK1"
-
-echo 更新时间∶  >> "$LINK"2
-date -r "$STATE" "+%Y-%m-%d %H:%M:%S"  >> "$LINK2"
-echo "$TITLE"IPV6 >> "$LINK2"
-echo "$NEW" >> "$LINK2"
-echo "$TITLE"DHCPV6 >> "$LINK2"
-echo "$DHCPV6" >> "$LINK2"
-
-
-
-
-
-
 
