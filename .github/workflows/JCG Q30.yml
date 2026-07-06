@@ -78,8 +78,66 @@ jobs:
           
           mv immortalwrt-imagebuilder-*-mediatek-filogic.Linux-x86_64 openwrt
 
+      # ✅ 修改点：在执行 diyjcq.sh 之前，先通过 yml 内联注入 BIN 格式补丁
       - name: Execute DIY Script
         run: |
+          cd openwrt
+
+          # =========================================================
+          # [内联] 强制 IB 输出 bin 格式固件 (Tab 安全)
+          # =========================================================
+          IMAGE_MK="target/linux/mediatek/image/filogic.mk"
+          if [ -f "$IMAGE_MK" ]; then
+            echo "🔧 [YML] 开始注入 bin 格式规则..."
+            cp "$IMAGE_MK" "${IMAGE_MK}.bak"
+            TAB=$'\t'
+
+            DEVICE_NAMES=("jcg_q30" "jcg_q30-pro" "jcg-q30" "jcg_q30_ubootmod")
+            PATCHED=false
+
+            for DEV in "${DEVICE_NAMES[@]}"; do
+              if grep -q "define Device/${DEV}" "$IMAGE_MK"; then
+                echo "✅ 找到设备定义: $DEV"
+                sed -i "/define Device\/${DEV//\//\\/}/,/endef/{
+                  /IMAGE\/sysupgrade.itb/d
+                  /UBINIZE_OPTS/d
+                  /UBI_VOLUME/d
+                  /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
+                }" "$IMAGE_MK"
+                PATCHED=true
+                break
+              fi
+            done
+
+            if [ "$PATCHED" = false ]; then
+              MATCHED_DEV=$(grep -oP 'define Device/\K[^\s]+(?=.*q30)' "$IMAGE_MK" | head -1)
+              if [ -n "$MATCHED_DEV" ]; then
+                echo "✅ 模糊匹配到设备: $MATCHED_DEV"
+                sed -i "/define Device\/${MATCHED_DEV//\//\\/}/,/endef/{
+                  /IMAGE\/sysupgrade.itb/d
+                  /UBINIZE_OPTS/d
+                  /UBI_VOLUME/d
+                  /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
+                }" "$IMAGE_MK"
+                PATCHED=true
+              fi
+            fi
+
+            if grep -P "^\tIMAGE/sysupgrade.bin" "$IMAGE_MK" > /dev/null; then
+              echo "✅ [YML] bin 格式规则注入成功（已确认 Tab 缩进）"
+            else
+              echo "❌ [YML] bin 格式规则注入失败！"
+              cat -A "$IMAGE_MK" | grep -i "sysupgrade" || true
+              exit 1
+            fi
+          else
+            echo "⚠️ 未找到 filogic.mk，跳过 bin 格式注入"
+          fi
+
+          # =========================================================
+          # 执行原有 diyjcq.sh (Lucky + EasyTier 等逻辑保持不变)
+          # =========================================================
+          cd ..
           if [ -f "./${{ env.DIY_SCRIPT }}" ]; then
             echo "🔧 开始执行 ${{ env.DIY_SCRIPT }} ..."
             chmod +x "./${{ env.DIY_SCRIPT }}"
@@ -114,7 +172,6 @@ jobs:
         run: |
           cd openwrt
           
-          # Profile 智能探测
           INPUT_PROFILE="${{ inputs.target_profile }}"
           INFO_FILE="/tmp/ib_profiles.txt"
           make info > "$INFO_FILE" 2>&1 || true
@@ -132,7 +189,6 @@ jobs:
           fi
           echo "✅ 使用 Profile: $FINAL_PROFILE"
           
-          # 读取包列表
           PACKAGES_LIST=""
           if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
             while IFS= read -r line; do
@@ -150,7 +206,6 @@ jobs:
           set -e
           make image PROFILE="$FINAL_PROFILE" FILES="files" PACKAGES="$PACKAGES_LIST" V=s
 
-      # ✅ 修复：同时检测 .bin 和 .itb 格式的 sysupgrade 文件
       - name: Diagnose Build Output
         if: always()
         run: |
@@ -173,7 +228,6 @@ jobs:
             echo "❌ 固件输出目录不存在，编译可能在早期阶段就已失败"
           fi
 
-      # ✅ 修复：上传所有关键固件文件（包含 itb、fip、preloader）
       - name: Upload Firmware to Artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -185,7 +239,6 @@ jobs:
             openwrt/bin/targets/mediatek/filogic/*-preloader.bin
             openwrt/bin/targets/mediatek/filogic/*.manifest
 
-      # ✅ 修复：Release 同样适配多格式固件
       - name: Upload Firmware to Release
         if: success()
         uses: softprops/action-gh-release@v2
@@ -206,11 +259,10 @@ jobs:
             - 包列表: ${{ env.PACKAGES_LIST_FILE }}
             
             ### ⚠️ 刷机提示
-            1. NAND 设备升级请使用 `*sysupgrade.itb` 文件
+            1. NAND 设备升级请使用 `*sysupgrade.bin` 文件
             2. 如需更新引导，请使用对应的 `preloader.bin` 和 `bl31-uboot.fip`
             3. 默认 IP: 192.168.1.1 / 密码: password
           files: |
             openwrt/bin/targets/mediatek/filogic/*sysupgrade.*
             openwrt/bin/targets/mediatek/filogic/*-bl31-uboot.fip
             openwrt/bin/targets/mediatek/filogic/*-preloader.bin
-
