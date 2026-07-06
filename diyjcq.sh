@@ -48,7 +48,7 @@ chmod +x "${BASE_FILES}/usr/bin/lucky"
 echo "✅ Lucky 二进制已注入 ${BASE_FILES}/usr/bin/lucky"
 
 # ========== [ EasyTier 二进制下载集成 ] ==========
-EASYTIER_VERSION="v2.6.4"
+EASYTIER_VERSION="v2.6.3"
 TARGET_ARCH="aarch64"
 
 echo ">>> 开始下载 EasyTier ${EASYTIER_VERSION} (${TARGET_ARCH})..."
