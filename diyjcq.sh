@@ -1,3 +1,4 @@
+cat > diyjcq.sh << 'SCRIPT_EOF'
 #!/bin/bash
 set -e
 
@@ -17,7 +18,7 @@ else
 fi
 
 # =========================================================
-# [新增] 强制 ImmortalWrt 23.05 IB 输出 bin 格式固件
+# [修复版] 强制 ImmortalWrt 23.05 IB 输出 bin 格式固件
 # =========================================================
 if [ "$IS_IMAGEBUILDER" = true ]; then
     echo "🔧 [DIY] 开始修改 ImageBuilder 镜像生成规则..."
@@ -31,19 +32,23 @@ if [ "$IS_IMAGEBUILDER" = true ]; then
 
     cp "$IMAGE_MK" "${IMAGE_MK}.bak"
 
-    sed -i '/define Device\/jcg_q30/,/endef/{
+    # ✅ 关键修复：使用 $'\t' 确保注入的是真正的 Tab 字符而非空格
+    TAB=$'\t'
+    
+    sed -i "/define Device\/jcg_q30/,/endef/{
         /IMAGE\/sysupgrade.itb/d
         /UBINIZE_OPTS/d
         /UBI_VOLUME/d
-        /KERNEL.*:=/a\  IMAGE/sysupgrade.bin := append-kernel | pad-to $$$$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
-    }' "$IMAGE_MK"
+        /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
+    }" "$IMAGE_MK"
 
+    # 兜底方案同样使用 Tab
     if ! grep -q "sysupgrade.bin.*append-kernel.*append-rootfs" "$IMAGE_MK"; then
         echo "⚠️ sed 精确匹配失败，尝试 awk 兜底替换..."
-        awk '
+        awk -v tab="$TAB" '
         /define Device\/jcg_q30/ { in_jcg=1 }
         in_jcg && /endef/ {
-            print "  IMAGE/sysupgrade.bin := append-kernel | pad-to $(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size"
+            print tab "IMAGE/sysupgrade.bin := append-kernel | pad-to $(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size"
             in_jcg=0
         }
         { print }
@@ -53,10 +58,12 @@ if [ "$IS_IMAGEBUILDER" = true ]; then
     echo "🔍 验证 jcg_q30 设备定义:"
     sed -n '/define Device\/jcg_q30/,/endef/p' "$IMAGE_MK"
 
-    if grep -q "sysupgrade.bin" "$IMAGE_MK"; then
-        echo "✅ [DIY] bin 格式规则注入成功"
+    # ✅ 新增：验证注入的行是否以 Tab 开头
+    if grep -P "^\tIMAGE/sysupgrade.bin" "$IMAGE_MK" > /dev/null; then
+        echo "✅ [DIY] bin 格式规则注入成功（已确认 Tab 缩进）"
     else
-        echo "❌ [DIY] bin 格式规则注入失败！"
+        echo "❌ [DIY] bin 格式规则缩进不正确！"
+        cat -A "$IMAGE_MK" | grep "sysupgrade.bin" || true
         exit 1
     fi
 else
@@ -160,3 +167,6 @@ else
 fi
 
 echo "🎉 diyjcq.sh 全部执行完毕！"
+SCRIPT_EOF
+
+chmod +x diyjcq.sh
