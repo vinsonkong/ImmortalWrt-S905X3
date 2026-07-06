@@ -30,7 +30,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build ImmortalWrt for {{ inputs.target_profile }}
+    name: Build ImmortalWrt for ${{ inputs.target_profile }}
 
     steps:
       - name: Checkout
@@ -38,7 +38,7 @@ jobs:
 
       - name: Create Swap File
         run: |
-          if [ -z "(swapon --show=NAME --noheadings)" ]; then
+          if [ -z "$(swapon --show=NAME --noheadings)" ]; then
             echo "Creating 4G swap..."
             sudo fallocate -l 4G /mnt/swapfile
             sudo chmod 600 /mnt/swapfile
@@ -57,23 +57,23 @@ jobs:
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
-          VERSION={{ inputs.immortalwrt_version }}
-          BASE_URL="https://downloads.immortalwrt.org/releases/{VERSION}/targets/mediatek/filogic"
+          VERSION="${{ inputs.immortalwrt_version }}"
+          BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/mediatek/filogic"
           
-          if [[ "VERSION" == "24."* ]]; then
+          if [[ "$VERSION" == "24."* ]]; then
             EXT="tar.zst"
           else
             EXT="tar.xz"
           fi
           
-          BUILDER_URL="{BASE_URL}/immortalwrt-imagebuilder-{VERSION}-mediatek-filogic.Linux-x86_64.{EXT}"
-          echo "Downloading: BUILDER_URL"
-          wget -q "BUILDER_URL" -O "imagebuilder.{EXT}"
+          BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-mediatek-filogic.Linux-x86_64.${EXT}"
+          echo "Downloading: ${BUILDER_URL}"
+          wget -q "${BUILDER_URL}" -O "imagebuilder.${EXT}"
           
-          if [[ "EXT" == "tar.zst" ]]; then
-            tar --use-compress-program=unzstd -xf "imagebuilder.{EXT}"
+          if [[ "$EXT" == "tar.zst" ]]; then
+            tar --use-compress-program=unzstd -xf "imagebuilder.${EXT}"
           else
-            tar -xf "imagebuilder.{EXT}"
+            tar -xf "imagebuilder.${EXT}"
           fi
           
           mv immortalwrt-imagebuilder-*-mediatek-filogic.Linux-x86_64 openwrt
@@ -81,16 +81,13 @@ jobs:
       - name: Execute DIY Script
         run: |
           cd openwrt
-          # =========================================================
-          # 执行原有 diyjcq.sh (Lucky + EasyTier)
-          # =========================================================
-          if [ -f "./{{ env.DIY_SCRIPT }}" ]; then
-            echo "🔧 开始执行 {{ env.DIY_SCRIPT }} ..."
-            chmod +x "./{{ env.DIY_SCRIPT }}"
-            cd openwrt && "../{{ env.DIY_SCRIPT }}" && cd ..
-            echo "✅ {{ env.DIY_SCRIPT }} 执行完毕"
+          if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
+            echo "🔧 开始执行 ${{ env.DIY_SCRIPT }} ..."
+            chmod +x "../${{ env.DIY_SCRIPT }}"
+            bash "../${{ env.DIY_SCRIPT }}"
+            echo "✅ ${{ env.DIY_SCRIPT }} 执行完毕"
           else
-            echo "⚠️ 未找到 {{ env.DIY_SCRIPT }}，跳过"
+            echo "⚠️ 未找到 ${{ env.DIY_SCRIPT }}，跳过"
           fi
 
       - name: Inject Custom Files & Packages
@@ -98,17 +95,17 @@ jobs:
           echo "📦 注入自定义资源..."
           mkdir -p ./openwrt/packages ./openwrt/files
           
-          if [ -d "./{{ env.CUSTOM_PACKAGES_DIR }}" ] && ls ./{{ env.CUSTOM_PACKAGES_DIR }}/*.ipk 1>/dev/null 2>&1; then
-            cp ./{{ env.CUSTOM_PACKAGES_DIR }}/*.ipk ./openwrt/packages/
+          if [ -d "./${{ env.CUSTOM_PACKAGES_DIR }}" ] && ls ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk 1>/dev/null 2>&1; then
+            cp ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk ./openwrt/packages/
             echo "✅ 自定义 ipk 已复制"
           fi
           
-          if [ -d "./{{ env.CUSTOM_FILES_DIR }}" ] && [ "(ls -A ./{{ env.CUSTOM_FILES_DIR }} 2>/dev/null)" ]; then
-            cp -r ./{{ env.CUSTOM_FILES_DIR }}/* ./openwrt/files/
+          if [ -d "./${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A ./${{ env.CUSTOM_FILES_DIR }} 2>/dev/null)" ]; then
+            cp -r ./${{ env.CUSTOM_FILES_DIR }}/* ./openwrt/files/
             echo "✅ 自定义文件已注入"
           fi
           
-          find ./openwrt/files -type f -name "*.sh" -exec chmod +x {} ; 2>/dev/null || true
+          find ./openwrt/files -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
           chmod -R +x ./openwrt/files/etc/init.d ./openwrt/files/etc/uci-defaults ./openwrt/files/etc/sh 2>/dev/null || true
           chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
           chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
@@ -118,34 +115,54 @@ jobs:
         run: |
           cd openwrt
           
-          INPUT_PROFILE="{{ inputs.target_profile }}"
+          INPUT_PROFILE="${{ inputs.target_profile }}"
           INFO_FILE="/tmp/ib_profiles.txt"
-          make info > "INFO_FILE" 2>&1 || true
+          make info > "$INFO_FILE" 2>&1 || true
           
-          if grep -q "^INPUT_PROFILE:" "INFO_FILE"; then
-            FINAL_PROFILE="INPUT_PROFILE"
+          if grep -q "^${INPUT_PROFILE}:" "$INFO_FILE"; then
+            FINAL_PROFILE="$INPUT_PROFILE"
           else
-            FINAL_PROFILE=(grep -iE "^{INPUT_PROFILE}(-pro|-ubootmod)?" "INFO_FILE" | head -n 1 | cut -d':' -f1)
+            FINAL_PROFILE=$(grep -iE "^${INPUT_PROFILE}(-pro|-ubootmod)?" "$INFO_FILE" | head -n 1 | cut -d':' -f1)
           fi
-          rm -f "INFO_FILE"
+          rm -f "$INFO_FILE"
           
-          if [ -z "FINAL_PROFILE" ]; then
-            echo "❌ 找不到匹配的 Profile: INPUT_PROFILE"
+          if [ -z "$FINAL_PROFILE" ]; then
+            echo "❌ 找不到匹配的 Profile: $INPUT_PROFILE"
             exit 1
           fi
-          echo "✅ 使用 Profile: FINAL_PROFILE"
+          echo "✅ 使用 Profile: $FINAL_PROFILE"
           
           PACKAGES_LIST=""
-          if [ -f "../{{ env.PACKAGES_LIST_FILE }}" ]; then
+          if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
             while IFS= read -r line; do
-              case "line" in #*|"") continue ;; esac
-              pkg=(echo "line" | xargs)
-              [ -n "pkg" ] && PACKAGES_LIST="PACKAGES_LIST pkg"
-            done /dev/null | wc -l)
-            echo "📊 sysupgrade 固件数量: SYSUPGRADE_COUNT"
+              case "$line" in \#*|"") continue ;; esac
+              pkg=$(echo "$line" | xargs)
+              [ -n "$pkg" ] && PACKAGES_LIST="$PACKAGES_LIST $pkg"
+            done < "../${{ env.PACKAGES_LIST_FILE }}"
+          fi
+          
+          echo "📦 包列表: $PACKAGES_LIST"
+          echo "🚀 开始编译 (包含 bin 格式)..."
+          
+          set -e
+          # ⚠️ 关键修改：通过 EXTRA_IMAGE_NAME 和默认行为确保生成所有支持的 bin 格式
+          make image PROFILE="$FINAL_PROFILE" FILES="files" PACKAGES="$PACKAGES_LIST" V=s
+
+      - name: Diagnose Build Output
+        if: always()
+        run: |
+          echo "🔍 检查编译产物..."
+          FIRMWARE_DIR="openwrt/bin/targets/mediatek/filogic"
+          
+          if [ -d "$FIRMWARE_DIR" ]; then
+            echo "📂 目录内容:"
+            ls -lah "$FIRMWARE_DIR/"
             
-            if [ "SYSUPGRADE_COUNT" -eq 0 ]; then
-              echo "⚠️ 未找到 sysupgrade 固件，请检查上方 Build 步骤日志"
+            BIN_COUNT=$(find "$FIRMWARE_DIR" $ -name "*.bin" -o -name "*.itb" -o -name "*.fip" $ 2>/dev/null | wc -l)
+            echo "📊 固件文件数量 (bin/itb/fip): $BIN_COUNT"
+            
+            if [ "$BIN_COUNT" -eq 0 ]; then
+              echo "⚠️ 未找到任何固件文件，请检查上方 Build 步骤日志"
             else
               echo "✅ 固件生成成功！"
             fi
@@ -157,37 +174,38 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-{{ inputs.immortalwrt_version }}-{{ inputs.target_profile }}
+          name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.target_profile }}
           path: |
-            openwrt/bin/targets/mediatek/filogic/sysupgrade.
+            openwrt/bin/targets/mediatek/filogic/*.bin
+            openwrt/bin/targets/mediatek/filogic/*.itb
             openwrt/bin/targets/mediatek/filogic/*-bl31-uboot.fip
-            openwrt/bin/targets/mediatek/filogic/*-preloader.bin
             openwrt/bin/targets/mediatek/filogic/*.manifest
 
       - name: Upload Firmware to Release
         if: success()
         uses: softprops/action-gh-release@v2
         env:
-          GITHUB_TOKEN: {{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: iwrt-{{ inputs.target_profile }}-{{ inputs.immortalwrt_version }}-build{{ github.run_number }}
-          name: ImmortalWrt JCG Q30 {{ inputs.immortalwrt_version }} (Build {{ github.run_number }})
+          tag_name: iwrt-${{ inputs.target_profile }}-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: ImmortalWrt JCG Q30 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            ImmortalWrt 固件 (JCG Q30 Pro)
-            - 版本: {{ inputs.immortalwrt_version }}
-            - 设备: {{ inputs.target_profile }}
+            ImmortalWrt 固件 (JCG Q30)
+            - 版本: ${{ inputs.immortalwrt_version }}
+            - 设备: ${{ inputs.target_profile }}
             
             ### 📁 自定义内容
-            - DIY脚本: {{ env.DIY_SCRIPT }}
-            - 自定义文件: {{ env.CUSTOM_FILES_DIR }}
-            - 自定义插件: {{ env.CUSTOM_PACKAGES_DIR }}
-            - 包列表: {{ env.PACKAGES_LIST_FILE }}
+            - DIY脚本: ${{ env.DIY_SCRIPT }}
+            - 自定义文件: ${{ env.CUSTOM_FILES_DIR }}
+            - 自定义插件: ${{ env.CUSTOM_PACKAGES_DIR }}
+            - 包列表: ${{ env.PACKAGES_LIST_FILE }}
             
             ### ⚠️ 刷机提示
-            1. NAND 设备升级请使用 *sysupgrade.bin 文件
-            2. 如需更新引导，请使用对应的 preloader.bin 和 bl31-uboot.fip
-            3. 默认 IP: 192.168.1.1 / 密码: password
+            1. NAND 设备首次刷入请使用 `factory.bin`
+            2. 系统内升级请使用 `sysupgrade.bin`
+            3. 如需更新引导，请使用对应的 `preloader.bin` 和 `bl31-uboot.fip`
+            4. 默认 IP: 192.168.1.1 / 密码: password
           files: |
-            openwrt/bin/targets/mediatek/filogic/sysupgrade.
+            openwrt/bin/targets/mediatek/filogic/*.bin
+            openwrt/bin/targets/mediatek/filogic/*.itb
             openwrt/bin/targets/mediatek/filogic/*-bl31-uboot.fip
-            openwrt/bin/targets/mediatek/filogic/*-preloader.bin
