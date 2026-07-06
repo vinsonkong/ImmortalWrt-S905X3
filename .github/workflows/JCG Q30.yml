@@ -82,72 +82,93 @@ jobs:
         run: |
           cd openwrt
 
-          IMAGE_MK="target/linux/mediatek/image/filogic.mk"
-
           # =========================================================
-          # [修复] 自动修正 filogic.mk 第42行原生缩进问题
+          # [诊断+修复] IB 根 Makefile 及所有 include 文件的第42行
           # =========================================================
-          if [ -f "$IMAGE_MK" ]; then
-            echo "🔧 [修复] 检查并修正 filogic.mk 第42行缩进..."
-            LINE42=$(sed -n '42p' "$IMAGE_MK")
-            if echo "$LINE42" | grep -qP '^ +\S'; then
-              echo "⚠️ 第42行检测到空格缩进，正在修复..."
-              sed -i '42s/^ */\t/' "$IMAGE_MK"
-              echo "✅ 第42行已修复"
-            else
-              echo "ℹ️ 第42行缩进正常或为空行"
+          echo "🔧 [诊断] 检查所有相关 Makefile 的第42行..."
+          
+          # 检查 IB 根 Makefile
+          if [ -f "Makefile" ]; then
+            echo "📄 === Makefile (根) 第38-46行 ==="
+            sed -n '38,46p' Makefile | cat -A
+            LINE42_ROOT=$(sed -n '42p' Makefile)
+            if echo "$LINE42_ROOT" | grep -qP '^ +\S'; then
+              echo "⚠️ Makefile 第42行检测到空格缩进，正在修复..."
+              sed -i '42s/^ */\t/' Makefile
+              echo "✅ Makefile 第42行已修复"
             fi
-            echo "🔍 修复后第38-46行 (cat -A):"
-            sed -n '38,46p' "$IMAGE_MK" | cat -A
-          else
-            echo "❌ 未找到 $IMAGE_MK"
-            exit 1
           fi
+
+          # 检查 include 子目录下的 Makefile
+          for MK in $(find . -maxdepth 3 -name "Makefile" -not -path "./build_dir/*" -not -path "./bin/*"); do
+            L42=$(sed -n '42p' "$MK" 2>/dev/null)
+            if echo "$L42" | grep -qP '^ +\S'; then
+              echo "⚠️ $MK 第42行检测到空格缩进，正在修复..."
+              sed -i '42s/^ */\t/' "$MK"
+              echo "✅ $MK 第42行已修复"
+              echo "🔍 修复后:"
+              sed -n '40,44p' "$MK" | cat -A
+            fi
+          done
+
+          # 同时检查 rules.make / image.mk 等可能被 include 的文件
+          for MK in $(find . -maxdepth 4 $ -name "*.mk" -o -name "*.make" $ -not -path "./build_dir/*" -not -path "./bin/*"); do
+            L42=$(sed -n '42p' "$MK" 2>/dev/null)
+            if echo "$L42" | grep -qP '^ +\S'; then
+              echo "⚠️ $MK 第42行检测到空格缩进，正在修复..."
+              sed -i '42s/^ */\t/' "$MK"
+              echo "✅ $MK 第42行已修复"
+            fi
+          done
+
+          IMAGE_MK="target/linux/mediatek/image/filogic.mk"
 
           # =========================================================
           # [内联] 强制 IB 输出 bin 格式固件 (Tab 安全)
           # =========================================================
-          echo "🔧 [YML] 开始注入 bin 格式规则..."
-          cp "$IMAGE_MK" "${IMAGE_MK}.bak"
-          TAB=$'\t'
+          if [ -f "$IMAGE_MK" ]; then
+            echo "🔧 [YML] 开始注入 bin 格式规则..."
+            cp "$IMAGE_MK" "${IMAGE_MK}.bak"
+            TAB=$'\t'
 
-          DEVICE_NAMES=("jcg_q30" "jcg_q30-pro" "jcg-q30" "jcg_q30_ubootmod")
-          PATCHED=false
+            DEVICE_NAMES=("jcg_q30" "jcg_q30-pro" "jcg-q30" "jcg_q30_ubootmod")
+            PATCHED=false
 
-          for DEV in "${DEVICE_NAMES[@]}"; do
-            if grep -q "define Device/${DEV}" "$IMAGE_MK"; then
-              echo "✅ 找到设备定义: $DEV"
-              sed -i "/define Device\/${DEV//\//\\/}/,/endef/{
-                /IMAGE\/sysupgrade.itb/d
-                /UBINIZE_OPTS/d
-                /UBI_VOLUME/d
-                /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
-              }" "$IMAGE_MK"
-              PATCHED=true
-              break
+            for DEV in "${DEVICE_NAMES[@]}"; do
+              if grep -q "define Device/${DEV}" "$IMAGE_MK"; then
+                echo "✅ 找到设备定义: $DEV"
+                sed -i "/define Device\/${DEV//\//\\/}/,/endef/{
+                  /IMAGE\/sysupgrade.itb/d
+                  /UBINIZE_OPTS/d
+                  /UBI_VOLUME/d
+                  /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
+                }" "$IMAGE_MK"
+                PATCHED=true
+                break
+              fi
+            done
+
+            if [ "$PATCHED" = false ]; then
+              MATCHED_DEV=$(grep -oP 'define Device/\K[^\s]+(?=.*q30)' "$IMAGE_MK" | head -1)
+              if [ -n "$MATCHED_DEV" ]; then
+                echo "✅ 模糊匹配到设备: $MATCHED_DEV"
+                sed -i "/define Device\/${MATCHED_DEV//\//\\/}/,/endef/{
+                  /IMAGE\/sysupgrade.itb/d
+                  /UBINIZE_OPTS/d
+                  /UBI_VOLUME/d
+                  /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
+                }" "$IMAGE_MK"
+                PATCHED=true
+              fi
             fi
-          done
 
-          if [ "$PATCHED" = false ]; then
-            MATCHED_DEV=$(grep -oP 'define Device/\K[^\s]+(?=.*q30)' "$IMAGE_MK" | head -1)
-            if [ -n "$MATCHED_DEV" ]; then
-              echo "✅ 模糊匹配到设备: $MATCHED_DEV"
-              sed -i "/define Device\/${MATCHED_DEV//\//\\/}/,/endef/{
-                /IMAGE\/sysupgrade.itb/d
-                /UBINIZE_OPTS/d
-                /UBI_VOLUME/d
-                /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
-              }" "$IMAGE_MK"
-              PATCHED=true
+            if grep -P "^\tIMAGE/sysupgrade.bin" "$IMAGE_MK" > /dev/null; then
+              echo "✅ [YML] bin 格式规则注入成功（已确认 Tab 缩进）"
+            else
+              echo "❌ [YML] bin 格式规则注入失败！"
+              cat -A "$IMAGE_MK" | grep -i "sysupgrade" || true
+              exit 1
             fi
-          fi
-
-          if grep -P "^\tIMAGE/sysupgrade.bin" "$IMAGE_MK" > /dev/null; then
-            echo "✅ [YML] bin 格式规则注入成功（已确认 Tab 缩进）"
-          else
-            echo "❌ [YML] bin 格式规则注入失败！"
-            cat -A "$IMAGE_MK" | grep -i "sysupgrade" || true
-            exit 1
           fi
 
           # =========================================================
