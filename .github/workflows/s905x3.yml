@@ -1,4 +1,4 @@
-name: build s905x3 with ImageBuilder
+name: s905x3 with ImageBuilder
 
 on:
   workflow_dispatch:
