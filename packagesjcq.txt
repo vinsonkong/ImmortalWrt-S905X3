@@ -59,3 +59,4 @@ luci-app-lucky
 luci-i18n-lucky-zh-cn
 luci-app-nfs
 luci-i18n-nfs-zh-cn
+luci-i18n-cifs-mount-zh-cn
