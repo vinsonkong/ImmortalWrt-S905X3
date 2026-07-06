@@ -1,7 +1,7 @@
 {
     "title": "X96maxPlusQ2",
     "user": "",
-    "ipv6": "http:\/\/[2408:8256:d085:30b0:17:2eff:fe4b:e910]:39380\/ipv6\/#private",
+    "ipv6": "",
     "pins": [
         {
             "txt": "x96max导航页",
@@ -16,7 +16,7 @@
         {
             "txt": "q2导航页",
             "url": "http:\/\/vinsonkong2014.eu.org:39880",
-            "purl": "http:\/\/192.168.30.100:39380\/#private"
+            "purl": "http:\/\/192.168.30.100\/webguide\/#private"
         },
         {
             "txt": "切换内外网",
@@ -28,12 +28,7 @@
         {
             "txt": "X96maxQ2",
             "url": "http:\/\/vinsonkong2014.eu.org:39810",
-            "purl": "http:\/\/192.168.30.100:80"
-        },
-        {
-            "txt": "书签",
-            "url": "http:\/\/vinsonkong2014.eu.org:39310\/webguide\/bookmarks",
-            "purl": "http:\/\/192.168.30.10\/webguide\/bookmarks"
+            "purl": "http:\/\/10.0.30.100\/"
         },
         {
             "txt": "q2文件管理",
@@ -42,9 +37,9 @@
         },
         {
             "txt": "LUCKY",
-            "url": "http:\/\/vinsonkong2014.eu.org:39390",
-            "purl": "http:\/\/192.168.30.100:39390"
-        },		
+            "url": "http:\/\/vinsonkong2014.eu.org:39390\/vinson",
+            "purl": "http:\/\/192.168.30.100:39390\/vinson"
+        },
         {
             "txt": "jellyfin",
             "url": "http:\/\/vinsonkong2014.eu.org:8096",
@@ -64,7 +59,7 @@
             "txt": "miniserve",
             "url": "http:\/\/vinsonkong2014.eu.org:39833",
             "purl": "http:\/\/192.168.30.100:39333"
-        },		
+        },
         {
             "txt": "WebDAV",
             "url": "http:\/\/vinsonkong2014.eu.org:39834",
