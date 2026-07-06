@@ -81,51 +81,9 @@ jobs:
       - name: Execute DIY Script
         run: |
           cd openwrt
-
-          IMAGE_MK="target/linux/mediatek/image/filogic.mk"
-
-          # =========================================================
-          # [安全重写] 使用 awk 精确替换 jcg_q30 的 sysupgrade 规则
-          # =========================================================
-          if [ ! -f "$IMAGE_MK" ]; then
-            echo "❌ 未找到 $IMAGE_MK"; exit 1
-          fi
-
-          echo "🔧 [YML] 使用 awk 安全重写 bin 格式规则..."
-          cp "$IMAGE_MK" "${IMAGE_MK}.bak"
-
-          awk '
-            /^define Device\/jcg_q30[[:space:]]*$/ { in_target = 1 }
-            /^endef$/ && in_target { in_target = 0 }
-            in_target && /^[[:space:]]*IMAGE\/sysupgrade\.itb/ {
-              print "\tIMAGE/sysupgrade.bin := append-kernel | pad-to $$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size"
-              next
-            }
-            { print }
-          ' "${IMAGE_MK}.bak" > "$IMAGE_MK"
-
-          # 验证：检查 jcg_q30 块内是否存在目标 BIN 规则
-          TARGET_BIN_IN_BLOCK=$(awk '
-            /^define Device\/jcg_q30[[:space:]]*$/ { in_target = 1 }
-            /^endef$/ && in_target { in_target = 0 }
-            in_target && /IMAGE\/sysupgrade\.bin := append-kernel/ { found = 1 }
-            END { print found+0 }
-          ' "$IMAGE_MK")
-
-          if [ "$TARGET_BIN_IN_BLOCK" -eq 1 ]; then
-            echo "✅ [YML] awk 安全重写成功（jcg_q30 块内已确认）"
-            awk '/^define Device\/jcg_q30[[:space:]]*$/,/^endef$/' "$IMAGE_MK" | grep "IMAGE/sysupgrade.bin" | cat -A
-          else
-            echo "❌ [YML] jcg_q30 块内未找到目标 BIN 规则！"
-            echo "🔍 jcg_q30 设备块完整内容:"
-            awk '/^define Device\/jcg_q30[[:space:]]*$/,/^endef$/' "$IMAGE_MK" | cat -An
-            exit 1
-          fi
-
           # =========================================================
           # 执行原有 diyjcq.sh (Lucky + EasyTier)
           # =========================================================
-          cd ..
           if [ -f "./${{ env.DIY_SCRIPT }}" ]; then
             echo "🔧 开始执行 ${{ env.DIY_SCRIPT }} ..."
             chmod +x "./${{ env.DIY_SCRIPT }}"
