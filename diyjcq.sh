@@ -100,4 +100,47 @@ else
     exit 1
 fi
 
+# ========== [ 23.05 JCG Q30 强制生成 sysupgrade.bin ] ==========
+# 针对 ImageBuilder 预编译环境的特殊处理
+IB_STAGE_DIR="staging_dir/host/bin"
+TARGET_MK="target/linux/mediatek/image/filogic.mk"
+
+if [ -f "$TARGET_MK" ]; then
+    echo "🔧 检测到 filogic.mk，正在注入 legacy bin 支持..."
+    
+    # 1. 备份原始文件
+    cp "$TARGET_MK" "${TARGET_MK}.bak"
+    
+    # 2. 将 jcg_q30 的 IMAGE/sysupgrade.itb 替换为 sysupgrade.bin
+    # 注意：不同小版本的 mk 语法可能略有差异，这里使用通用正则
+    sed -i '/define Device\/jcg_q30/,/endef/ {
+        s|IMAGE/sysupgrade.itb.*|IMAGE/sysupgrade.bin := append-kernel \| pad-to 64k \| append-rootfs \| pad-rootfs \| check-size \| append-metadata|
+        s|IMAGES.*itb|IMAGES += sysupgrade.bin|
+    }' "$TARGET_MK"
+    
+    # 3. 验证修改是否成功
+    if grep -q "sysupgrade.bin" "$TARGET_MK"; then
+        echo "✅ 已成功将 JCG Q30 固件格式从 itb 切换为 bin"
+    else
+        echo "⚠️ sed 替换未生效，尝试备用方案..."
+        # 备用方案：直接在文件末尾追加覆盖定义
+        cat >> "$TARGET_MK" << 'EOF'
+
+# Force legacy bin format for JCG Q30
+define Device/jcg_q30-bin
+  DEVICE_VENDOR := JCG
+  DEVICE_MODEL := Q30
+  IMAGES := sysupgrade.bin
+  IMAGE/sysupgrade.bin := append-kernel | pad-to 64k | append-rootfs | pad-rootfs | check-size | append-metadata
+endef
+TARGET_DEVICES += jcg_q30-bin
+EOF
+        echo "✅ 已通过追加定义方式启用 bin 格式"
+    fi
+else
+    echo "❌ 未找到 $TARGET_MK，请确认 ImageBuilder 版本是否为 23.05"
+fi
+
+
 echo "🎉 diyjcq.sh 全部执行完毕！"
+exit 0
