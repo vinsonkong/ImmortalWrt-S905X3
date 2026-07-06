@@ -1,390 +1,366 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-    
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+::-webkit-scrollbar {
+    display: none;
+}
 
-        *::-webkit-scrollbar {
-            display: none
-        }
+html {
+    min-width: 640px;
+}
 
-        html {
-            min-width: 640px;
-        }
+body {
+    background-color: white;
+    min-width: 640px;
+    color: #333;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+}
 
-        body {
-            background-color: white;
-            min-width: 640px;
-            color: #333;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            height: 100vh;
-            overflow: hidden;
-        }
+a {
+    text-decoration: none;
+    color: #333;
+}
 
-        a {
-            text-decoration: none;
-            color: #333;
-        }
+/* 主容器 */
+#main {
+    height: 100%;
+    width: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
 
-        #main {
-            height: 100%;
-            width: 100%;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-        }
+#main .topbar {
+    width: 100%;
+    height: 60px;
+    line-height: 50px;
+    background: linear-gradient(135deg, #1e88e5, #0d47a1);
+    color: white;
+    font-size: 1.5em;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    z-index: 100;
+}
 
-        #main .topbar {
-            width: 100%;
-            height: 60px;
-            line-height: 50px;
-            background: linear-gradient(135deg, #1e88e5, #0d47a1);
-            color: white;
-            font-size: 1.5em;
-            overflow: hidden;
-            position: relative;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 100;
-        }
+#main .topbar .left {
+    padding-left: 1em;
+    float: left;
+}
 
-        #main .topbar .left {
-            padding-left: 1em;
-            float: left;
-        }
+#main .topbar .right {
+    padding-right: 1em;
+    float: right;
+}
 
-        #main .topbar .right {
-            padding-right: 1em;
-            float: right;
-        }
+#main .topbar .middle {
+    position: absolute;
+    width: 100%;
+    z-index: -1;
+    text-align: center;
+    font-weight: 500;
+}
 
-        #main .topbar .middle {
-            position: absolute;
-            width: 100%;
-            z-index: -1;            
-            text-align: center;
-            font-weight: 500;
-        }
+/* 内容区域 */
+#main .content {
+    width: 100%;
+    flex: 1;
+    overflow-y: scroll;
+    padding: 1em;
+    background: #f8fbff;
+}
 
-        #main .content {
-            width: 100%;
-            flex: 1;
-            overflow-y: scroll;
-            padding: 1em;
-            background: #f8fbff;
-        }
+.content .grid strong {
+    line-height: 3em;
+}
 
-        .content .grid {
-            margin-top: 1.5em;
-        }
+.grid {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+}
 
-        .content .grid strong {
-            line-height: 3em;
-        }
+.grid .app {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+    padding: 8px;
+}
 
-        .grid {
-            width: 100%;
-            display: flex;
-            flex-flow: row wrap;
-            align-items: center;
-            justify-content: flex-start;
-        }
+.grid a {
+    width: 100%;
+    height: 100%;
+}
 
-        .grid .app {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 160px;
-            padding: 8px;
-        }
+.grid a>* {
+    display: block;
+    margin: 0 auto;
+    text-align: center;
+    width: 100%;
+    height: 100%;
+}
 
-        .grid a {
-            width: 100%;
-            height: 100%;
-        }
+.grid span {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 100px;
+    background: linear-gradient(145deg, #ffffff, #ceffce);
+    border-radius: 20px;
+    padding: 15px 10px;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 3px 6px rgba(30, 136, 229, 0.15);
+    border: 3px solid #bbdefb;
+}
 
-        .grid a>* {
-            display: block;
-            margin: 0 auto;
-            text-align: center;
-            width: 100%;
-            height: 100%;
-        }
+.grid span:hover {
+    background: linear-gradient(145deg, #e3f2fd, #bbdefb);
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(30, 136, 229, 0.25);
+}
 
-        .grid span {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            min-height: 100px;
-            background: linear-gradient(145deg, #ffffff, #ceffce);
-            border-radius: 20px;
-            padding: 15px 10px;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            box-shadow: 0 3px 6px rgba(30, 136, 229, 0.15);
-            border: 3px solid #bbdefb;
-        }
+/* 底部栏 */
+#main .footerbar {
+    width: 100%;
+    height: 165px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-content: center;
+    background: linear-gradient(135deg, #d9ffff, #caffff);
+    color: white;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    padding-top: 10px;
+}
 
-        .grid span:hover {
-            background: linear-gradient(145deg, #e3f2fd, #bbdefb);
-            transform: translateY(-5px);
-            box-shadow: 0 8px 16px rgba(30, 136, 229, 0.25);
-        }
+#main .footerbar .grid {
+    position: absolute;
+    bottom: .3em;
+    width: 100%;
+    z-index: 20;
+    display: flex;
+    justify-content: center;
+}
 
-        #main .footerbar {
-            width: 100%;
-            height: 165px;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            align-content: center;
-            background: linear-gradient(135deg, #d9ffff, #caffff);
-            color: white;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            padding-top: 10px;
-        }
+.user-button {
+    background: rgba(255, 255, 255, 0.5);
+    border: none;
+    color: #333;
+    padding: 12px 20px;
+    margin-left: 10px;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 500;
+    font-size: 18px;
+    min-width: 22px;
+    min-height: 12px;
+    box-sizing: border-box;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
 
-        #main .footerbar .grid {
-            position: absolute;
-            bottom: .3em;
-            width: 100%;
-            z-index: 20;
-            display: flex;
-            justify-content: center;
-        }
+.user-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
 
- 
+.app-icon {
+    font-size: 2.5em;
+    margin-bottom: 15px;
+    color: #1e88e5;
+    background: rgba(30, 136, 229, 0.1);
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
+/* 编辑状态 */
+.editing .grid span {
+    background: #fff9c4;
+}
 
-        .user-button {
-            background: rgba(255,255,255,0.5);
-            border: none;
-            color: #333;
-            padding: 12px 20px;
-            margin-left: 10px;
-            border-radius: 30px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: 500;
-            font-size: 18px;
-            min-width: 22px;
-            min-height: 12px;
-            box-sizing: border-box;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        
-        .user-button:hover {
-            background: rgba(255,255,255,0.3);
-            transform: translateY(-2px);
-        }
-        
-        .app-icon {
-            font-size: 2.5em;
-            margin-bottom: 15px;
-            color: #1e88e5;
-            background: rgba(30, 136, 229, 0.1);
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+/* 模态框通用样式 */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
 
-        /* 编辑状态下的样式 */
-        .editing .grid span {
-            background: #fff9c4;
-        }
-        
-        /* 编辑表单样式 */
-        #edit-modal, #add-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .edit-form, .add-form {
-            background: white;
-            width: 450px;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-            overflow: hidden;
-        }
-        
-        .edit-form-header, .add-form-header {
-            padding: 15px 20px;
-            background: #1e88e5;
-            color: white;
-            font-weight: 600;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .edit-form-content, .add-form-content {
-            padding: 20px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-            color: #555;
-        }
-        
-        .form-group input {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 15px;
-        }
-        
-        .form-group input:focus {
-            border-color: #1e88e5;
-            outline: none;
-        }
-        
-        .edit-form-footer, .add-form-footer {
-            padding: 15px 20px;
-            background: #f5f9ff;
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-        
-        .form-button {
-            padding: 8px 20px;
-            border-radius: 4px;
-            border: none;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .cancel-btn {
-            background: #f0f0f0;
-            color: #555;
-        }
-        
-        .cancel-btn:hover {
-            background: #e5e5e5;
-        }
-        
-        .submit-btn {
-            background: #1e88e5;
-            color: white;
-        }
-        
-        .submit-btn:hover {
-            background: #1565c0;
-        }
-        
-        .delete-btn {
-            background: #f44336;
-            color: white;
-            padding: 5px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .delete-btn:hover {
-            background: #d32f2f;
-        }
-    
+.modal-content {
+    background: white;
+    width: 450px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
 
-    <!-- 自适应 -->
-    
-        /*横屏*/
-        @media all and (orientation : landscape) {
-            @media screen and (max-width: 639px) {
-                .app {
-                    width: 25%;
-                    height: 25vw;
-                }
+.modal-header {
+    padding: 15px 20px;
+    background: #1e88e5;
+    color: white;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-                .footerbar .app {
-                    width: 20%;
-                    height: 20vw;
-                }
-            }
+.modal-body {
+    padding: 20px;
+}
 
-            @media screen and (min-width: 640px) and (max-width: 859px) {
-                .app {
-                    width: 20%;
-                    height: 20vw;
-                }
+.form-group {
+    margin-bottom: 15px;
+}
 
-            }
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #555;
+}
 
-            @media screen and (min-width: 860px) and (max-width: 1349px) {
-                .app {
-                    width: 16.65%;
-                    height: 16.65vw;
-                }
+.form-group input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 15px;
+}
 
-            }
+.form-group input:focus {
+    border-color: #1e88e5;
+    outline: none;
+}
 
-            @media screen and (min-width: 1350px) and (max-width: 1899px) {
-                .app {
-                    width: 14.23%;
-                    height: 14.23vw;
-                }
+.modal-footer {
+    padding: 15px 20px;
+    background: #f5f9ff;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
 
-            }
+.btn {
+    padding: 8px 20px;
+    border-radius: 4px;
+    border: none;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
 
-            @media screen and (min-width: 1900px) {
-                .app {
-                    width: 12.5%;
-                    height: 12.5vw;
-                }
+.btn-cancel {
+    background: #f0f0f0;
+    color: #555;
+}
 
-            }
+.btn-cancel:hover {
+    background: #e5e5e5;
+}
+
+.btn-submit {
+    background: #1e88e5;
+    color: white;
+}
+
+.btn-submit:hover {
+    background: #1565c0;
+}
+
+.btn-delete {
+    background: #f44336;
+    color: white;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-delete:hover {
+    background: #d32f2f;
+}
+
+/* 响应式布局 */
+@media all and (orientation: landscape) {
+    @media screen and (max-width: 639px) {
+        .app {
+            width: 25%;
+            height: 25vw;
         }
-
-        /*竖屏*/
-        @media all and (orientation : portrait) {
-            .footerbar .app {
-                width: 20%;
-                height: 20vw;
-            }
-
-
-            @media screen and (max-width: 764px) {
-                .app {
-                    width: 25%;
-                    height: 25vw;
-                }
-
-            }
-
-            @media screen and (min-width: 765px) {
-                .app {
-                    width: 20%;
-                    height: 20vw;
-                }
-            }
+        .footerbar .app {
+            width: 20%;
+            height: 20vw;
         }
-        
-        @media screen and (max-width: 860px) {
-            .user-button {
-                padding: 12px 20px;
-                font-size: 14px;
-                margin-left: 6px;
-            }
+    }
+    @media screen and (min-width: 640px) and (max-width: 859px) {
+        .app {
+            width: 20%;
+            height: 20vw;
         }
-    
+    }
+    @media screen and (min-width: 860px) and (max-width: 1349px) {
+        .app {
+            width: 16.65%;
+            height: 16.65vw;
+        }
+    }
+    @media screen and (min-width: 1350px) and (max-width: 1899px) {
+        .app {
+            width: 14.23%;
+            height: 14.23vw;
+        }
+    }
+    @media screen and (min-width: 1900px) {
+        .app {
+            width: 12.5%;
+            height: 12.5vw;
+        }
+    }
+}
+
+@media all and (orientation: portrait) {
+    .footerbar .app {
+        width: 20%;
+        height: 20vw;
+    }
+    @media screen and (max-width: 764px) {
+        .app {
+            width: 25%;
+            height: 25vw;
+        }
+    }
+    @media screen and (min-width: 765px) {
+        .app {
+            width: 20%;
+            height: 20vw;
+        }
+    }
+}
+
+@media screen and (max-width: 860px) {
+    .user-button {
+        padding: 12px 20px;
+        font-size: 14px;
+        margin-left: 6px;
+    }
+}
