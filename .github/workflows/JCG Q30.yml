@@ -1,4 +1,4 @@
-name: Build ImmortalWrt JCG Q30
+name: Build ImmortalWrt JCG Q30 (21.02.7)
 
 on:
   workflow_dispatch:
@@ -6,21 +6,18 @@ on:
       immortalwrt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '23.05.7'
+        default: '21.02.7'
         type: choice
         options:
           - 21.02.7
-          - 23.05.4
-          - 23.05.5
-          - 23.05.6
-          - 23.05.7
-          - 24.10.0
-          - 24.10.1
-          - 24.10.2
       target_profile:
         description: 'Target Profile (Device)'
         required: true
         default: 'jcg_q30'
+        # 21.02.7 的 Profile 名称可能略有不同，可根据实际情况调整
+        options:
+          - jcg_q30
+          - jcg_q30-pro
 
 env:
   CUSTOM_FILES_DIR: "custom-filesjcq"
@@ -31,7 +28,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build ImmortalWrt for ${{ inputs.target_profile }}
+    name: Build ImmortalWrt ${{ inputs.immortalwrt_version }} for ${{ inputs.target_profile }}
 
     steps:
       - name: Checkout
@@ -59,36 +56,39 @@ jobs:
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
           VERSION=${{ inputs.immortalwrt_version }}
-          BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/mediatek/filogic"
-          
-          if [[ "$VERSION" == "24."* ]]; then
-            EXT="tar.zst"
-          else
+          # --- 21.02.7 专用路径 ---
+          if [[ "$VERSION" == "21.02.7" ]]; then
+            BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armvirt/64"
             EXT="tar.xz"
+            BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-armvirt-64.Linux-x86_64.${EXT}"
+          else
+            # 兼容其他版本（如果需要）
+            BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/mediatek/filogic"
+            EXT="tar.zst"
+            BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-mediatek-filogic.Linux-x86_64.${EXT}"
           fi
           
-          BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-mediatek-filogic.Linux-x86_64.${EXT}"
           echo "Downloading: $BUILDER_URL"
           wget -q "$BUILDER_URL" -O "imagebuilder.${EXT}"
           
+          # 解压
           if [[ "$EXT" == "tar.zst" ]]; then
             tar --use-compress-program=unzstd -xf "imagebuilder.${EXT}"
           else
             tar -xf "imagebuilder.${EXT}"
           fi
           
-          mv immortalwrt-imagebuilder-*-mediatek-filogic.Linux-x86_64 openwrt
+          # 重命名目录
+          mv immortalwrt-imagebuilder-*-*.Linux-x86_64 openwrt
 
       - name: Execute DIY Script
         run: |
           cd openwrt
-          # =========================================================
-          # 执行原有 diyjcq.sh (Lucky + EasyTier)
-          # =========================================================
           if [ -f "./${{ env.DIY_SCRIPT }}" ]; then
             echo "🔧 开始执行 ${{ env.DIY_SCRIPT }} ..."
             chmod +x "./${{ env.DIY_SCRIPT }}"
-            cd openwrt && "../${{ env.DIY_SCRIPT }}" && cd ..
+            # 注意路径修正
+            "../${{ env.DIY_SCRIPT }}"
             echo "✅ ${{ env.DIY_SCRIPT }} 执行完毕"
           else
             echo "⚠️ 未找到 ${{ env.DIY_SCRIPT }}，跳过"
@@ -110,9 +110,7 @@ jobs:
           fi
           
           find ./openwrt/files -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
-          chmod -R +x ./openwrt/files/etc/init.d ./openwrt/files/etc/uci-defaults ./openwrt/files/etc/sh 2>/dev/null || true
-          chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
-          chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
+          chmod -R +x ./openwrt/files/etc/init.d ./openwrt/files/etc/uci-defaults 2>/dev/null || true
 
       - name: Build Firmware with Custom Config
         id: build_firmware
@@ -123,10 +121,12 @@ jobs:
           INFO_FILE="/tmp/ib_profiles.txt"
           make info > "$INFO_FILE" 2>&1 || true
           
+          # 21.02.7 的 Profile 匹配逻辑
           if grep -q "^$INPUT_PROFILE:" "$INFO_FILE"; then
             FINAL_PROFILE="$INPUT_PROFILE"
           else
-            FINAL_PROFILE=$(grep -iE "^${INPUT_PROFILE}(-pro|-ubootmod)?" "$INFO_FILE" | head -n 1 | cut -d':' -f1)
+            # 尝试模糊匹配
+            FINAL_PROFILE=$(grep -i "^${INPUT_PROFILE}" "$INFO_FILE" | head -n 1 | cut -d':' -f1)
           fi
           rm -f "$INFO_FILE"
           
@@ -136,15 +136,16 @@ jobs:
           fi
           echo "✅ 使用 Profile: $FINAL_PROFILE"
           
-          PACKAGES_LIST=""
+          # 默认包列表（21.02.7 的包名可能略有不同）
+          PACKAGES_LIST="luci luci-app-ttyd curl wget-ssl"
+          
+          # 读取自定义包列表
           if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
             while IFS= read -r line; do
               case "$line" in \#*|"") continue ;; esac
               pkg=$(echo "$line" | xargs)
               [ -n "$pkg" ] && PACKAGES_LIST="$PACKAGES_LIST $pkg"
             done < "../${{ env.PACKAGES_LIST_FILE }}"
-          else
-            PACKAGES_LIST="luci luci-app-ttyd curl wget-ssl"
           fi
           
           echo "📦 包列表: $PACKAGES_LIST"
@@ -157,13 +158,14 @@ jobs:
         if: always()
         run: |
           echo "🔍 检查编译产物..."
-          FIRMWARE_DIR="openwrt/bin/targets/mediatek/filogic"
+          # 21.02.7 的输出路径通常是 generic 或具体架构
+          FIRMWARE_DIR="openwrt/bin/targets/armvirt/64"
           
           if [ -d "$FIRMWARE_DIR" ]; then
             echo "📂 目录内容:"
             ls -lah "$FIRMWARE_DIR/"
             
-            SYSUPGRADE_COUNT=$(find "$FIRMWARE_DIR" $ -name "*sysupgrade.bin" -o -name "*sysupgrade.itb" $ 2>/dev/null | wc -l)
+            SYSUPGRADE_COUNT=$(find "$FIRMWARE_DIR" $ -name "*sysupgrade.bin" $ 2>/dev/null | wc -l)
             echo "📊 sysupgrade 固件数量: $SYSUPGRADE_COUNT"
             
             if [ "$SYSUPGRADE_COUNT" -eq 0 ]; then
@@ -181,10 +183,7 @@ jobs:
         with:
           name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.target_profile }}
           path: |
-            openwrt/bin/targets/mediatek/filogic/*sysupgrade.*
-            openwrt/bin/targets/mediatek/filogic/*-bl31-uboot.fip
-            openwrt/bin/targets/mediatek/filogic/*-preloader.bin
-            openwrt/bin/targets/mediatek/filogic/*.manifest
+            openwrt/bin/targets/armvirt/64/*sysupgrade.bin
 
       - name: Upload Firmware to Release
         if: success()
@@ -195,7 +194,7 @@ jobs:
           tag_name: iwrt-${{ inputs.target_profile }}-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
           name: ImmortalWrt JCG Q30 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            ImmortalWrt 固件 (JCG Q30 Pro)
+            ImmortalWrt 固件 (JCG Q30)
             - 版本: ${{ inputs.immortalwrt_version }}
             - 设备: ${{ inputs.target_profile }}
             
@@ -206,10 +205,7 @@ jobs:
             - 包列表: ${{ env.PACKAGES_LIST_FILE }}
             
             ### ⚠️ 刷机提示
-            1. NAND 设备升级请使用 `*sysupgrade.bin` 文件
-            2. 如需更新引导，请使用对应的 `preloader.bin` 和 `bl31-uboot.fip`
-            3. 默认 IP: 192.168.1.1 / 密码: password
+            1. 请使用 *sysupgrade.bin 文件进行升级
+            2. 默认 IP: 192.168.1.1 / 密码: password
           files: |
-            openwrt/bin/targets/mediatek/filogic/*sysupgrade.*
-            openwrt/bin/targets/mediatek/filogic/*-bl31-uboot.fip
-            openwrt/bin/targets/mediatek/filogic/*-preloader.bin
+            openwrt/bin/targets/armvirt/64/*sysupgrade.bin
