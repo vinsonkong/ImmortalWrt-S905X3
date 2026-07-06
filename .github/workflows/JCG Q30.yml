@@ -142,10 +142,9 @@ jobs:
           fi
           
           echo "📦 包列表: $PACKAGES_LIST"
-          echo "🚀 开始编译 (包含 bin 格式)..."
+          echo "🚀 开始编译..."
           
           set -e
-          # ⚠️ 关键修改：通过 EXTRA_IMAGE_NAME 和默认行为确保生成所有支持的 bin 格式
           make image PROFILE="$FINAL_PROFILE" FILES="files" PACKAGES="$PACKAGES_LIST" V=s
 
       - name: Diagnose Build Output
@@ -158,10 +157,11 @@ jobs:
             echo "📂 目录内容:"
             ls -lah "$FIRMWARE_DIR/"
             
-            BIN_COUNT=$(find "$FIRMWARE_DIR" $ -name "*.bin" -o -name "*.itb" -o -name "*.fip" $ 2>/dev/null | wc -l)
-            echo "📊 固件文件数量 (bin/itb/fip): $BIN_COUNT"
+            # ✅ 修复：正确转义 find 的括号，避免 Shell 解析错误
+            FIRMWARE_COUNT=$(find "$FIRMWARE_DIR" $ -name "*.bin" -o -name "*.itb" -o -name "*.fip" $ 2>/dev/null | wc -l)
+            echo "📊 固件文件数量 (bin/itb/fip): $FIRMWARE_COUNT"
             
-            if [ "$BIN_COUNT" -eq 0 ]; then
+            if [ "$FIRMWARE_COUNT" -eq 0 ]; then
               echo "⚠️ 未找到任何固件文件，请检查上方 Build 步骤日志"
             else
               echo "✅ 固件生成成功！"
@@ -201,10 +201,9 @@ jobs:
             - 包列表: ${{ env.PACKAGES_LIST_FILE }}
             
             ### ⚠️ 刷机提示
-            1. NAND 设备首次刷入请使用 `factory.bin`
-            2. 系统内升级请使用 `sysupgrade.bin`
-            3. 如需更新引导，请使用对应的 `preloader.bin` 和 `bl31-uboot.fip`
-            4. 默认 IP: 192.168.1.1 / 密码: password
+            1. NAND 设备系统内升级请使用 `*sysupgrade.itb` 文件
+            2. 首次刷入或救砖请使用 `preloader.bin` + `bl31-uboot.fip` + `sysupgrade.itb`
+            3. 默认 IP: 192.168.1.1 / 密码: password
           files: |
             openwrt/bin/targets/mediatek/filogic/*.bin
             openwrt/bin/targets/mediatek/filogic/*.itb
