@@ -78,64 +78,80 @@ jobs:
           
           mv immortalwrt-imagebuilder-*-mediatek-filogic.Linux-x86_64 openwrt
 
-      # ✅ 修改点：在执行 diyjcq.sh 之前，先通过 yml 内联注入 BIN 格式补丁
       - name: Execute DIY Script
         run: |
           cd openwrt
 
-          # =========================================================
-          # [内联] 强制 IB 输出 bin 格式固件 (Tab 安全)
-          # =========================================================
           IMAGE_MK="target/linux/mediatek/image/filogic.mk"
+
+          # =========================================================
+          # [修复] 自动修正 filogic.mk 第42行原生缩进问题
+          # =========================================================
           if [ -f "$IMAGE_MK" ]; then
-            echo "🔧 [YML] 开始注入 bin 格式规则..."
-            cp "$IMAGE_MK" "${IMAGE_MK}.bak"
-            TAB=$'\t'
-
-            DEVICE_NAMES=("jcg_q30" "jcg_q30-pro" "jcg-q30" "jcg_q30_ubootmod")
-            PATCHED=false
-
-            for DEV in "${DEVICE_NAMES[@]}"; do
-              if grep -q "define Device/${DEV}" "$IMAGE_MK"; then
-                echo "✅ 找到设备定义: $DEV"
-                sed -i "/define Device\/${DEV//\//\\/}/,/endef/{
-                  /IMAGE\/sysupgrade.itb/d
-                  /UBINIZE_OPTS/d
-                  /UBI_VOLUME/d
-                  /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
-                }" "$IMAGE_MK"
-                PATCHED=true
-                break
-              fi
-            done
-
-            if [ "$PATCHED" = false ]; then
-              MATCHED_DEV=$(grep -oP 'define Device/\K[^\s]+(?=.*q30)' "$IMAGE_MK" | head -1)
-              if [ -n "$MATCHED_DEV" ]; then
-                echo "✅ 模糊匹配到设备: $MATCHED_DEV"
-                sed -i "/define Device\/${MATCHED_DEV//\//\\/}/,/endef/{
-                  /IMAGE\/sysupgrade.itb/d
-                  /UBINIZE_OPTS/d
-                  /UBI_VOLUME/d
-                  /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
-                }" "$IMAGE_MK"
-                PATCHED=true
-              fi
-            fi
-
-            if grep -P "^\tIMAGE/sysupgrade.bin" "$IMAGE_MK" > /dev/null; then
-              echo "✅ [YML] bin 格式规则注入成功（已确认 Tab 缩进）"
+            echo "🔧 [修复] 检查并修正 filogic.mk 第42行缩进..."
+            LINE42=$(sed -n '42p' "$IMAGE_MK")
+            if echo "$LINE42" | grep -qP '^ +\S'; then
+              echo "⚠️ 第42行检测到空格缩进，正在修复..."
+              sed -i '42s/^ */\t/' "$IMAGE_MK"
+              echo "✅ 第42行已修复"
             else
-              echo "❌ [YML] bin 格式规则注入失败！"
-              cat -A "$IMAGE_MK" | grep -i "sysupgrade" || true
-              exit 1
+              echo "ℹ️ 第42行缩进正常或为空行"
             fi
+            echo "🔍 修复后第38-46行 (cat -A):"
+            sed -n '38,46p' "$IMAGE_MK" | cat -A
           else
-            echo "⚠️ 未找到 filogic.mk，跳过 bin 格式注入"
+            echo "❌ 未找到 $IMAGE_MK"
+            exit 1
           fi
 
           # =========================================================
-          # 执行原有 diyjcq.sh (Lucky + EasyTier 等逻辑保持不变)
+          # [内联] 强制 IB 输出 bin 格式固件 (Tab 安全)
+          # =========================================================
+          echo "🔧 [YML] 开始注入 bin 格式规则..."
+          cp "$IMAGE_MK" "${IMAGE_MK}.bak"
+          TAB=$'\t'
+
+          DEVICE_NAMES=("jcg_q30" "jcg_q30-pro" "jcg-q30" "jcg_q30_ubootmod")
+          PATCHED=false
+
+          for DEV in "${DEVICE_NAMES[@]}"; do
+            if grep -q "define Device/${DEV}" "$IMAGE_MK"; then
+              echo "✅ 找到设备定义: $DEV"
+              sed -i "/define Device\/${DEV//\//\\/}/,/endef/{
+                /IMAGE\/sysupgrade.itb/d
+                /UBINIZE_OPTS/d
+                /UBI_VOLUME/d
+                /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
+              }" "$IMAGE_MK"
+              PATCHED=true
+              break
+            fi
+          done
+
+          if [ "$PATCHED" = false ]; then
+            MATCHED_DEV=$(grep -oP 'define Device/\K[^\s]+(?=.*q30)' "$IMAGE_MK" | head -1)
+            if [ -n "$MATCHED_DEV" ]; then
+              echo "✅ 模糊匹配到设备: $MATCHED_DEV"
+              sed -i "/define Device\/${MATCHED_DEV//\//\\/}/,/endef/{
+                /IMAGE\/sysupgrade.itb/d
+                /UBINIZE_OPTS/d
+                /UBI_VOLUME/d
+                /KERNEL.*:=/a\\${TAB}IMAGE/sysupgrade.bin := append-kernel | pad-to \$\$\$\$(BLOCKSIZE) | append-rootfs | pad-rootfs | check-size
+              }" "$IMAGE_MK"
+              PATCHED=true
+            fi
+          fi
+
+          if grep -P "^\tIMAGE/sysupgrade.bin" "$IMAGE_MK" > /dev/null; then
+            echo "✅ [YML] bin 格式规则注入成功（已确认 Tab 缩进）"
+          else
+            echo "❌ [YML] bin 格式规则注入失败！"
+            cat -A "$IMAGE_MK" | grep -i "sysupgrade" || true
+            exit 1
+          fi
+
+          # =========================================================
+          # 执行原有 diyjcq.sh (Lucky + EasyTier)
           # =========================================================
           cd ..
           if [ -f "./${{ env.DIY_SCRIPT }}" ]; then
