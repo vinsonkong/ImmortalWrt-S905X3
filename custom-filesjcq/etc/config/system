@@ -1,6 +1,6 @@
 
 config system
-	option hostname 'JCQ-Q3'
+	option hostname 'JCG-Q30'
 	option timezone 'CST-8'
 	option ttylogin '0'
 	option log_size '64'
