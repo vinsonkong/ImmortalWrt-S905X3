@@ -43,8 +43,7 @@ env:
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packages.txt"
   BUILDER_DIR: "openwrt"
-  # S905X3 最通用的 DTB，覆盖 X96 Max+ / TX3 / A95XF3-Air 等主流盒子
-  DEFAULT_DTB: "meson-sm1-x96-max-plus"
+  DEFAULT_DTB: "meson-sm1-x96-max-plus-q2.dtb"
   # 根分区大小(MB)，eMMC 安装建议 ≥2048
   ROOTFS_PARTSIZE: "2048"
   # 默认 LAN IP
@@ -216,14 +215,6 @@ jobs:
 
             ### 🔧 DTB Troubleshooting
             If the box fails to boot or Ethernet doesn't work, edit `/boot/uEnv.txt` in the BOOT partition and change the `FDT` line:
-
-            | Box Model | Recommended DTB |
-            |-----------|-----------------|
-            | X96 Max+ | `meson-sm1-x96-max-plus` |
-            | X96 Max+ (eth fix) | `meson-sm1-sei610-ethfix` |
-            | A95X F3 Air | `meson-sm1-a95xf3-air` |
-            | TX3 Mini | `meson-sm1-tx3-mini` |
-            | HK1 Box | `meson-sm1-hk1box` |
 
             > 💡 After editing `uEnv.txt`, safely reboot the device.
           files: |
