@@ -1,3 +1,8 @@
+# ==========================================
+# OpenWrt / ImmortalWrt 自定义软件包列表
+# 说明: 以 # 开头的行会被自动忽略
+#       请勿在包名后方添加行内注释
+# ==========================================
 
 # === 核心基础与系统工具 ===
 base-files
@@ -63,7 +68,7 @@ git
 ttyd
 openssh-sftp-server
 
-#=== 磁盘管理与文件系统支持 ===
+# === 磁盘管理与文件系统支持 ===
 block-mount
 mount-utils
 losetup
@@ -127,7 +132,7 @@ luci-i18n-lucky-zh-cn
 ffmpeg
 libffmpeg-full
 
-#=== 虚拟组网工具 ===
+# === 虚拟组网工具 ===
 luci-app-easytier
 luci-app-zerotier
 luci-i18n-zerotier-zh-cn
@@ -213,6 +218,7 @@ luci-i18n-syncthing-zh-cn
 openlist
 luci-app-openlist
 luci-i18n-openlist-zh-cn
+
 
 # === 下载工具 ===
 aria2
