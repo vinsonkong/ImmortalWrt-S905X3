@@ -17,7 +17,6 @@ var title = "", user = "", ipv6 = "", pins = [], apps = [];
                 catch(e) { return s; }
             }
             apps.forEach(function(a) { a.url = fixUrl(a.url); a.purl = fixUrl(a.purl); });
-            pins.forEach(function(p) { p.url = fixUrl(p.url); p.purl = fixUrl(p.purl); });
 
             initPage();
         })
