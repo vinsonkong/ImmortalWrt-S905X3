@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title></title>
+    <link rel="stylesheet" href="assets/css/webguide.css"> 
+    
+    <!-- Font Awesome 图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+
+<body>
+    <div id="main">
+        <div class="topbar">
+            <div class="right">
+                 <a href="javascript:void(0);" id="manage-button" class="user-button">
+                     <i class="fas fa-edit"></i> 管理网址
+                 </a>
+            </div>
+            <div class="left">
+                 <a href="javascript:void(0);" id="add-button" class="user-button">
+                     <i class="fas fa-plus"></i> 添加网址
+                 </a>
+            </div>
+            <div class="middle title"></div>
+        </div>
+
+        <div class="content">
+            <div class="grid"></div>
+        </div>
+        <div class="footerbar">
+            <div class="grid"></div>
+        </div>
+    </div>
+    
+    <!-- 编辑模态框 -->
+    <div id="edit-modal" class="modal"> 
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>编辑网址</span>
+                <button class="btn btn-delete">删除</button> 
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>名称</label>
+                    <input type="text" id="edit-txt" placeholder="网址名称">
+                </div>
+                <div class="form-group">
+                    <label>外网URL</label>
+                    <input type="text" id="edit-url" placeholder="https://...">
+                </div>
+                <div class="form-group">
+                    <label>内网URL</label>
+                    <input type="text" id="edit-purl" placeholder="http://内网地址...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel">取消</button> 
+                <button class="btn btn-submit">保存</button> 
+            </div>
+        </div>
+    </div>
+    
+    <!-- 添加模态框  -->
+    <div id="add-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>添加新网址</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>名称</label>
+                    <input type="text" id="add-txt" placeholder="网址名称">
+                </div>
+                <div class="form-group">
+                    <label>外网URL</label>
+                    <input type="text" id="add-url" placeholder="https://...">
+                </div>
+                <div class="form-group">
+                    <label>内网URL</label>
+                    <input type="text" id="add-purl" placeholder="http://内网地址...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel">取消</button>
+                <button class="btn btn-submit">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/edit.js"></script>
+</body>
+</html>
