@@ -20,12 +20,18 @@ on:
         description: 'Target Profile (Device)'
         required: true
         default: 'jcg_q30-ubootmod'
+        type: choice
+        options:
+          - jcg_q30-ubootmod
+          - jcg_q30
 
 env:
+  BUILDER_DIR: "openwrt"
   CUSTOM_FILES_DIR: "custom-filesjcq"
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packagesjcq.txt"
   DIY_SCRIPT: "diyjcq.sh"
+  DEFAULT_IP: "192.168.2.254"
 
 jobs:
   build:
@@ -33,21 +39,24 @@ jobs:
     name: Build ImmortalWrt for ${{ inputs.target_profile }}
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Create Swap File
         run: |
           if [ -z "$(swapon --show=NAME --noheadings)" ]; then
-            echo "Creating 4G swap..."
-            sudo fallocate -l 4G /mnt/swapfile
+            echo "⚡ Creating 4G swap..."
+            sudo fallocate -l 4G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=4096
             sudo chmod 600 /mnt/swapfile
             sudo mkswap /mnt/swapfile
             sudo swapon /mnt/swapfile
+            echo "✅ Swap enabled"
+          else
+            echo "ℹ️ Swap already active"
           fi
           free -h
 
-      - name: Install dependencies
+      - name: Install Dependencies
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
@@ -59,35 +68,36 @@ jobs:
         run: |
           VERSION="${{ inputs.immortalwrt_version }}"
           BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/mediatek/filogic"
-          
-          if [[ "$VERSION" == "24."* ]]; then
-            EXT="tar.zst"
-          else
-            EXT="tar.xz"
-          fi
-          
+
+          [[ "$VERSION" == "24."* ]] && EXT="tar.zst" || EXT="tar.xz"
+
           BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-mediatek-filogic.Linux-x86_64.${EXT}"
-          echo "Downloading: ${BUILDER_URL}"
-          wget -q "${BUILDER_URL}" -O "imagebuilder.${EXT}"
-          
+          echo "📥 Downloading: ${BUILDER_URL}"
+          wget -q --show-progress "${BUILDER_URL}" -O "imagebuilder.${EXT}"
+
           if [[ "$EXT" == "tar.zst" ]]; then
             tar --use-compress-program=unzstd -xf "imagebuilder.${EXT}"
           else
             tar -xf "imagebuilder.${EXT}"
           fi
-          
-          mv immortalwrt-imagebuilder-*-mediatek-filogic.Linux-x86_64 openwrt
+
+          mv immortalwrt-imagebuilder-*-mediatek-filogic.Linux-x86_64 "${{ env.BUILDER_DIR }}"
+
+          if [ ! -d "${{ env.BUILDER_DIR }}" ]; then
+            echo "❌ ImageBuilder extraction failed!" && exit 1
+          fi
+          echo "✅ ImageBuilder ready at ./${{ env.BUILDER_DIR }}"
 
       - name: Execute DIY Script
         run: |
-          cd openwrt
-          if [ -f "../${{ env.DIY_SCRIPT }}" ]; then
-            echo "🔧 开始执行 ${{ env.DIY_SCRIPT }} ..."
-            chmod +x "../${{ env.DIY_SCRIPT }}"
-            bash "../${{ env.DIY_SCRIPT }}"
-            echo "✅ ${{ env.DIY_SCRIPT }} 执行完毕"
+          if [ -f "${{ env.DIY_SCRIPT }}" ]; then
+            echo "🔧 Executing ${{ env.DIY_SCRIPT }}..."
+            chmod +x "${{ env.DIY_SCRIPT }}"
+            cd "${{ env.BUILDER_DIR }}"
+            "../${{ env.DIY_SCRIPT }}"
+            echo "✅ DIY script completed"
           else
-            echo "⚠️ 未找到 ${{ env.DIY_SCRIPT }}，跳过"
+            echo "⏭️ ${{ env.DIY_SCRIPT }} not found, skipping"
           fi
 
       - name: Inject Custom Files & Packages
@@ -96,14 +106,13 @@ jobs:
           BUILDER_FILES="${{ env.BUILDER_DIR }}/files"
           mkdir -p "$BUILDER_FILES" "${{ env.BUILDER_DIR }}/packages"
 
-          # 1. 注入自定义文件并立即修复权限（原子操作）
+          # 1. 注入自定义文件并修复权限
           if [ -d "${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_FILES_DIR }}" 2>/dev/null)" ]; then
             cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "$BUILDER_FILES/"
-            
+
             echo "🔐 Fixing permissions for ALL injected init.d scripts..."
             find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
-            
-            # 显式校验 easytier
+
             if [ -f "$BUILDER_FILES/etc/init.d/easytier" ]; then
               echo "✅ easytier found and marked executable"
             else
@@ -121,73 +130,74 @@ jobs:
             echo "⏭️ No custom IPKs found"
           fi
 
-          # 3. 其他通用权限修复
+          # 3. 通用权限修复
           find "$BUILDER_FILES/usr/bin" "$BUILDER_FILES/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
           [ -f "$BUILDER_FILES/etc/rc.local" ] && chmod +x "$BUILDER_FILES/etc/rc.local"
           [ -d "$BUILDER_FILES/etc/dropbear" ] && chmod 700 "$BUILDER_FILES/etc/dropbear"
           find "$BUILDER_FILES/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
-          
+
           echo "✅ Injection completed"
 
-
-      - name: Build Firmware with Custom Config
-        id: build_firmware
+      - name: Build Firmware with ImageBuilder
         run: |
-          cd openwrt
-          
+          cd "${{ env.BUILDER_DIR }}"
+
+          # sha256 兼容处理
+          command -v sha256 &>/dev/null || sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
+
+          # Profile 智能匹配
           INPUT_PROFILE="${{ inputs.target_profile }}"
           INFO_FILE="/tmp/ib_profiles.txt"
           make info > "$INFO_FILE" 2>&1 || true
-          
+
           if grep -q "^${INPUT_PROFILE}:" "$INFO_FILE"; then
             FINAL_PROFILE="$INPUT_PROFILE"
           else
             FINAL_PROFILE=$(grep -iE "^${INPUT_PROFILE}(-pro|-ubootmod)?" "$INFO_FILE" | head -n 1 | cut -d':' -f1)
           fi
           rm -f "$INFO_FILE"
-          
+
           if [ -z "$FINAL_PROFILE" ]; then
-            echo "❌ 找不到匹配的 Profile: $INPUT_PROFILE"
+            echo "❌ Profile not found: $INPUT_PROFILE"
             exit 1
           fi
-          echo "✅ 使用 Profile: $FINAL_PROFILE"
-          
-          PACKAGES_LIST=""
+          echo "✅ Using Profile: $FINAL_PROFILE"
+
+          # 读取包列表
+          PACKAGES=""
           if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
-            while IFS= read -r line; do
-              case "$line" in \#*|"") continue ;; esac
-              pkg=$(echo "$line" | xargs)
-              [ -n "$pkg" ] && PACKAGES_LIST="$PACKAGES_LIST $pkg"
-            done < "../${{ env.PACKAGES_LIST_FILE }}"
+            PACKAGES=$(grep -vE '^\s*#|^\s*$' "../${{ env.PACKAGES_LIST_FILE }}" | tr '\n' ' ')
+            echo "📋 Packages from ${{ env.PACKAGES_LIST_FILE }}: $(echo $PACKAGES | wc -w) items"
+          else
+            echo "⏭️ ${{ env.PACKAGES_LIST_FILE }} not found, building with defaults"
           fi
-          
-          echo "📦 包列表: $PACKAGES_LIST"
-          echo "🚀 开始编译..."
-          
-          set -e
-          make image PROFILE="$FINAL_PROFILE" FILES="files" PACKAGES="$PACKAGES_LIST" V=s
+
+          echo "🚀 Starting ImageBuilder..."
+          make image PROFILE="$FINAL_PROFILE" \
+            FILES="files" \
+            PACKAGES="$PACKAGES" \
+            V=s
 
       - name: Diagnose Build Output
         if: always()
         run: |
-          echo "🔍 检查编译产物..."
-          FIRMWARE_DIR="openwrt/bin/targets/mediatek/filogic"
-          
+          echo "🔍 Checking build artifacts..."
+          FIRMWARE_DIR="${{ env.BUILDER_DIR }}/bin/targets/mediatek/filogic"
+
           if [ -d "$FIRMWARE_DIR" ]; then
-            echo "📂 目录内容:"
+            echo "📂 Directory contents:"
             ls -lah "$FIRMWARE_DIR/"
-            
-            # ✅ 修复：正确转义 find 的括号，避免 Shell 解析错误
+
             FIRMWARE_COUNT=$(find "$FIRMWARE_DIR" $ -name "*.bin" -o -name "*.itb" -o -name "*.fip" $ 2>/dev/null | wc -l)
-            echo "📊 固件文件数量 (bin/itb/fip): $FIRMWARE_COUNT"
-            
+            echo "📊 Firmware files (bin/itb/fip): $FIRMWARE_COUNT"
+
             if [ "$FIRMWARE_COUNT" -eq 0 ]; then
-              echo "⚠️ 未找到任何固件文件，请检查上方 Build 步骤日志"
+              echo "⚠️ No firmware files found! Check the Build step logs above."
             else
-              echo "✅ 固件生成成功！"
+              echo "✅ Firmware generated successfully!"
             fi
           else
-            echo "❌ 固件输出目录不存在，编译可能在早期阶段就已失败"
+            echo "❌ Firmware output directory missing. Build likely failed early."
           fi
 
       - name: Upload Firmware to Artifact
@@ -196,10 +206,10 @@ jobs:
         with:
           name: ImmortalWrt-${{ inputs.immortalwrt_version }}-${{ inputs.target_profile }}
           path: |
-            openwrt/bin/targets/mediatek/filogic/*.bin
-            openwrt/bin/targets/mediatek/filogic/*.itb
-            openwrt/bin/targets/mediatek/filogic/*-bl31-uboot.fip
-            openwrt/bin/targets/mediatek/filogic/*.manifest
+            ${{ env.BUILDER_DIR }}/bin/targets/mediatek/filogic/*.bin
+            ${{ env.BUILDER_DIR }}/bin/targets/mediatek/filogic/*.itb
+            ${{ env.BUILDER_DIR }}/bin/targets/mediatek/filogic/*-bl31-uboot.fip
+            ${{ env.BUILDER_DIR }}/bin/targets/mediatek/filogic/*.manifest
 
       - name: Upload Firmware to Release
         if: success()
@@ -210,21 +220,30 @@ jobs:
           tag_name: iwrt-${{ inputs.target_profile }}-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
           name: ImmortalWrt JCG Q30 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
-            ImmortalWrt 固件 (JCG Q30)
-            - 版本: ${{ inputs.immortalwrt_version }}
-            - 设备: ${{ inputs.target_profile }}
-            
-            ### 📁 自定义内容
-            - DIY脚本: ${{ env.DIY_SCRIPT }}
-            - 自定义文件: ${{ env.CUSTOM_FILES_DIR }}
-            - 自定义插件: ${{ env.CUSTOM_PACKAGES_DIR }}
-            - 包列表: ${{ env.PACKAGES_LIST_FILE }}
-            
-            ### ⚠️ 刷机提示
-            1. NAND 设备系统内升级请使用 `*sysupgrade.itb` 文件
-            2. 首次刷入或救砖请使用 `preloader.bin` + `bl31-uboot.fip` + `sysupgrade.itb`
-            3. 默认 IP: 192.168.1.1 / 密码: password
+            ## ImmortalWrt Firmware (JCG Q30 Pro / MT7981B)
+
+            | Item | Value |
+            |------|-------|
+            | Version | `${{ inputs.immortalwrt_version }}` |
+            | Profile | `${{ inputs.target_profile }}` |
+            | Default IP | `${{ env.DEFAULT_IP }}` |
+
+            ### 📁 Custom Resources
+            - DIY Script: `${{ env.DIY_SCRIPT }}`
+            - Custom Files: `${{ env.CUSTOM_FILES_DIR }}`
+            - Custom Packages: `${{ env.CUSTOM_PACKAGES_DIR }}`
+            - Package List: `${{ env.PACKAGES_LIST_FILE }}`
+
+            ### ⚠️ Flash Instructions
+            1. **Sysupgrade (系统内升级)**: Use `*-sysupgrade.itb`
+            2. **First Flash / Unbrick**: Use `preloader.bin` + `*-bl31-uboot.fip` + `*-sysupgrade.itb` via MTK Flash Tool or TFTP
+            3. Default IP: `${{ env.DEFAULT_IP }}` / Password: `password`
+
+            ### 🔧 MT7981B Notes
+            - If using `24.10.x`, ensure your U-Boot matches the ubootmod layout
+            - DTS overlay issues? Check `/lib/firmware/mediatek/` for mt7981 WiFi firmware
+            - For NAND flash devices, always use `.itb` format for sysupgrade
           files: |
-            openwrt/bin/targets/mediatek/filogic/*.bin
-            openwrt/bin/targets/mediatek/filogic/*.itb
-            openwrt/bin/targets/mediatek/filogic/*-bl31-uboot.fip
+            ${{ env.BUILDER_DIR }}/bin/targets/mediatek/filogic/*.bin
+            ${{ env.BUILDER_DIR }}/bin/targets/mediatek/filogic/*.itb
+            ${{ env.BUILDER_DIR }}/bin/targets/mediatek/filogic/*-bl31-uboot.fip
