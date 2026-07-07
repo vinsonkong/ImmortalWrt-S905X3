@@ -1,10 +1,5 @@
-==========================================
-OpenWrt / ImmortalWrt 自定义软件包列表
-说明: 以 # 开头的行会被自动忽略
-请勿在包名后方添加行内注释
-==========================================
 
-=== 核心基础与系统工具 ===
+# === 核心基础与系统工具 ===
 base-files
 busybox
 bash
@@ -44,7 +39,7 @@ jq
 iconv
 hostapd-common
 
-=== Perl 运行环境 (部分插件依赖) ===
+# === Perl 运行环境 (部分插件依赖) ===
 perl-http-date
 perlbase-file
 perlbase-getopt
@@ -52,7 +47,7 @@ perlbase-time
 perlbase-unicode
 perlbase-utf8
 
-=== PHP 运行环境 (Web服务/面板依赖) ===
+# === PHP 运行环境 (Web服务/面板依赖) ===
 php8
 php8-cgi
 php8-mod-curl
@@ -61,14 +56,14 @@ php8-mod-session
 php8-mod-zip
 php8-mod-mbstring
 
-=== Git 版本控制 ===
+# === Git 版本控制 ===
 git
 
-=== 终端与远程管理 ===
+# === 终端与远程管理 ===
 ttyd
 openssh-sftp-server
 
-=== 磁盘管理与文件系统支持 ===
+#=== 磁盘管理与文件系统支持 ===
 block-mount
 mount-utils
 losetup
@@ -96,12 +91,12 @@ kmod-fs-f2fs
 kmod-fs-ksmbd
 kmod-fs-cifs
 
-=== USB 设备与存储支持 ===
+# === USB 设备与存储支持 ===
 kmod-usb-storage
 kmod-usb-storage-uas
 kmod-usb-printer
 
-=== 网络基础与拨号工具 ===
+# === 网络基础与拨号工具 ===
 curl
 wget-ssl
 uclient-fetch
@@ -117,33 +112,33 @@ usb-modeswitch
 wpad-basic
 wwan
 
-=== Wi-Fi 无线驱动 (博通/通用) ===
+# === Wi-Fi 无线驱动 (博通/通用) ===
 kmod-brcmfmac
 kmod-brcmutil
 kmod-cfg80211
 kmod-mac80211
 
-=== Lucky 大吉面板 ===
+# === Lucky 大吉面板 ===
 lucky
 luci-app-lucky
 luci-i18n-lucky-zh-cn
 
-=== 多媒体与流媒体处理 ===
+# === 多媒体与流媒体处理 ===
 ffmpeg
 libffmpeg-full
 
-=== 虚拟组网工具 ===
+#=== 虚拟组网工具 ===
 luci-app-easytier
 luci-app-zerotier
 luci-i18n-zerotier-zh-cn
-luci-app-tailscale
-luci-i18n-tailscale-zh-cn
+# luci-app-tailscale
+# luci-i18n-tailscale-zh-cn
 
-=== DDNS 动态域名解析 ===
-luci-app-ddns-go
-luci-i18n-ddns-go-zh-cn
+# === DDNS 动态域名解析 ===
+# luci-app-ddns-go
+# luci-i18n-ddns-go-zh-cn
 
-=== Docker 容器环境 ===
+# === Docker 容器环境 ===
 containerd
 docker
 docker-compose
@@ -154,7 +149,7 @@ luci-lib-docker
 luci-app-dockerman
 luci-i18n-dockerman-zh-cn
 
-=== LuCI 核心框架与基础模块 ===
+# === LuCI 核心框架与基础模块 ===
 luci
 luci-base
 luci-compat
@@ -165,13 +160,13 @@ luci-lib-jsonc
 luci-lib-nixio
 luci-i18n-base-zh-cn
 
-=== LuCI 系统管理模块 ===
+# === LuCI 系统管理模块 ===
 luci-mod-admin-full
 luci-mod-network
 luci-mod-status
 luci-mod-system
 
-=== LuCI 网络协议支持 ===
+# === LuCI 网络协议支持 ===
 luci-proto-3g
 luci-proto-ipip
 luci-proto-ipv6
@@ -181,35 +176,35 @@ luci-proto-ppp
 luci-proto-qmi
 luci-proto-relay
 
-=== Web 服务器 (uhttpd) ===
+# === Web 服务器 (uhttpd) ===
 uhttpd
 uhttpd-mod-ubus
 liblucihttp
 liblucihttp-lua
 
-=== 主题与外观 ===
+# === 主题与外观 ===
 luci-theme-argon
 
-=== 软件包管理 ===
+# === 软件包管理 ===
 luci-app-package-manager
 luci-i18n-package-manager-zh-cn
 
-=== 常用 LuCI 应用程序 ===
+# === 常用 LuCI 应用程序 ===
 luci-app-amlogic
 luci-i18n-amlogic-zh-cn
 luci-app-firewall
 luci-i18n-firewall-zh-cn
 luci-app-ttyd
 luci-i18n-ttyd-zh-cn
-luci-app-wol
-luci-i18n-wol-zh-cn
+# luci-app-wol
+# luci-i18n-wol-zh-cn
 luci-app-diskman
 luci-i18n-diskman-zh-cn
 luci-app-hd-idle
 luci-i18n-hd-idle-zh-cn
 luci-i18n-filebrowser-go-zh-cn
-luci-app-socat
-luci-i18n-socat-zh-cn
+# luci-app-socat
+# luci-i18n-socat-zh-cn
 luci-app-upnp
 luci-i18n-upnp-zh-cn
 syncthing
@@ -219,23 +214,23 @@ openlist
 luci-app-openlist
 luci-i18n-openlist-zh-cn
 
-=== 下载工具 ===
+# === 下载工具 ===
 aria2
 luci-app-aria2
 luci-i18n-aria2-zh-cn
 
-=== 局域网文件共享 (Samba/NFS/DLNA) ===
+# === 局域网文件共享 (Samba/NFS/DLNA) ===
 samba4-server
 luci-app-samba4
 luci-i18n-samba4-zh-cn
-luci-i18n-ksmbd-zh-cn
+# luci-i18n-ksmbd-zh-cn
 cifsmount
 luci-i18n-cifs-mount-zh-cn
 nfs-kernel-server
 luci-i18n-nfs-zh-cn
-minidlna
-luci-i18n-minidlna-zh-cn
+# minidlna
+# luci-i18n-minidlna-zh-cn
 
-=== 时区数据 ===
+# === 时区数据 ===
 zoneinfo-asia
 zoneinfo-core
