@@ -140,8 +140,8 @@ luci-i18n-zerotier-zh-cn
 # luci-i18n-tailscale-zh-cn
 
 # === DDNS 动态域名解析 ===
-# luci-app-ddns-go
-# luci-i18n-ddns-go-zh-cn
+luci-app-ddns-go
+luci-i18n-ddns-go-zh-cn
 
 # === Docker 容器环境 ===
 containerd
