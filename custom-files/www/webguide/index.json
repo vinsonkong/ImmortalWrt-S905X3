@@ -26,12 +26,12 @@
     ],
     "apps": [
         {
-            "txt": "X96maxQ2",
+            "txt": "路由器",
             "url": "http:\/\/vinsonkong2014.eu.org:39810",
             "purl": "http:\/\/10.0.30.100\/"
         },
         {
-            "txt": "q2文件管理",
+            "txt": "文件管理",
             "url": "http:\/\/vinsonkong2014.eu.org:39811",
             "purl": "http:\/\/192.168.30.100:39311"
         },
