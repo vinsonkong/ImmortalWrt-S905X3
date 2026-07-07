@@ -83,9 +83,9 @@ luci-i18n-firewall-zh-cn
 luci-app-easytier
 luci-app-zerotier
 luci-i18n-zerotier-zh-cn
-lucky
-luci-app-lucky
-luci-i18n-lucky-zh-cn
+# lucky
+# luci-app-lucky
+# luci-i18n-lucky-zh-cn
 luci-app-nfs
 luci-i18n-nfs-zh-cn
 luci-i18n-cifs-mount-zh-cn
