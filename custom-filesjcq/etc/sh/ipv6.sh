@@ -1,7 +1,7 @@
 ﻿#!/bin/bash
 
 # 配置项
-TITLE="x96max"
+TITLE="JCG-Q30"
 INTERFACE="br-lan"
 STATE="/tmp/last_ipv6.txt"
 WEB_PORT="39380"
