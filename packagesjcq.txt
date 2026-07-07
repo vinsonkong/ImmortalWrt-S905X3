@@ -1,40 +1,72 @@
 # === ImmortalWrt 23.05 JCG Q30 Pro 官方默认包 ===
+
+# --- 核心基础系统 ---
 base-files
 busybox
-ca-bundle
-ca-certificates
-dnsmasq-full
-dropbear
-firewall4
-nftables
+libc
+libgcc
+procd
+procd-seccomp
+procd-ujail
+uci
+urngd
+urandom-seed
+logd
+fstools
+mtd
+netifd
+block-mount
+bridger
+autocore
+default-settings-chn
+
+# --- 加密与硬件加速 ---
+kmod-crypto-hw-safexcel
+kmod-nf-nathelper
+kmod-nf-nathelper-extra
 kmod-nft-offload
-odhcpd-ipv6only
-opkg
-ppp
-ppp-mod-pppoe
-libustream-mbedtls
-resolveip
-wpad-basic-mbedtls
-hostapd-common
-iwinfo
-uboot-envtools
-f2fs-tools
-mkf2fs
-kmod-fs-f2fs
+
+# --- GPIO / LED / 按键 ---
+kmod-gpio-button-hotplug
+kmod-leds-gpio
+
+# --- WiFi 驱动与固件 (MT7981B) ---
 kmod-mt7981-firmware
 mt7981-wo-firmware
-kmod-leds-gpio
-kmod-gpio-button-hotplug
-kmod-nvmem-layout-u-boot-env
+kmod-mt7915e
+
+# --- 网络协议栈与防火墙 ---
+dnsmasq-full
+firewall4
+nftables
+odhcp6c
+odhcpd-ipv6only
+ppp
+ppp-mod-pppoe
+
+# --- TLS / SSL (OpenSSL 变体) ---
+ca-bundle
+libustream-openssl
+wpad-openssl
+
+# --- 基础网络工具 ---
+uclient-fetch
+uboot-envtools
+
+# --- LuCI Web 管理界面 ---
 luci
-luci-base
-luci-mod-admin-full
-luci-mod-network
-luci-mod-status
-luci-mod-system
-luci-i18n-base-zh-cn
+luci-compat
+luci-lib-base
+luci-lib-ipkg
+luci-app-opkg
+
+# --- 软件包管理 ---
+opkg
+
+
+
 luci-theme-argon
-luci-i18n-base-zh-cn
+
 
 # === 自定义工具 ===
 bash
@@ -56,5 +88,4 @@ luci-app-lucky
 luci-i18n-lucky-zh-cn
 luci-app-nfs
 luci-i18n-nfs-zh-cn
-cifsmount
 luci-i18n-cifs-mount-zh-cn
