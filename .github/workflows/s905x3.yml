@@ -27,7 +27,7 @@ on:
       kernel_version:
         description: 'Kernel Branch (ophub/kernel)'
         required: true
-        default: '6.18.y'
+        default: '6.6.y'
         type: choice
         options:
           - 5.10.y
@@ -37,13 +37,18 @@ on:
           - 6.12.y
           - 6.18.y
 
-# ✅ 全局环境变量：统一管理自定义资源路径
 env:
   DIY_SCRIPT: "diy.sh"
   CUSTOM_FILES_DIR: "custom-files"
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packages.txt"
   BUILDER_DIR: "openwrt"
+  # S905X3 最通用的 DTB，覆盖 X96 Max+ / TX3 / A95XF3-Air 等主流盒子
+  DEFAULT_DTB: "meson-sm1-x96-max-plus"
+  # 根分区大小(MB)，eMMC 安装建议 ≥2048
+  ROOTFS_PARTSIZE: "2048"
+  # 默认 LAN IP
+  DEFAULT_IP: "192.168.30.100"
 
 jobs:
   build:
@@ -58,10 +63,13 @@ jobs:
         run: |
           if [ -z "$(swapon --show=NAME --noheadings)" ]; then
             echo "⚡ Creating 4G swap..."
-            sudo fallocate -l 4G /mnt/swapfile
+            sudo fallocate -l 4G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=4096
             sudo chmod 600 /mnt/swapfile
             sudo mkswap /mnt/swapfile
             sudo swapon /mnt/swapfile
+            echo "✅ Swap enabled"
+          else
+            echo "ℹ️ Swap already active"
           fi
           free -h
 
@@ -77,16 +85,16 @@ jobs:
         run: |
           VERSION="${{ inputs.immortalwrt_version }}"
           BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/armsr/armv8"
-          
+
           [[ "$VERSION" == "23.05."* ]] && EXT="tar.xz" || EXT="tar.zst"
-          
+
           BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-armsr-armv8.Linux-x86_64.${EXT}"
           echo "📥 Downloading: $BUILDER_URL"
           wget -q --show-progress "$BUILDER_URL" -O "imagebuilder.${EXT}"
-          
+
           tar -xf "imagebuilder.${EXT}"
           mv immortalwrt-imagebuilder-*-armsr-armv8.Linux-x86_64 "${{ env.BUILDER_DIR }}"
-          
+
           if [ ! -d "${{ env.BUILDER_DIR }}" ]; then
             echo "❌ ImageBuilder extraction failed!" && exit 1
           fi
@@ -110,14 +118,13 @@ jobs:
           BUILDER_FILES="${{ env.BUILDER_DIR }}/files"
           mkdir -p "$BUILDER_FILES" "${{ env.BUILDER_DIR }}/packages"
 
-          # 1. 注入自定义文件并立即修复权限（原子操作）
+          # 1. 注入自定义文件并修复权限
           if [ -d "${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_FILES_DIR }}" 2>/dev/null)" ]; then
             cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "$BUILDER_FILES/"
-            
+
             echo "🔐 Fixing permissions for ALL injected init.d scripts..."
             find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
-            
-            # 显式校验 easytier
+
             if [ -f "$BUILDER_FILES/etc/init.d/easytier" ]; then
               echo "✅ easytier found and marked executable"
             else
@@ -135,21 +142,21 @@ jobs:
             echo "⏭️ No custom IPKs found"
           fi
 
-          # 3. 其他通用权限修复
+          # 3. 通用权限修复
           find "$BUILDER_FILES/usr/bin" "$BUILDER_FILES/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
           [ -f "$BUILDER_FILES/etc/rc.local" ] && chmod +x "$BUILDER_FILES/etc/rc.local"
           [ -d "$BUILDER_FILES/etc/dropbear" ] && chmod 700 "$BUILDER_FILES/etc/dropbear"
           find "$BUILDER_FILES/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
-          
+
           echo "✅ Injection completed"
 
       - name: Build Rootfs with ImageBuilder
         run: |
           cd "${{ env.BUILDER_DIR }}"
-          
+
           # sha256 兼容处理
           command -v sha256 &>/dev/null || sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
-          
+
           # 读取包列表（过滤注释和空行）
           PACKAGES=""
           if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
@@ -158,11 +165,12 @@ jobs:
           else
             echo "⏭️ ${{ env.PACKAGES_LIST_FILE }} not found, building with defaults"
           fi
-          
+
           echo "🚀 Starting ImageBuilder..."
           make image PROFILE=generic \
             FILES="files" \
-            ROOTFS_PARTSIZE=1024 \
+            ROOTFS_PARTSIZE=${{ env.ROOTFS_PARTSIZE }} \
+            EXTRA_IMAGE_NAME="s905x3" \
             PACKAGES="$PACKAGES" \
             V=s
 
@@ -172,6 +180,8 @@ jobs:
           openwrt_path: ${{ env.BUILDER_DIR }}/bin/targets/armsr/armv8/*-rootfs.tar.gz
           openwrt_board: ${{ inputs.device_board }}
           openwrt_kernel: ${{ inputs.kernel_version }}
+          openwrt_dtb: ${{ env.DEFAULT_DTB }}
+          openwrt_ip: ${{ env.DEFAULT_IP }}
           auto_kernel: true
           builder_name: ImmortalWrt
 
@@ -191,16 +201,31 @@ jobs:
           name: S905X3 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
             ## ImmortalWrt Firmware (ImageBuilder)
-            
+
             | Item | Value |
             |------|-------|
             | Version | `${{ inputs.immortalwrt_version }}` |
             | Device | `${{ inputs.device_board }}` |
             | Kernel | `${{ inputs.kernel_version }}` |
-                        
+            | Default DTB | `${{ env.DEFAULT_DTB }}` |
+            | RootFS Size | `${{ env.ROOTFS_PARTSIZE }} MB` |
+
             ### ⚠️ Flash Instructions
-            1. Default IP: `192.168.30.100`
-            2. To modify DTB, edit `/boot/uEnv.txt` in BOOT partition
+            1. Default IP: `${{ env.DEFAULT_IP }}`
+            2. Default DTB: `${{ env.DEFAULT_DTB }}`
+
+            ### 🔧 DTB Troubleshooting
+            If the box fails to boot or Ethernet doesn't work, edit `/boot/uEnv.txt` in the BOOT partition and change the `FDT` line:
+
+            | Box Model | Recommended DTB |
+            |-----------|-----------------|
+            | X96 Max+ | `meson-sm1-x96-max-plus` |
+            | X96 Max+ (eth fix) | `meson-sm1-sei610-ethfix` |
+            | A95X F3 Air | `meson-sm1-a95xf3-air` |
+            | TX3 Mini | `meson-sm1-tx3-mini` |
+            | HK1 Box | `meson-sm1-hk1box` |
+
+            > 💡 After editing `uEnv.txt`, safely reboot the device.
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
