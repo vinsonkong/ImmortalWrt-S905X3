@@ -47,6 +47,7 @@ wget-ssl
 openssh-sftp-server
 
 # LuCI 应用及中文语言包
+luci-i18n-opkg-zh-cn
 luci-app-upnp
 luci-i18n-upnp-zh-cn
 luci-app-firewall
