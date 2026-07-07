@@ -92,23 +92,43 @@ jobs:
 
       - name: Inject Custom Files & Packages
         run: |
-          echo "📦 注入自定义资源..."
-          mkdir -p ./openwrt/packages ./openwrt/files
-          
-          if [ -d "./${{ env.CUSTOM_PACKAGES_DIR }}" ] && ls ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk 1>/dev/null 2>&1; then
-            cp ./${{ env.CUSTOM_PACKAGES_DIR }}/*.ipk ./openwrt/packages/
-            echo "✅ 自定义 ipk 已复制"
+          echo "📦 Injecting custom resources..."
+          BUILDER_FILES="${{ env.BUILDER_DIR }}/files"
+          mkdir -p "$BUILDER_FILES" "${{ env.BUILDER_DIR }}/packages"
+
+          # 1. 注入自定义文件并立即修复权限（原子操作）
+          if [ -d "${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_FILES_DIR }}" 2>/dev/null)" ]; then
+            cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "$BUILDER_FILES/"
+            
+            echo "🔐 Fixing permissions for ALL injected init.d scripts..."
+            find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
+            
+            # 显式校验 easytier
+            if [ -f "$BUILDER_FILES/etc/init.d/easytier" ]; then
+              echo "✅ easytier found and marked executable"
+            else
+              echo "⚠️ easytier not found in injected files! Please check repo path structure."
+            fi
+          else
+            echo "⏭️ No custom files to inject"
           fi
-          
-          if [ -d "./${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A ./${{ env.CUSTOM_FILES_DIR }} 2>/dev/null)" ]; then
-            cp -r ./${{ env.CUSTOM_FILES_DIR }}/* ./openwrt/files/
-            echo "✅ 自定义文件已注入"
+
+          # 2. 注入自定义 IPK
+          if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ] && find "${{ env.CUSTOM_PACKAGES_DIR }}" -name "*.ipk" -print -quit | grep -q .; then
+            cp -v "${{ env.CUSTOM_PACKAGES_DIR }}"/*.ipk "${{ env.BUILDER_DIR }}/packages/"
+            echo "✅ Custom IPKs injected"
+          else
+            echo "⏭️ No custom IPKs found"
           fi
+
+          # 3. 其他通用权限修复
+          find "$BUILDER_FILES/usr/bin" "$BUILDER_FILES/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
+          [ -f "$BUILDER_FILES/etc/rc.local" ] && chmod +x "$BUILDER_FILES/etc/rc.local"
+          [ -d "$BUILDER_FILES/etc/dropbear" ] && chmod 700 "$BUILDER_FILES/etc/dropbear"
+          find "$BUILDER_FILES/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
           
-          find ./openwrt/files -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
-          chmod -R +x ./openwrt/files/etc/init.d ./openwrt/files/etc/uci-defaults ./openwrt/files/etc/sh 2>/dev/null || true
-          chmod 700 ./openwrt/files/etc/dropbear 2>/dev/null || true
-          chmod 600 ./openwrt/files/etc/dropbear/* 2>/dev/null || true
+          echo "✅ Injection completed"
+
 
       - name: Build Firmware with Custom Config
         id: build_firmware
