@@ -1,3 +1,4 @@
 00 5 * * * sleep 5 && touch /etc/banner && reboot
-*/30 * * * *  /etc/sh/updatehosts.sh >/dev/null  2>&1 &
+30 * * * *  /etc/sh/updatehosts.sh >/dev/null  2>&1 &
 */20 * * * *  /etc/sh/wifi-switch.sh >/dev/null  2>&1 &
+*/30 * * * *  /etc/sh/ipv6.sh >/dev/null  2>&1 &
