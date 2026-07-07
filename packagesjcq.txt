@@ -89,5 +89,18 @@ luci-i18n-lucky-zh-cn
 luci-app-nfs
 luci-i18n-nfs-zh-cn
 luci-i18n-cifs-mount-zh-cn
+
+luci-app-ddns-go
+luci-i18n-ddns-go-zh-cn
 luci-app-socat
-luci-i18n-socat
+luci-i18n-socat-zh-cn
+luci-i18n-filebrowser-go-zh-cn
+
+# === PHP 运行环境 (Web服务/面板依赖) ===
+php8
+php8-cgi
+php8-mod-curl
+php8-mod-openssl
+php8-mod-session
+php8-mod-zip
+php8-mod-mbstring
