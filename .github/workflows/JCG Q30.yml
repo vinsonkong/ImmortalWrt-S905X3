@@ -27,7 +27,7 @@ on:
 
 env:
   BUILDER_DIR: "openwrt"
-  CUSTOM_FILES_DIR: "custom-filesjcq1"
+  CUSTOM_FILES_DIR: "custom-filesjcq"
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packagesjcq.txt"
   DIY_SCRIPT: "diyjcq.sh"
