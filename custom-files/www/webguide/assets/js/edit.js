@@ -8,7 +8,7 @@ var isEditing = false; // 编辑状态标记
 
 // 1. 加载配置文件
 (function loadConfig() {
-    fetch('../index.json') 
+    fetch('index.json') 
         .then(function(r) { 
             if (!r.ok) throw new Error('Network response was not ok');
             return r.json(); 
