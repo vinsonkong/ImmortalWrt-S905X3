@@ -16,14 +16,12 @@
 -kmod-usb-xhci-hcd
 
 # === MT7981B 平台稳定性修复 (解决自动重启核心依赖) ===
-kmod-cpufreq-dt
-kmod-regulator-fixed
 kmod-thermal
 kmod-mt7981-firmware
 mt7981-wo-firmware
 kmod-leds-gpio
 kmod-gpio-button-hotplug
-kmod-nvmem-layout-u-boot-env
+
 
 # === 官方 Filogic 目标默认基础包 ===
 base-files
