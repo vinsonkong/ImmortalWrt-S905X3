@@ -1,0 +1,44 @@
+#!/bin/sh /etc/rc.common
+# OpenWrt init script for miniserve webdav server
+
+USE_PROCD=1
+START=99
+STOP=10
+user=root
+
+SERVICE_NAME="miniserve"
+SERVICE_DAEMON="/usr/bin/miniserve"
+SERVICE_ARGS="--auth vinsonkong:14371250kong --enable-webdav --hide-version-footer --upload-files --mkdir --qrcode --port 39333 /mnt"
+SERVICE_PID_FILE="/var/run/miniserve.pid"
+
+start_service() {
+    procd_open_instance
+    procd_set_param command "$SERVICE_DAEMON"
+    
+    # 添加参数
+    for arg in $SERVICE_ARGS; do
+        procd_append_param command "$arg"
+    done
+    
+    procd_set_param env HOME=/root
+    procd_set_param respawn
+    procd_set_param pidfile "$SERVICE_PID_FILE"
+    procd_set_param stdout 0
+    procd_set_param stderr 0
+    procd_close_instance
+}
+
+stop_service() {
+    [ -f "$SERVICE_PID_FILE" ] && {
+        local pid=$(cat "$SERVICE_PID_FILE" 2>/dev/null)
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null
+        rm -f "$SERVICE_PID_FILE"
+    }
+    # 确保进程被终止
+    killall miniserve 2>/dev/null
+}
+
+reload_service() {
+    stop
+    start
+}
