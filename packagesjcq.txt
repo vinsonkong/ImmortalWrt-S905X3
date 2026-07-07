@@ -1,29 +1,4 @@
-# === JCG Q30 Pro (MT7981B) ImmortalWrt 完整包列表 ===
-# 包含：官方默认包 + 平台稳定性修复 + 定制应用
-# ⚠️ 已移除所有 USB 相关包 (设备无 USB 接口)
-
-# ⚠️ 强制卸载冲突包 (防止 openssl 变体被间接拉取)
--libustream-openssl
--wpad-openssl
--wpad-basic-openssl
--openssl-util
--wpad-mesh-openssl
--kmod-usb3
--kmod-usb-storage
--kmod-usb-storage-uas
--kmod-usb-core
--kmod-usb-dwc3
--kmod-usb-xhci-hcd
-
-# === MT7981B 平台稳定性修复 (解决自动重启核心依赖) ===
-kmod-thermal
-kmod-mt7981-firmware
-mt7981-wo-firmware
-kmod-leds-gpio
-kmod-gpio-button-hotplug
-
-
-# === 官方 Filogic 目标默认基础包 ===
+# === ImmortalWrt 23.05 JCG Q30 Pro 官方默认包 ===
 base-files
 busybox
 ca-bundle
@@ -46,14 +21,18 @@ uboot-envtools
 f2fs-tools
 mkf2fs
 kmod-fs-f2fs
-
-# === Web 管理界面 ===
+kmod-mt7981-firmware
+mt7981-wo-firmware
+kmod-leds-gpio
+kmod-gpio-button-hotplug
+kmod-nvmem-layout-u-boot-env
 luci
 luci-base
 luci-mod-admin-full
 luci-mod-network
 luci-mod-status
 luci-mod-system
+luci-i18n-base-zh-cn
 luci-theme-argon
 luci-i18n-base-zh-cn
 
