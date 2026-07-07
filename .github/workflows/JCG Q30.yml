@@ -19,7 +19,7 @@ on:
       target_profile:
         description: 'Target Profile (Device)'
         required: true
-        default: 'jcg_q30'
+        default: 'jcg_q30-ubootmod'
 
 env:
   CUSTOM_FILES_DIR: "custom-filesjcq"
