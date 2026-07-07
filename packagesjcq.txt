@@ -1,11 +1,55 @@
-# === JCG Q30 Pro ImmortalWrt 定制包列表 ===
+# === JCG Q30 Pro (MT7981B) ImmortalWrt 完整包列表 ===
+# 包含：官方默认包 + 平台稳定性修复 + 定制应用
+# ⚠️ 已移除所有 USB 相关包 (设备无 USB 接口)
 
-# ⚠️ 核心修复：强制卸载 openssl 变体，防止第三方插件拉取导致冲突
+# ⚠️ 强制卸载冲突包 (防止 openssl 变体被间接拉取)
 -libustream-openssl
 -wpad-openssl
 -wpad-basic-openssl
+-openssl-util
+-wpad-mesh-openssl
+-kmod-usb3
+-kmod-usb-storage
+-kmod-usb-storage-uas
+-kmod-usb-core
+-kmod-usb-dwc3
+-kmod-usb-xhci-hcd
 
-# Web 管理界面
+# === MT7981B 平台稳定性修复 (解决自动重启核心依赖) ===
+kmod-cpufreq-dt
+kmod-regulator-fixed
+kmod-thermal
+kmod-mt7981-firmware
+mt7981-wo-firmware
+kmod-leds-gpio
+kmod-gpio-button-hotplug
+kmod-nvmem-layout-u-boot-env
+
+# === 官方 Filogic 目标默认基础包 ===
+base-files
+busybox
+ca-bundle
+ca-certificates
+dnsmasq-full
+dropbear
+firewall4
+nftables
+kmod-nft-offload
+odhcpd-ipv6only
+opkg
+ppp
+ppp-mod-pppoe
+libustream-mbedtls
+resolveip
+wpad-basic-mbedtls
+hostapd-common
+iwinfo
+uboot-envtools
+f2fs-tools
+mkf2fs
+kmod-fs-f2fs
+
+# === Web 管理界面 ===
 luci
 luci-base
 luci-mod-admin-full
@@ -15,38 +59,14 @@ luci-mod-system
 luci-theme-argon
 luci-i18n-base-zh-cn
 
-# 核心网络服务
-dnsmasq-full
-firewall4
-nftables
-kmod-nft-offload
-odhcpd-ipv6only
-ppp
-ppp-mod-pppoe
-
-# 基础系统工具 (保持 mbedtls)
-busybox
-dropbear
-opkg
-ca-bundle
-ca-certificates
-libustream-mbedtls
-resolveip
-
-# WiFi 驱动 (保持 mbedtls)
-kmod-mt7981-firmware
-wpad-basic-mbedtls
-hostapd-common
-iwinfo
-
-# 自定义添加
+# === 自定义工具 ===
 bash
-wwan
 curl
 wget-ssl
 openssh-sftp-server
+wwan
 
-# LuCI 应用及中文语言包
+# === LuCI 应用及中文语言包 ===
 luci-i18n-opkg-zh-cn
 luci-app-upnp
 luci-i18n-upnp-zh-cn
