@@ -1,5 +1,5 @@
 instance_name = "vinson"
-hostname = "JCQ-Q30"
+hostname = "JCG-Q30"
 ipv4 = "10.0.30.11"
 
 [network_identity]
