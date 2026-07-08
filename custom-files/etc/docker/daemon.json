@@ -1,14 +1,1 @@
-{
-  "bip": "172.31.0.1/24",
-  "data-root": "/mnt/mmcblk2p4/docker/",
-  "log-level": "warn",
-  "log-driver": "json-file",
-  "log-opts": {
-     "max-size": "10m",
-     "max-file": "5"
-   },
-  "registry-mirrors": [
-     "https://mirror.baidubce.com/",
-     "https://hub-mirror.c.163.com"
-   ]
-}
+{ "data-root": "\/mnt\/mmcblk1p4\/docker\/", "log-level": "warn", "iptables": true, "ip6tables": false, "registry-mirrors": [ "https:\/\/docker.m.daocloud.io", "https:\/\/docker.1ms.run", "https:\/\/hub-mirror.c.163.com" ], "dns": [ "223.5.5.5", "119.29.29.29", "8.8.8.8" ] }
