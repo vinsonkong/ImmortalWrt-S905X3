@@ -97,7 +97,7 @@ luci-i18n-socat-zh-cn
 luci-i18n-filebrowser-go-zh-cn
 luci-app-access-control
 luci-i18n-appfilter-zh-cn
-luci-app-adguardhome
+# luci-app-adguardhome
 
 # === PHP 运行环境 (Web服务/面板依赖) ===
 php8
