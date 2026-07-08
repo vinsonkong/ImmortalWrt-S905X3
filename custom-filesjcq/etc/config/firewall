@@ -204,4 +204,4 @@ config rule
 	list src_mac 'CC:E0:DA:22:40:74'
 	list src_mac 'B4:CD:27:92:14:AE'
 	list proto 'all'
-
+	option dest 'wan'
