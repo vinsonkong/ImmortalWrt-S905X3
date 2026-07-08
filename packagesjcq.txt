@@ -95,6 +95,7 @@ luci-i18n-ddns-go-zh-cn
 luci-app-socat
 luci-i18n-socat-zh-cn
 luci-i18n-filebrowser-go-zh-cn
+luci-app-access-control
 
 # === PHP 运行环境 (Web服务/面板依赖) ===
 php8
