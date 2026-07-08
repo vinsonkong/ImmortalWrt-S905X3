@@ -1,20 +1,19 @@
 
 config defaults
-	option syn_flood '1'
 	option input 'REJECT'
 	option output 'ACCEPT'
 	option forward 'REJECT'
 	option flow_offloading '1'
 	option flow_offloading_hw '1'
 	option fullcone '1'
-	option fullcone6 '0'
+	option synflood_protect '1'
 
 config zone
 	option name 'lan'
-	list network 'lan'
 	option input 'ACCEPT'
 	option output 'ACCEPT'
 	option forward 'ACCEPT'
+	list network 'lan'
 
 config zone
 	option name 'wan'
@@ -124,6 +123,48 @@ config rule
 	option proto 'udp'
 	option target 'ACCEPT'
 
+config zone 'docker'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+	option name 'docker'
+	list network 'docker'
+
+config rule 'easytier_udp'
+	option name 'easytier_udp'
+	option target 'ACCEPT'
+	option src 'wan'
+	option proto 'all'
+	option dest_port '11010'
+	option enabled '1'
+
+config zone 'easytierzone'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	option masq '1'
+	option mtu_fix '1'
+	option name 'EasyTier'
+	option network 'EasyTier'
+
+config forwarding 'easytierfwlan'
+	option dest 'lan'
+	option src 'EasyTier'
+
+config forwarding 'easytierfwwan'
+	option dest 'wan'
+	option src 'EasyTier'
+
+config forwarding 'lanfweasytier'
+	option dest 'EasyTier'
+	option src 'lan'
+
+config include 'LUCKY_go'
+	option type 'script'
+	option path '/var/etc/LUCKY.include'
+	option enabled '1'
+	option reload '1'
+
 config include 'zerotier_input'
 	option type 'nftables'
 	option path '/var/run/zerotier-one/_fw4/input.nft'
@@ -142,20 +183,26 @@ config include 'zerotier_forward'
 	option position 'chain-pre'
 	option chain 'forward'
 
-config zone 'docker'
-	option input 'ACCEPT'
-	option output 'ACCEPT'
-	option forward 'ACCEPT'
-	option name 'docker'
-	list network 'docker'
+config include 'socat'
+	option type 'script'
+	option path '/var/etc/socat.include'
+	option reload '1'
 
-config rule 'easytier_udp'
-	option name 'easytier_udp'
-	option target 'ACCEPT'
+config forwarding
+	option src 'docker'
+	option dest 'lan'
+
+config forwarding
+	option src 'docker'
+	option dest 'wan'
+
+config forwarding
+	option src 'lan'
+	option dest 'docker'
+
+config forwarding
 	option src 'wan'
-	option proto 'all'
-	option dest_port '11010'
-	option enabled '1'
+	option dest 'docker'
 
 config rule 'easytier_tcp_udp'
 	option name 'easytier_tcp_udp'
@@ -188,31 +235,4 @@ config rule 'easytier_wg'
 	option proto 'all'
 	option dest_port '11011'
 	option enabled '1'
-
-config zone 'easytierzone'
-	option input 'ACCEPT'
-	option output 'ACCEPT'
-	option forward 'ACCEPT'
-	option masq '1'
-	option mtu_fix '1'
-	option name 'EasyTier'
-	option network 'EasyTier'
-
-config forwarding 'easytierfwlan'
-	option dest 'lan'
-	option src 'EasyTier'
-
-config forwarding 'easytierfwwan'
-	option dest 'wan'
-	option src 'EasyTier'
-
-config forwarding 'lanfweasytier'
-	option dest 'EasyTier'
-	option src 'lan'
-
-config include 'LUCKY_go'
-	option type 'script'
-	option path '/var/etc/LUCKY.include'
-	option enabled '1'
-	option reload '1'
 
