@@ -195,3 +195,13 @@ config forwarding 'lanfweasytier'
 	option dest 'EasyTier'
 	option src 'lan'
 
+config rule
+	option name '控制儿童设备上网'
+	option src 'lan'
+	option target 'REJECT'
+	option start_time '17:00:00'
+	option stop_time '22:00:00'
+	list src_mac 'CC:E0:DA:22:40:74'
+	list src_mac 'B4:CD:27:92:14:AE'
+	list proto 'all'
+
