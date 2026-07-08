@@ -218,7 +218,10 @@ luci-i18n-syncthing-zh-cn
 openlist
 luci-app-openlist
 luci-i18n-openlist-zh-cn
-
+luci-app-access-control
+luci-i18n-appfilter-zh-cn
+adguardhome
+luci-app-adguardhome
 
 # === 下载工具 ===
 aria2
