@@ -1,19 +1,27 @@
 config globals 'globals'
-	option data_root '/mnt/mmcblk2p4/docker/'
-	option log_level 'warn'
-	option iptables '1'
-	option auto_start '1'
-	list registry_mirrors 'https://docker.m.daocloud.io'
-	list registry_mirrors 'https://docker.1ms.run'
+    option data_root '/mnt/mmcblk1p4/docker/'
+    option log_level 'warn'
+    option iptables '1'
+    option auto_start '1'
+    
+    # DNS 配置 (按顺序查询)
+    list dns '223.5.5.5'
+    list dns '119.29.29.29'
+    list dns '8.8.8.8'
 
+    # 镜像加速器 (多个源会增加拉取成功率)
+    list registry_mirrors 'https://docker.m.daocloud.io'
+    list registry_mirrors 'https://docker.1ms.run'
+    list registry_mirrors 'https://hub-mirror.c.163.com'
+
+# 代理配置（留空表示不使用代理）
 config proxies 'proxies'
 
+# Web 管理界面配置
 config dockerman 'dockerman'
-	option socket_path '/var/run/docker.sock'
-	option status_path '/tmp/.docker_action_status'
-	option debug 'false'
-	option debug_path '/tmp/.docker_debug'
-	option remote_endpoint '0'
-	list ac_allowed_interface 'br-lan'
-
-
+    option socket_path '/var/run/docker.sock'
+    option status_path '/tmp/.docker_action_status'
+    option debug 'false'
+    option debug_path '/tmp/.docker_debug'
+    option remote_endpoint '0'
+    list ac_allowed_interface 'br-lan'
