@@ -115,7 +115,7 @@ fi
 
 # ================= [ 4. AdGuard Home 二进制下载 ] =================
 echo "🛡️ 4. 注入 AdGuard Home 二进制文件..."
-ADGUARD_VERSION="v0.107.59"
+ADGUARD_VERSION="v0.107.77"
 ADGUARD_ARCH="arm64"
 
 AGH_DOWNLOAD_URL="https://github.com/AdguardTeam/AdGuardHome/releases/download/${ADGUARD_VERSION}/AdGuardHome_linux_${ADGUARD_ARCH}.tar.gz"
