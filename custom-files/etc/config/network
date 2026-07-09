@@ -49,5 +49,4 @@ config interface 'EasyTier'
 	option proto 'none'
 	option device 'tun0'
 	option ifname 'tun0'
-	option defaultroute '0'
 

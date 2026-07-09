@@ -165,6 +165,22 @@ config include 'LUCKY_go'
 	option enabled '1'
 	option reload '1'
 
+config forwarding
+	option src 'docker'
+	option dest 'lan'
+
+config forwarding
+	option src 'docker'
+	option dest 'wan'
+
+config forwarding
+	option src 'lan'
+	option dest 'docker'
+
+config forwarding
+	option src 'wan'
+	option dest 'docker'
+
 config include 'zerotier_input'
 	option type 'nftables'
 	option path '/var/run/zerotier-one/_fw4/input.nft'
@@ -187,22 +203,6 @@ config include 'socat'
 	option type 'script'
 	option path '/var/etc/socat.include'
 	option reload '1'
-
-config forwarding
-	option src 'docker'
-	option dest 'lan'
-
-config forwarding
-	option src 'docker'
-	option dest 'wan'
-
-config forwarding
-	option src 'lan'
-	option dest 'docker'
-
-config forwarding
-	option src 'wan'
-	option dest 'docker'
 
 config rule 'easytier_tcp_udp'
 	option name 'easytier_tcp_udp'
