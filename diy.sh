@@ -64,17 +64,17 @@ echo "✅ Lucky 二进制已注入"
 # ================= [ 3. EasyTier 二进制下载 ] =================
 echo "🌐 3. 注入 EasyTier 二进制文件..."
 EASYTIER_VERSION="v2.6.3"
-TARGET_ARCH="aarch64"
+EASYTIER_ARCH="aarch64"
 
-DOWNLOAD_URL="https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}-${EASYTIER_VERSION}.zip"
+DOWNLOAD_URL="https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${EASYTIER_ARCH}-${EASYTIER_VERSION}.zip"
 mkdir -p /tmp/easytier-dl
 
-echo "⬇️ 正在下载 EasyTier ${EASYTIER_VERSION} (${TARGET_ARCH})..."
+echo "⬇️ 正在下载 EasyTier ${EASYTIER_VERSION} (${EASYTIER_ARCH})..."
 if wget -q --show-progress -O /tmp/easytier-dl/easytier.zip "$DOWNLOAD_URL"; then
     echo "✅ EasyTier 官方源下载成功"
 else
     echo "⚠️ 官方下载失败，正在尝试镜像..."
-    MIRROR_URL="https://ghproxy.com/https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${TARGET_ARCH}-${EASYTIER_VERSION}.zip"
+    MIRROR_URL="https://ghproxy.com/https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${EASYTIER_ARCH}-${EASYTIER_VERSION}.zip"
     if wget -q --show-progress -O /tmp/easytier-dl/easytier.zip "$MIRROR_URL"; then
         echo "✅ EasyTier 镜像下载成功"
     else
@@ -115,26 +115,13 @@ fi
 
 # ================= [ 4. AdGuard Home 二进制下载 ] =================
 echo "🛡️ 4. 注入 AdGuard Home 二进制文件..."
-ADGUARD_VERSION="v0.107.77"
+ADGUARD_VERSION="v0.107.59"
+ADGUARD_ARCH="arm64"
 
-# 自动检测架构并映射为 AdGuard Home 发行版命名
-UNAME_M=$(uname -m)
-case "${UNAME_M}" in
-    "x86_64")  AGH_ARCH="amd64" ;;
-    "aarch64") AGH_ARCH="arm64" ;;
-    "armv7l")  AGH_ARCH="armv7" ;;
-    "i386"|"i686") AGH_ARCH="386" ;;
-    *)
-        echo "❌ 不支持的架构: ${UNAME_M}"
-        exit 1
-        ;;
-esac
-echo "🔍 检测到架构: ${UNAME_M} -> AdGuardHome 平台: ${AGH_ARCH}"
-
-AGH_DOWNLOAD_URL="https://github.com/AdguardTeam/AdGuardHome/releases/download/${ADGUARD_VERSION}/AdGuardHome_linux_${AGH_ARCH}.tar.gz"
+AGH_DOWNLOAD_URL="https://github.com/AdguardTeam/AdGuardHome/releases/download/${ADGUARD_VERSION}/AdGuardHome_linux_${ADGUARD_ARCH}.tar.gz"
 mkdir -p /tmp/adguardhome-dl
 
-echo "⬇️ 正在下载 AdGuard Home ${ADGUARD_VERSION} (${AGH_ARCH})..."
+echo "⬇️ 正在下载 AdGuard Home ${ADGUARD_VERSION} (${ADGUARD_ARCH})..."
 if wget -q --show-progress -O /tmp/adguardhome-dl/adguard.tar.gz "$AGH_DOWNLOAD_URL"; then
     echo "✅ AdGuard Home 官方源下载成功"
 else
@@ -152,7 +139,6 @@ fi
 if tar -tzf /tmp/adguardhome-dl/adguard.tar.gz > /dev/null 2>&1; then
     tar -xzf /tmp/adguardhome-dl/adguard.tar.gz -C /tmp/adguardhome-dl/
 
-    # AdGuard Home 解压后文件位于 AdGuardHome/ 子目录中
     if [ -f "/tmp/adguardhome-dl/AdGuardHome/AdGuardHome" ]; then
         cp -f /tmp/adguardhome-dl/AdGuardHome/AdGuardHome "${BASE_FILES}/usr/bin/AdGuardHome"
         chmod +x "${BASE_FILES}/usr/bin/AdGuardHome"
@@ -164,9 +150,7 @@ if tar -tzf /tmp/adguardhome-dl/adguard.tar.gz > /dev/null 2>&1; then
         exit 1
     fi
 
-    # 预创建配置目录，避免首次启动报错
     mkdir -p "${BASE_FILES}/etc/AdGuardHome"
-
     rm -rf /tmp/adguardhome-dl
 else
     echo "❌ 下载的 AdGuard Home 文件不是有效的 tar.gz 格式"
