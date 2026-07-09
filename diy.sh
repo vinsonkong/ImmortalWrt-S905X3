@@ -115,7 +115,7 @@ fi
 
 # ================= [ 4. AdGuard Home 二进制下载 ] =================
 echo "🛡️ 4. 注入 AdGuard Home 二进制文件..."
-ADGUARD_VERSION="v0.107.59"
+ADGUARD_VERSION="v0.107.77"
 
 # 自动检测架构并映射为 AdGuard Home 发行版命名
 UNAME_M=$(uname -m)
