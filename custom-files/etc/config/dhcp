@@ -14,7 +14,7 @@ config dnsmasq
 	option localservice '1'
 	option ednspacket_max '1232'
 	list addnhosts '/etc/hosts-new/hosts.combined'
-	option port '5353'
+	option port '5553'
 	option noresolv '1'
 	option cachesize '0'
 
