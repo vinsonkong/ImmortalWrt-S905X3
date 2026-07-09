@@ -1,0 +1,6 @@
+table inet fw4 {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        oifname "br-lan" masquerade comment "AGH Side-Router NAT"
+    }
+}
