@@ -13,7 +13,7 @@ config share
 
 config mount
 	option enabled '0'
-	option source '192.168.30.10:/mnt/mmcblk2p4'
+	option source '192.168.30.100:/mnt/mmcblk2p4'
 	option target '/mnt/nfs/x96max'
 	option options 'rw,nolock'
 	option delay '10'
