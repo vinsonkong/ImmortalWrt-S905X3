@@ -1,6 +1,6 @@
 instance_name = "vinson"
-hostname = "X96maxQ2"
-ipv4 = "10.0.30.100"
+hostname = "X96max"
+ipv4 = "10.0.30.10"
 
 [network_identity]
 network_name = "vinsonkong"
