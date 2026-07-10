@@ -1,0 +1,17 @@
+
+config zerotier 'global'
+	option fw_allow_input '1'
+	option local_conf_path '/etc/zerotier.conf'
+	option config_path '/etc/zerotier'
+	option enabled '1'
+	option secret '960f6376df:0:979d5b3eeaff66e6a17076984ad391d0fa4cc9ec4e58678beba4c3e9815c3d5ac4016d60e39cd56fb8d2e8fa33cffc0c3411dbf1bff841be92878c1862de6983:85c58e8cd00204a71b4c105a734b7e4a7519f732e5afe2a3354666237fdac9efdcab3b737c1ad7c0708ead461ee55249126aecbbba767ab35d715d9ae6bb0c0b'
+
+config network 'earth'
+	option id '9f77fc393e652048'
+	option allow_global '1'
+	option allow_default '1'
+	option allow_dns '1'
+	option fw_allow_input '1'
+	option fw_allow_forward '1'
+	option fw_allow_masq '1'
+
