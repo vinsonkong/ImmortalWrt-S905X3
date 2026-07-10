@@ -189,8 +189,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: x96maxs905x3-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
-          name: x96max S905X3 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          tag_name: x96maxs-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: x96max ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
             ## ImmortalWrt Firmware (ImageBuilder)
 
