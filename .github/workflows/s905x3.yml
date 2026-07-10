@@ -163,6 +163,7 @@ jobs:
           echo "🚀 Starting ImageBuilder..."
           make image PROFILE=generic \
             FILES="files" \
+            ROOTFS_PARTSIZE=2048 \
             EXTRA_IMAGE_NAME="s905x3" \
             PACKAGES="$PACKAGES" \
             V=s
