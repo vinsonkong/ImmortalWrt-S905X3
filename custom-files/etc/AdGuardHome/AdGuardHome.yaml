@@ -31,16 +31,20 @@ dns:
   refuse_any: true
   upstream_dns:
     - https://dns.alidns.com/dns-query
-    - tls://dot.pub
+    - tls://dns.alidns.com
     - https://doh.pub/dns-query
+    - tls://dot.pub
+    - 127.0.0.1:5553
   upstream_dns_file: ""
   bootstrap_dns:
     - 223.5.5.5
     - 119.29.29.29
     - 8.8.8.8
     - 1.1.1.1
-  fallback_dns: []
-  upstream_mode: load_balance
+  fallback_dns:
+    - https://doh.360.cn/dns-query
+    - tls://dot.360.cn
+  upstream_mode: parallel
   fastest_timeout: 1s
   allowed_clients: []
   disallowed_clients: []
@@ -72,7 +76,7 @@ dns:
   bootstrap_prefer_ipv6: false
   upstream_timeout: 10s
   private_networks: []
-  use_private_ptr_resolvers: false
+  use_private_ptr_resolvers: true
   local_ptr_upstreams:
     - 127.0.0.1:5553
   use_dns64: false
