@@ -22,7 +22,7 @@ theme: auto
 dns:
   bind_hosts:
     - 0.0.0.0
-  port: 53
+  port: 5553
   anonymize_client_ip: false
   ratelimit: 0
   ratelimit_subnet_len_ipv4: 24
@@ -34,7 +34,8 @@ dns:
     - tls://dns.alidns.com
     - https://doh.pub/dns-query
     - tls://dot.pub
-    - 127.0.0.1:5553
+    - '[/lan/]192.168.2.254'
+    - '[/lan/]192.168.30.1'
   upstream_dns_file: ""
   bootstrap_dns:
     - 223.5.5.5
@@ -76,9 +77,11 @@ dns:
   bootstrap_prefer_ipv6: false
   upstream_timeout: 10s
   private_networks: []
-  use_private_ptr_resolvers: false
+  use_private_ptr_resolvers: true
   local_ptr_upstreams:
     - 127.0.0.1:5553
+    - '[/2.168.192.in-addr.arpa/]192.168.2.254'
+    - '[/30.168.192.in-addr.arpa/]192.168.30.1'
   use_dns64: false
   dns64_prefixes: []
   serve_http3: false
