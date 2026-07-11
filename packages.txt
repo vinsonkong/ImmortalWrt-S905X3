@@ -219,10 +219,9 @@ openlist
 luci-app-openlist
 luci-i18n-openlist-zh-cn
 luci-app-access-control
-kmod-oaf
-appfilter
-luci-app-appfilter
-luci-i18n-appfilter-zh-cn
+# appfilter
+# luci-app-appfilter
+# luci-i18n-appfilter-zh-cn
 # adguardhome
 luci-app-adguardhome
 
