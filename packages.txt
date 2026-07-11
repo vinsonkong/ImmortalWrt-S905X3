@@ -189,6 +189,7 @@ liblucihttp-lua
 
 # === 主题与外观 ===
 luci-theme-argon
+-luci-theme-bootstrap
 
 # === 软件包管理 ===
 luci-app-package-manager
