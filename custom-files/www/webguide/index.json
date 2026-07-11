@@ -16,7 +16,7 @@
         {
             "txt": "q2导航页",
             "url": "http:\/\/vinsonkong2014.eu.org:39880",
-            "purl": "http:\/\/192.168.30.100\/webguide\/#private"
+            "purl": "http:\/\/192.168.30.100\/#private"
         },
         {
             "txt": "切换内外网",
@@ -27,12 +27,12 @@
     "apps": [
         {
             "txt": "路由器",
-            "url": "http:\/\/vinsonkong2014.eu.org:39810",
+            "url": "http:\/\/vinsonkong2014.eu.org:39310",
             "purl": "http:\/\/10.0.30.100\/"
         },
         {
             "txt": "文件管理",
-            "url": "http:\/\/vinsonkong2014.eu.org:39811",
+            "url": "http:\/\/vinsonkong2014.eu.org:39311",
             "purl": "http:\/\/192.168.30.100:39311"
         },
         {
@@ -57,17 +57,17 @@
         },
         {
             "txt": "miniserve",
-            "url": "http:\/\/vinsonkong2014.eu.org:39833",
+            "url": "http:\/\/vinsonkong2014.eu.org:39333",
             "purl": "http:\/\/192.168.30.100:39333"
         },
         {
             "txt": "WebDAV",
-            "url": "http:\/\/vinsonkong2014.eu.org:39834",
+            "url": "http:\/\/vinsonkong2014.eu.org:39334",
             "purl": "http:\/\/192.168.30.100:39334"
         },
         {
             "txt": "navidrome",
-            "url": "http:\/\/vinsonkong2014.eu.org:39835",
+            "url": "http:\/\/vinsonkong2014.eu.org:39335",
             "purl": "http:\/\/192.168.30.100:39335"
         },
         {
