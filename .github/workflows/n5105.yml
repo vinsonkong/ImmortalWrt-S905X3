@@ -1,4 +1,4 @@
-name: Build ImmortalWrt N5105 (x86_64) ISO
+name: N5105 (x86_64) with ImageBuilder
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
       immortalwrt_version:
         description: 'ImmortalWrt Version'
         required: true
-        default: '24.10.2'
+        default: '24.10.6'
         type: choice
         options:
           - 23.05.4
@@ -20,28 +20,18 @@ on:
           - 24.10.4
           - 24.10.5
           - 24.10.6
-      rootfs_type:
-        description: 'Root Filesystem Type'
-        required: true
-        default: 'squashfs'
-        type: choice
-        options:
-          - squashfs
-          - ext4
 
 env:
-  SOURCE_DIR: "immortalwrt"
+  DIY_SCRIPT: "diyX86.sh"
   CUSTOM_FILES_DIR: "custom-files"
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packagesX86.txt"
-  DIY_SCRIPT: "diyX86.sh"
-  DEFAULT_IP: "192.168.10.1"
-  TARGET_ARCH: "x86_64"
+  BUILDER_DIR: "openwrt"
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    name: Build ImmortalWrt N5105 (${{ inputs.rootfs_type }})
+    name: Build for N5105 (x86_64)
 
     steps:
       - name: Checkout Repository
@@ -50,8 +40,8 @@ jobs:
       - name: Create Swap File
         run: |
           if [ -z "$(swapon --show=NAME --noheadings)" ]; then
-            echo "⚡ Creating 8G swap (x86 full build requires more memory)..."
-            sudo fallocate -l 8G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192
+            echo "⚡ Creating 4G swap..."
+            sudo fallocate -l 4G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=4096
             sudo chmod 600 /mnt/swapfile
             sudo mkswap /mnt/swapfile
             sudo swapon /mnt/swapfile
@@ -67,34 +57,39 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
-            libssl-dev gettext unzip zlib1g-dev wget file zstd xz-utils curl perl coreutils \
-            python3 python3-distutils qemu-utils genisoimage rsync
+            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl coreutils
 
-      - name: Clone ImmortalWrt Source
+      - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
           VERSION="${{ inputs.immortalwrt_version }}"
-          BRANCH="openwrt-${VERSION}"
-          
-          echo "📥 Cloning ImmortalWrt ${VERSION}..."
-          git clone --depth=1 -b "$BRANCH" https://github.com/immortalwrt/immortalwrt.git "${{ env.SOURCE_DIR }}"
-          
-          if [ ! -d "${{ env.SOURCE_DIR }}" ]; then
-            echo "❌ Clone failed!" && exit 1
-          fi
-          echo "✅ Source ready at ./${{ env.SOURCE_DIR }}"
+          BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/x86/64"
 
-      - name: Update & Install Feeds
-        run: |
-          cd "${{ env.SOURCE_DIR }}"
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          # 23.05 使用 tar.xz，24.10+ 使用 tar.zst (若遇 404 可微调)
+          [[ "$VERSION" == "23.05."* ]] && EXT="tar.xz" || EXT="tar.zst"
+
+          BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-x86-64.Linux-x86_64.${EXT}"
+          echo "📥 Downloading: $BUILDER_URL"
+          wget -q --show-progress "$BUILDER_URL" -O "imagebuilder.${EXT}"
+
+          if [[ "$EXT" == "tar.zst" ]]; then
+            tar --use-compress-program=unzstd -xf "imagebuilder.${EXT}"
+          else
+            tar -xf "imagebuilder.${EXT}"
+          fi
+          
+          mv immortalwrt-imagebuilder-*-x86-64.Linux-x86_64 "${{ env.BUILDER_DIR }}"
+
+          if [ ! -d "${{ env.BUILDER_DIR }}" ]; then
+            echo "❌ ImageBuilder extraction failed!" && exit 1
+          fi
+          echo "✅ ImageBuilder ready at ./${{ env.BUILDER_DIR }}"
 
       - name: Execute DIY Script
         run: |
           if [ -f "${{ env.DIY_SCRIPT }}" ]; then
             echo "🔧 Executing ${{ env.DIY_SCRIPT }}..."
             chmod +x "${{ env.DIY_SCRIPT }}"
-            cd "${{ env.SOURCE_DIR }}"
+            cd "${{ env.BUILDER_DIR }}"
             "../${{ env.DIY_SCRIPT }}"
             echo "✅ DIY script completed"
           else
@@ -104,181 +99,98 @@ jobs:
       - name: Inject Custom Files & Packages
         run: |
           echo "📦 Injecting custom resources..."
-          SRC_FILES="${{ env.SOURCE_DIR }}/files"
-          mkdir -p "$SRC_FILES" "${{ env.SOURCE_DIR }}/package/custom"
+          BUILDER_FILES="${{ env.BUILDER_DIR }}/files"
+          mkdir -p "$BUILDER_FILES" "${{ env.BUILDER_DIR }}/packages"
 
-          # 1. 注入自定义文件
+          # 1. 注入自定义文件并修复权限
           if [ -d "${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_FILES_DIR }}" 2>/dev/null)" ]; then
-            cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "$SRC_FILES/"
-            
-            echo "🔐 Fixing permissions..."
-            find "$SRC_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
-            find "$SRC_FILES/usr/bin" "$SRC_FILES/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
-            [ -f "$SRC_FILES/etc/rc.local" ] && chmod +x "$SRC_FILES/etc/rc.local"
-            [ -d "$SRC_FILES/etc/dropbear" ] && chmod 700 "$SRC_FILES/etc/dropbear"
-            find "$SRC_FILES/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
-            
-            echo "✅ Custom files injected"
+            cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "$BUILDER_FILES/"
+
+            echo "🔐 Fixing permissions for ALL injected init.d scripts..."
+            find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
           else
             echo "⏭️ No custom files to inject"
           fi
 
-          # 2. 注入自定义 IPK / 源码包
-          if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_PACKAGES_DIR }}" 2>/dev/null)" ]; then
-            cp -rv "${{ env.CUSTOM_PACKAGES_DIR }}"/* "${{ env.SOURCE_DIR }}/package/custom/"
-            echo "✅ Custom packages injected"
+          # 2. 注入自定义 IPK
+          if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ] && find "${{ env.CUSTOM_PACKAGES_DIR }}" -name "*.ipk" -print -quit | grep -q .; then
+            cp -v "${{ env.CUSTOM_PACKAGES_DIR }}"/*.ipk "${{ env.BUILDER_DIR }}/packages/"
+            echo "✅ Custom IPKs injected"
           else
-            echo "⏭️ No custom packages found"
+            echo "⏭️ No custom IPKs found"
           fi
 
-      - name: Generate Config for N5105 (SquashFS + ISO)
+          # 3. 通用权限修复
+          find "$BUILDER_FILES/usr/bin" "$BUILDER_FILES/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
+          [ -f "$BUILDER_FILES/etc/rc.local" ] && chmod +x "$BUILDER_FILES/etc/rc.local"
+          [ -d "$BUILDER_FILES/etc/dropbear" ] && chmod 700 "$BUILDER_FILES/etc/dropbear"
+          find "$BUILDER_FILES/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
+
+          echo "✅ Injection completed"
+
+      - name: Build SquashFS Firmware with ImageBuilder
         run: |
-          cd "${{ env.SOURCE_DIR }}"
-          
-          cat > .config << 'EOF'
-          # === Target: x86_64 ===
-          CONFIG_TARGET_x86=y
-          CONFIG_TARGET_x86_64=y
-          CONFIG_TARGET_x86_64_DEVICE_generic=y
-          
-          # === Rootfs: SquashFS (or ext4 via input) ===
-          ROOTFS_TYPE="${{ inputs.rootfs_type }}"
-          EOF
+          cd "${{ env.BUILDER_DIR }}"
 
-          # 根据用户选择动态设置文件系统
-          if [ "${{ inputs.rootfs_type }}" = "squashfs" ]; then
-            echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
-            echo "CONFIG_TARGET_ROOTFS_EXT4FS=n" >> .config
-          else
-            echo "CONFIG_TARGET_ROOTFS_SQUASHFS=n" >> .config
-            echo "CONFIG_TARGET_ROOTFS_EXT4FS=y" >> .config
-          fi
+          # sha256 兼容处理
+          command -v sha256 &>/dev/null || sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
 
-          # ISO 输出格式
-          cat >> .config << 'EOF'
-          CONFIG_TARGET_ROOTFS_ISO=y
-          CONFIG_GRUB_IMAGES=y
-          CONFIG_VMDK_IMAGES=n
-          
-          # === N5105 关键内核模块 ===
-          CONFIG_PACKAGE_kmod-igc=y
-          CONFIG_PACKAGE_kmod-igb=y
-          CONFIG_PACKAGE_kmod-r8125=y
-          CONFIG_PACKAGE_kmod-e1000e=y
-          CONFIG_PACKAGE_kmod-i915=y
-          CONFIG_PACKAGE_i915-firmware-dmc=y
-          CONFIG_PACKAGE_intel-gpu-firmware=y
-          CONFIG_PACKAGE_kmod-usb3=y
-          CONFIG_PACKAGE_kmod-usb-storage=y
-          CONFIG_PACKAGE_kmod-usb-storage-uas=y
-          CONFIG_PACKAGE_kmod-fs-ext4=y
-          CONFIG_PACKAGE_kmod-fs-f2fs=y
-          CONFIG_PACKAGE_kmod-fs-exfat=y
-          CONFIG_PACKAGE_kmod-fs-ntfs3=y
-          
-          # === 基础工具 ===
-          CONFIG_PACKAGE_bash=y
-          CONFIG_PACKAGE_pigz=y
-          CONFIG_PACKAGE_htop=y
-          CONFIG_PACKAGE_coreutils=y
-          EOF
+          # 强制指定 SquashFS 格式 (关闭 ext4，开启 squashfs)
+          sed -i 's/CONFIG_TARGET_ROOTFS_EXT4FS=y/CONFIG_TARGET_ROOTFS_EXT4FS=n/g' .config
+          sed -i 's/# CONFIG_TARGET_ROOTFS_SQUASHFS is not set/CONFIG_TARGET_ROOTFS_SQUASHFS=y/g' .config
+          echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
+          echo "✅ Forced SquashFS rootfs"
 
-          # 从包列表文件追加额外软件包
+          # 读取包列表（过滤注释和空行）
+          PACKAGES=""
           if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
-            echo "" >> .config
-            grep -vE '^\s*#|^\s*$' "../${{ env.PACKAGES_LIST_FILE }}" | while read pkg; do
-              echo "CONFIG_PACKAGE_${pkg}=y" >> .config
-            done
-            PKG_COUNT=$(grep -cvE '^\s*#|^\s*$' "../${{ env.PACKAGES_LIST_FILE }}")
-            echo "📋 Added $PKG_COUNT packages from ${{ env.PACKAGES_LIST_FILE }}"
-          fi
-
-          # 应用默认 IP
-          sed -i "s/192\.168\.[0-9]*\.[0-9]*/${{ env.DEFAULT_IP }}/g" package/base-files/files/bin/config_generate 2>/dev/null || true
-
-          make defconfig
-          echo "✅ .config generated"
-          echo "--- Config Summary ---"
-          grep -E "CONFIG_TARGET_|CONFIG_PACKAGE_kmod-ig|CONFIG_TARGET_ROOTFS" .config | head -20
-
-      - name: Download Sources
-        run: |
-          cd "${{ env.SOURCE_DIR }}"
-          make download -j$(nproc) V=s
-
-      - name: Build Firmware
-        run: |
-          cd "${{ env.SOURCE_DIR }}"
-          echo "🚀 Starting full build ($(nproc) threads)..."
-          make -j$(nproc) V=s || make -j1 V=s
-
-      - name: Diagnose Build Output
-        if: always()
-        run: |
-          echo "🔍 Checking build artifacts..."
-          FIRMWARE_DIR="${{ env.SOURCE_DIR }}/bin/targets/x86/64"
-
-          if [ -d "$FIRMWARE_DIR" ]; then
-            echo "📂 Directory contents:"
-            ls -lah "$FIRMWARE_DIR/"
-
-            ISO_COUNT=$(find "$FIRMWARE_DIR" -name "*.iso" 2>/dev/null | wc -l)
-            echo "📊 ISO files: $ISO_COUNT"
-
-            if [ "$ISO_COUNT" -eq 0 ]; then
-              echo "⚠️ No ISO found! Check build logs above."
-            else
-              echo "✅ ISO firmware generated successfully!"
-            fi
+            PACKAGES=$(grep -vE '^\s*#|^\s*$' "../${{ env.PACKAGES_LIST_FILE }}" | tr '\n' ' ')
+            echo "📋 Packages from ${{ env.PACKAGES_LIST_FILE }}: $(echo $PACKAGES | wc -w) items"
           else
-            echo "❌ Output directory missing. Build likely failed early."
+            echo "⏭️ ${{ env.PACKAGES_LIST_FILE }} not found, building with defaults"
           fi
+
+          echo "🚀 Starting ImageBuilder for x86_64..."
+          make image PROFILE=generic \
+            FILES="files" \
+            ROOTFS_PARTSIZE=2048 \
+            EXTRA_IMAGE_NAME="n5105" \
+            PACKAGES="$PACKAGES" \
+            V=s
 
       - name: Upload Firmware to Artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ImmortalWrt-N5105-${{ inputs.immortalwrt_version }}-${{ inputs.rootfs_type }}
+          name: IWrt-${{ inputs.immortalwrt_version }}-N5105-squashfs
           path: |
-            ${{ env.SOURCE_DIR }}/bin/targets/x86/64/*.iso
-            ${{ env.SOURCE_DIR }}/bin/targets/x86/64/*.manifest
-            ${{ env.SOURCE_DIR }}/bin/targets/x86/64/*-efi.img.gz
+            ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*-n5105.img.gz
+            ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*.manifest
 
       - name: Upload Firmware to Release
-        if: success()
         uses: softprops/action-gh-release@v2
+        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: iwrt-n5105-${{ inputs.immortalwrt_version }}-${{ inputs.rootfs_type }}-build${{ github.run_number }}
-          name: ImmortalWrt N5105 ${{ inputs.immortalwrt_version }} (${{ inputs.rootfs_type }}) Build ${{ github.run_number }}
+          tag_name: n5105-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: N5105 x86_64 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
             ## ImmortalWrt Firmware (N5105 / x86_64)
 
             | Item | Value |
             |------|-------|
             | Version | `${{ inputs.immortalwrt_version }}` |
-            | RootFS | `${{ inputs.rootfs_type }}` |
-            | Default IP | `${{ env.DEFAULT_IP }}` |
-            | Format | ISO (UEFI + Legacy BIOS) |
+            | Architecture | `x86_64` |
+            | RootFS | `SquashFS` |
 
-            ### 📁 Custom Resources
-            - DIY Script: `${{ env.DIY_SCRIPT }}`
-            - Custom Files: `${{ env.CUSTOM_FILES_DIR }}`
-            - Custom Packages: `${{ env.CUSTOM_PACKAGES_DIR }}`
-            - Package List: `${{ env.PACKAGES_LIST_FILE }}`
-
-            ### ⚠️ Installation Instructions
-            1. **Write ISO to USB**: Use Rufus / Ventoy / balenaEtcher
-            2. **Boot from USB**: Enter BIOS → Select UEFI or Legacy boot
-            3. **Install to Disk**: Boot into Live system, use `fdisk` + `dd` or built-in installer
-            4. Default IP: `${{ env.DEFAULT_IP }}` / Password: `password`
-
+            ### ⚠️ Flash Instructions
+            1. **PVE 虚拟机**: 解压 `.img.gz` 得到 `.img`，使用 `qm importdisk` 导入。
+            2. **物理机 U盘启动**: 使用 Rufus (DD模式) 或 balenaEtcher 将解压后的 `.img` 写入 U盘。
+            3. **物理机 直写硬盘**: 在 PE 或 LiveCD 下使用 `dd` 或 `DiskGenius` 将 `.img` 写入 N5105 内置硬盘。
+            
             ### 🔧 N5105 Notes
-            - Intel i225/i226 NIC: Uses `kmod-igc` driver
-            - Realtek 2.5G NIC: Uses `kmod-r8125` driver
-            - GPU acceleration: `kmod-i915` + firmware included
-            - SquashFS supports factory reset via overlay; ext4 does NOT
+            - 默认生成 `combined-efi.img.gz` (支持 UEFI 启动) 和 `combined.img.gz` (Legacy BIOS)。N5105 请使用 **efi** 版本。
+            - SquashFS 格式支持在 LuCI 中“恢复出厂设置”（Reset to defaults）。
           files: |
-            ${{ env.SOURCE_DIR }}/bin/targets/x86/64/*.iso
-            ${{ env.SOURCE_DIR }}/bin/targets/x86/64/*-efi.img.gz
+            ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*-n5105.img.gz
+            ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*.manifest
