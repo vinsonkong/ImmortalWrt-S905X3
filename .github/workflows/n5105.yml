@@ -27,11 +27,11 @@ on:
 
 env:
   SOURCE_DIR: "immortalwrt"
-  CUSTOM_FILES_DIR: "custom-files-n5105"
+  CUSTOM_FILES_DIR: "custom-files"
   CUSTOM_PACKAGES_DIR: "custom-packages"
-  PACKAGES_LIST_FILE: "packages-n5105.txt"
-  DIY_SCRIPT: "diy-n5105.sh"
-  DEFAULT_IP: "192.168.2.254"
+  PACKAGES_LIST_FILE: "packagesx86.txt"
+  DIY_SCRIPT: "diyx86.sh"
+  DEFAULT_IP: "192.168.10.1"
   TARGET_ARCH: "x86_64"
 
 jobs:
