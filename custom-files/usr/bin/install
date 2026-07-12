@@ -1,8 +1,13 @@
-
 /etc/init.d/AdGuardHome stop
 /etc/init.d/dockerd stop
 /etc/init.d/dockerman stop
 
 
+cp /usr/bin/AdGuardHome /mnt/mmcblk1p4/
+
+
 /usr/sbin/openwrt-install-amlogic
 
+
+cp /mnt/mmcblk1p4/AdGuardHome /usr/bin/
+chmod +x /usr/bin/AdGuardHome
