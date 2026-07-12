@@ -202,6 +202,7 @@ luci-app-firewall
 luci-i18n-firewall-zh-cn
 luci-app-ttyd
 luci-i18n-ttyd-zh-cn
+luci-app-commands
 # luci-app-wol
 # luci-i18n-wol-zh-cn
 luci-app-diskman
