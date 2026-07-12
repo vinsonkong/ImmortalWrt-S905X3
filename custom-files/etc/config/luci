@@ -43,5 +43,5 @@ config internal 'diag'
 
 config command
 	option name '恢复出厂'
-	option command '/sbin/reset'
+	option command '/sbin/firstbootgo'
 
