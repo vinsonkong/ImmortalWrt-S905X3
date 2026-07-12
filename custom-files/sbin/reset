@@ -1,6 +1,6 @@
 #!/bin/sh
 #========================================================================
-# Ophub X96MaxPlusQ2 纯Btrfs 恢复出厂设置脚本
+# amlogic 纯Btrfs 恢复出厂设置脚本
 # 适配无 OverlayFS 的单分区 Btrfs 布局
 #========================================================================
 
@@ -55,6 +55,6 @@ do_factory_reset() {
     reboot
 }
 
-echo -e "${STEPS} Ophub X96MaxPlusQ2 系统恢复工具"
+echo -e "${STEPS} amlogic 系统恢复工具"
 [ "$(id -u)" -eq 0 ] || error_exit "请以 root 权限运行"
 do_factory_reset
