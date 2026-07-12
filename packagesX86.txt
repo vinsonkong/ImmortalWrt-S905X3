@@ -252,6 +252,6 @@ openssh-sftp-server
 zoneinfo-asia
 zoneinfo-core
 
-# === Wi-Fi 无线驱动 (已移除博通ARM驱动，N5105无需) ===
+# === Wi-Fi 无线驱动  ===
 kmod-cfg80211
 kmod-mac80211
