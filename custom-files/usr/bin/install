@@ -1,0 +1,8 @@
+
+/etc/init.d/AdGuardHome stop
+/etc/init.d/dockerd stop
+/etc/init.d/dockerman stop
+
+
+/usr/sbin/openwrt-install-amlogic
+
