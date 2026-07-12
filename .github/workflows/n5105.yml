@@ -16,6 +16,10 @@ on:
           - 24.10.0
           - 24.10.1
           - 24.10.2
+          - 24.10.3
+          - 24.10.4
+          - 24.10.5
+          - 24.10.6
       rootfs_type:
         description: 'Root Filesystem Type'
         required: true
