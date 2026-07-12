@@ -1,5 +1,7 @@
 # ==========================================
 # OpenWrt / ImmortalWrt N5105 (x86_64) 软件包列表
+# 说明: 以 # 开头的行会被自动忽略
+#       请勿在包名后方添加行内注释
 # ==========================================
 
 # === 1. 核心基础与系统工具 ===
@@ -7,16 +9,41 @@ base-files
 busybox
 bash
 acpid
+attr
+chattr
 ca-bundle
 coreutils
+coreutils-base64
+coreutils-nohup
+coreutils-truncate
+gawk
+getopt
+gzip
 pigz
+pv
+rename
 tar
 unzip
+uuidgen
+whereis
+which
+xz
+xz-utils
+ziptool
 zstd
+bzip2
 htop
+coremark
+bc
+blkid
+blockd
+bsdtar
+cgi-io
+jshn
+libjson-script
 jq
-zoneinfo-asia
-zoneinfo-core
+iconv
+hostapd-common
 
 # === 2. N5105 专属内核与硬件驱动 ===
 kmod-igc
@@ -32,30 +59,58 @@ kmod-vhost-net
 
 # === 3. 磁盘管理与文件系统 ===
 block-mount
-fdisk
+mount-utils
+losetup
+lsattr
+lsblk
+lscpu
 parted
+fdisk
 dosfstools
 e2fsprogs
+dumpe2fs
+e2freefrag
+resize2fs
+tune2fs
 f2fs-tools
+f2fsck
+mkf2fs
+btrfs-progs
+ntfs-3g
+exfat-mkfs
+xfs-fsck
+xfs-mkfs
 kmod-fs-ext4
 kmod-fs-f2fs
 kmod-fs-exfat
 kmod-fs-ntfs3
+kmod-fs-ksmbd
+kmod-fs-cifs
 
-# === 4. USB 设备支持 ===
+# === 4. USB 设备与存储支持 ===
+kmod-usb-core
 kmod-usb3
 kmod-usb-storage
 kmod-usb-storage-uas
+kmod-usb-printer
 
 # === 5. 网络基础、拨号与多线多拨 ===
 curl
 wget-ssl
 uclient-fetch
 openssl-util
+iw
+iwinfo
 ppp
 ppp-mod-pppoe
 ppp-mod-pptp
 ppp-mod-l2tp
+comgt
+comgt-ncm
+uqmi
+usb-modeswitch
+wpad-basic
+wwan
 mwan3
 luci-app-mwan3
 luci-app-syncdial
@@ -75,68 +130,56 @@ luci-i18n-dockerman-zh-cn
 luci-app-easytier
 luci-app-zerotier
 luci-i18n-zerotier-zh-cn
-luci-app-tailscale
-socat
-luci-app-socat
-luci-i18n-socat-zh-cn
+# luci-app-tailscale
+# luci-i18n-tailscale-zh-cn
+# socat
+# luci-app-socat
+# luci-i18n-socat-zh-cn
 
 # === 8. 局域网共享与打印 ===
 samba4-server
 luci-app-samba4
 luci-i18n-samba4-zh-cn
-nfs-kernel-server
+# luci-i18n-ksmbd-zh-cn
+cifsmount
+luci-i18n-cifs-mount-zh-cn
+# nfs-kernel-server
 luci-i18n-nfs-zh-cn
-kmod-usb-printer
+# minidlna
+# luci-i18n-minidlna-zh-cn
 luci-app-usb-printer
 luci-i18n-usb-printer-zh-cn
 
-# === 9. LuCI 核心框架与系统管理 ===
+# === 9. LuCI 核心框架与基础模块 ===
 luci
 luci-base
 luci-compat
+luci-lib-base
+luci-lib-ip
+luci-lib-ipkg
+luci-lib-jsonc
+luci-lib-nixio
 luci-i18n-base-zh-cn
-luci-theme-argon
 luci-mod-admin-full
 luci-mod-network
 luci-mod-status
 luci-mod-system
-luci-app-package-manager
-luci-i18n-package-manager-zh-cn
 
-# === 10. 核心 LuCI 应用程序 ===
-luci-app-firewall
-luci-i18n-firewall-zh-cn
-luci-app-upnp
-luci-i18n-upnp-zh-cn
-luci-app-sqm
-luci-app-ttyd
-luci-i18n-ttyd-zh-cn
-luci-app-wol
-luci-i18n-wol-zh-cn
-luci-app-ddns-go
-luci-i18n-ddns-go-zh-cn
-luci-app-cron
-luci-app-ramfree
-luci-app-uhttpd
+# === 10. LuCI 网络协议支持 ===
+luci-proto-3g
+luci-proto-ipip
+luci-proto-ipv6
+luci-proto-ncm
+luci-proto-openconnect
+luci-proto-ppp
+luci-proto-qmi
+luci-proto-relay
 
-# === 11. 流量监控与统计 ===
-luci-app-statistics
-collectd-mod-ping
-collectd-mod-uptime
-wrtbwmon
-luci-app-wrtbwmon
-
-# === 12. 下载工具 ===
-aria2
-luci-app-aria2
-luci-i18n-aria2-zh-cn
-
-# === 13. Lucky 大吉面板 ===
-lucky
-luci-app-lucky
-luci-i18n-lucky-zh-cn
-
-# === 14. PHP 运行环境 ===
+# === 11. Web 服务器与 PHP 运行环境 ===
+uhttpd
+uhttpd-mod-ubus
+liblucihttp
+liblucihttp-lua
 php8
 php8-cgi
 php8-mod-curl
@@ -144,3 +187,71 @@ php8-mod-openssl
 php8-mod-session
 php8-mod-zip
 php8-mod-mbstring
+
+# === 12. 主题与外观 ===
+luci-theme-argon
+
+# === 13. 软件包管理 ===
+luci-app-package-manager
+luci-i18n-package-manager-zh-cn
+
+# === 14. 常用 LuCI 应用程序 ===
+luci-app-firewall
+luci-i18n-firewall-zh-cn
+luci-app-upnp
+luci-i18n-upnp-zh-cn
+luci-app-sqm
+luci-app-ttyd
+luci-i18n-ttyd-zh-cn
+luci-app-commands
+luci-i18n-commands-zh-cn
+# luci-app-wol
+# luci-i18n-wol-zh-cn
+# luci-app-ddns-go
+# luci-i18n-ddns-go-zh-cn
+luci-app-cron
+luci-app-diskman
+luci-i18n-diskman-zh-cn
+luci-app-hd-idle
+luci-i18n-hd-idle-zh-cn
+luci-i18n-filebrowser-go-zh-cn
+appfilter
+luci-app-appfilter
+luci-i18n-appfilter-zh-cn
+# adguardhome
+luci-app-adguardhome
+luci-app-access-control
+
+# === 15. 下载工具 ===
+aria2
+luci-app-aria2
+luci-i18n-aria2-zh-cn
+
+# === 16. Lucky 大吉面板 ===
+lucky
+luci-app-lucky
+luci-i18n-lucky-zh-cn
+
+# === 17. 同步与文件列表 ===
+syncthing
+luci-app-syncthing
+luci-i18n-syncthing-zh-cn
+openlist
+luci-app-openlist
+luci-i18n-openlist-zh-cn
+
+# === 18. 多媒体与流媒体处理 ===
+ffmpeg
+libffmpeg-full
+
+# === 19. 终端与远程管理 ===
+ttyd
+openssh-sftp-server
+
+# === 20. 时区数据 ===
+zoneinfo-asia
+zoneinfo-core
+
+# === Wi-Fi 无线驱动 (已移除博通ARM驱动，N5105无需) ===
+kmod-cfg80211
+kmod-mac80211
