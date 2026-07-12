@@ -36,6 +36,8 @@ dns:
     - tls://dot.pub
     - '[/lan/]192.168.2.254'
     - '[/lan/]192.168.30.1'
+    - '[/x96max.lan/]192.168.30.10'
+    - '[/x96maxq2.lan/]192.168.30.100'
   upstream_dns_file: ""
   bootstrap_dns:
     - 223.5.5.5
