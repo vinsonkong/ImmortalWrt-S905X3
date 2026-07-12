@@ -1,0 +1,60 @@
+#!/bin/sh
+#========================================================================
+# Ophub X96MaxPlusQ2 纯Btrfs 恢复出厂设置脚本
+# 适配无 OverlayFS 的单分区 Btrfs 布局
+#========================================================================
+
+STEPS="[\033[95m STEPS \033[0m]"
+INFO="[\033[94m INFO \033[0m]"
+SUCCESS="[\033[92m SUCCESS \033[0m]"
+ERROR="[\033[91m ERROR \033[0m]"
+
+error_exit() { echo -e "${ERROR} $1"; exit 1; }
+
+do_factory_reset() {
+    local SNAP="/.snapshots/etc-000"
+    
+    # 1. 验证出厂快照存在
+    [ -d "$SNAP" ] || error_exit "出厂快照 [$SNAP] 不存在！请重刷固件。"
+    
+    echo -e "${INFO} 检测到纯 Btrfs 布局，开始原子化恢复..."
+    
+    # 2. 备份当前 /etc (防止回滚失败导致无法开机)
+    if [ -e "/etc" ]; then
+        echo -e "${INFO} 备份当前配置到 /etc.factory_backup..."
+        mv /etc /etc.factory_backup 2>/dev/null || \
+            error_exit "无法移动 /etc，可能有进程占用。请先停止相关服务。"
+    fi
+    
+    # 3. 智能重建 /etc
+    # 检查快照本身是否为 btrfs 子卷
+    if btrfs subvolume show "$SNAP" >/dev/null 2>&1; then
+        echo -e "${INFO} 从 Btrfs 快照重建 /etc 子卷..."
+        btrfs subvolume snapshot "$SNAP" /etc || {
+            mv /etc.factory_backup /etc 2>/dev/null
+            error_exit "Btrfs 快照创建失败！已回滚备份。"
+        }
+    else
+        # 兜底：如果快照是普通目录（极少数旧版固件）
+        echo -e "${INFO} 从普通目录复制还原 /etc..."
+        cp -a "$SNAP" /etc || {
+            mv /etc.factory_backup /etc 2>/dev/null
+            error_exit "文件复制失败！已回滚备份。"
+        }
+    fi
+    
+    # 4. 清理运行时残留（无 overlay 但仍需清理临时状态）
+    echo -e "${INFO} 清理运行时缓存与临时状态..."
+    rm -rf /tmp/* /var/run/* /var/state/* 2>/dev/null
+    rm -rf /etc.factory_backup
+    
+    # 5. 同步并重启
+    sync
+    echo -e "${SUCCESS} ✅ 恢复完成！3秒后重启..."
+    sleep 3
+    reboot
+}
+
+echo -e "${STEPS} Ophub X96MaxPlusQ2 系统恢复工具"
+[ "$(id -u)" -eq 0 ] || error_exit "请以 root 权限运行"
+do_factory_reset
