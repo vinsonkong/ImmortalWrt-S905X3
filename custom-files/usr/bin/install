@@ -1,13 +1,25 @@
-/etc/init.d/AdGuardHome stop
+
+
+/etc/init.d/aria2 stop
+/etc/init.d/navidrome stop
+/etc/init.d/nfs stop
+/etc/init.d/nfsd stop
+/etc/init.d/samba4 stop
+/etc/init.d/syncthing stop
+
+
 /etc/init.d/dockerd stop
 /etc/init.d/dockerman stop
+/etc/init.d/AdGuardHome stop
 
 
-cp /usr/bin/AdGuardHome /mnt/mmcblk1p4/
+
+cp /usr/bin/AdGuardHome /mnt/mmcblk1p4/AdGuardHome
 
 
 /usr/sbin/openwrt-install-amlogic
 
 
-cp /mnt/mmcblk1p4/AdGuardHome /usr/bin/
+cp /mnt/mmcblk1p4/AdGuardHome /usr/bin/AdGuardHome
 chmod +x /usr/bin/AdGuardHome
+
