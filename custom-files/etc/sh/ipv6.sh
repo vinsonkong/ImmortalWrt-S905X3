@@ -112,8 +112,8 @@ fi
 # ---------- ServerChan 推送 ----------
 if [[ -n "$SERVERCHAN_SENDKEY" ]]; then
     SC_DESP="## 📡 ${TITLE} IPv6 地址已更新\n\n"
-    [[ -n "$URL_NEW" ]]    && SC_DESP+="**前缀地址 (SLAAC):**\n[${URL_NEW}](${URL_NEW})\n\n"
-    [[ -n "$URL_DHCPV6" ]] && SC_DESP+="**PD地址 (DHCPv6):**\n[${URL_DHCPV6}](${URL_DHCPV6})\n\n"
+    [[ -n "$URL_NEW" ]]    && SC_DESP+="**前缀地址 (SLAAC):**[${URL_NEW}](${URL_NEW})"
+    [[ -n "$URL_DHCPV6" ]] && SC_DESP+="**PD地址 (DHCPv6):**[${URL_DHCPV6}](${URL_DHCPV6})"
     SC_DESP+="> 更新时间: ${CURRENT_TIME}"
 
     SC_RESULT=$(curl $CURL_OPTS -X POST "https://sctapi.ftqq.com/${SERVERCHAN_SENDKEY}.send" \
