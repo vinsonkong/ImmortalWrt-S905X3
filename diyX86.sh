@@ -64,7 +64,7 @@ echo "✅ Lucky 二进制已注入"
 # ================= [ 3. EasyTier 二进制下载 ] =================
 echo "🌐 3. 注入 EasyTier 二进制文件..."
 EASYTIER_VERSION="v2.6.3"
-EASYTIER_ARCH="aarch64"
+EASYTIER_ARCH="x86_64"
 
 DOWNLOAD_URL="https://github.com/EasyTier/EasyTier/releases/download/${EASYTIER_VERSION}/easytier-linux-${EASYTIER_ARCH}-${EASYTIER_VERSION}.zip"
 mkdir -p /tmp/easytier-dl
