@@ -206,7 +206,7 @@ luci-i18n-samba4-zh-cn
 # luci-i18n-ksmbd-zh-cn
 cifsmount
 luci-i18n-cifs-mount-zh-cn
-nfs-kernel-server
+# nfs-kernel-server
 luci-i18n-nfs-zh-cn
 # minidlna
 # luci-i18n-minidlna-zh-cn
