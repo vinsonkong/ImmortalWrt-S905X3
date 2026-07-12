@@ -34,7 +34,7 @@ echo "✅ Navidrome 二进制已注入"
 # ================= [ 2. Lucky 大吉面板二进制下载 ] =================
 echo "🍀 2. 注入 Lucky 大吉面板二进制..."
 LUCKY_VERSION="2.27.2"
-LUCKY_ARCH="amd64"
+LUCKY_ARCH="x86_64"
 
 WANJI_URL="https://release.66666.host/v${LUCKY_VERSION}/${LUCKY_VERSION}_wanji/lucky_${LUCKY_VERSION}_Linux_${LUCKY_ARCH}_wanji.tar.gz"
 GITHUB_URL="https://github.com/gdy666/lucky/releases/download/v${LUCKY_VERSION}/lucky_${LUCKY_VERSION}_linux_${LUCKY_ARCH}.tar.gz"
