@@ -24,10 +24,10 @@ config dnsmasq
 
 config dhcp 'lan'
 	option interface 'lan'
-	option ignore '1'
 	option start '100'
 	option limit '150'
 	option leasetime '12h'
+	option ignore '1'
 
 config dhcp 'wan'
 	option interface 'wan'
