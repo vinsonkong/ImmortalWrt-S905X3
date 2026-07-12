@@ -1,22 +1,43 @@
-
+#!/bin/bash
 
 /etc/init.d/aria2 stop
-/etc/init.d/navidrome stop
-/etc/init.d/syncthing stop
+sleep 1
+echo "停止aria2"
 
+/etc/init.d/navidrome stop
+sleep 1
+echo "停止navidrome"
+
+/etc/init.d/syncthing stop
+sleep 1
+echo "停止syncthing"
+
+/etc/init.d/dockerman stop
+sleep 2
+echo "停止dockerman"
 
 /etc/init.d/dockerd stop
-/etc/init.d/dockerman stop
+sleep 1
+echo "停止dockerd"
+
 /etc/init.d/AdGuardHome stop
+sleep 2
+echo "停止adguardhome"
 
 
-
-cp /usr/bin/AdGuardHome /mnt/mmcblk1p4/AdGuardHome
-
+cp /usr/bin/AdGuardHome /tmp/AdGuardHome
+sleep 3
+echo "复制adguardhome二进制文件到tmp"
 
 /usr/sbin/openwrt-install-amlogic
+sleep 2
+echo "安装完成"
 
-
-cp /mnt/mmcblk1p4/AdGuardHome /usr/bin/AdGuardHome
+cp /tmp/AdGuardHome /usr/bin/AdGuardHome
+sleep 3
 chmod +x /usr/bin/AdGuardHome
+echo "复制回adguardhome二进制文件"
+
+
+exit 0
 
