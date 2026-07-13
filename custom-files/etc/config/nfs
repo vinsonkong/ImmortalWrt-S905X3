@@ -3,17 +3,18 @@ config share
 	option enabled '0'
 	option path '/mnt/mmcblk2p4'
 	option clients '*'
-	option options 'rw,sync,no_root_squash,insecure,no_subtree_check'
+	option options 'rw,fsid=2,sync,no_root_squash,insecure,no_subtree_check'
 
 config share
 	option enabled '0'
 	option path '/mnt'
 	option clients '*'
-	option options 'rw,sync,no_root_squash,insecure,no_subtree_check'
+	option options 'rw,fsid=1,sync,no_root_squash,insecure,no_subtree_check'
 
 config mount
 	option enabled '0'
 	option source '10.0.30.100:/mnt/mmcblk2p4'
 	option target '/mnt/nfs/q2'
-	option delay '10'
+	option delay '5'
+
 
