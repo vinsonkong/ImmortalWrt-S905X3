@@ -1,0 +1,15 @@
+
+config zerotier 'global'
+	option fw_allow_input '1'
+	option port '9993'
+	option local_conf_path '/etc/zerotier.conf'
+	option config_path '/etc/zerotier'
+	option secret 'c60ed0885e:0:fe457984e149df1ce0c3ecfbfa3b755ccc556f375948134257aa46c14439322f31edbcf385c452041a1d680bb915042c0ae3cac02ac82a549ac092d049ed080b:fe60b627b7874b5ca9c58b9d46457dec0ef9117171e21efb3fa817292580458d39ed8a376d0ababb13bde965b79486f215110214fe690b5bfa9fe284d408f796'
+	option enabled '1'
+
+config network 'earth'
+	option id '9f77fc393e652048'
+	option fw_allow_input '1'
+	option fw_allow_forward '1'
+	option allow_global '1'
+
