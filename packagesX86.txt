@@ -50,9 +50,7 @@ kmod-igc
 kmod-igb
 kmod-r8125
 kmod-e1000e
-kmod-i915
 i915-firmware-dmc
-intel-gpu-firmware
 kmod-9pnet
 kmod-9pvirtio
 kmod-vhost-net
@@ -104,7 +102,6 @@ iwinfo
 ppp
 ppp-mod-pppoe
 ppp-mod-pptp
-ppp-mod-l2tp
 comgt
 comgt-ncm
 uqmi
@@ -209,7 +206,6 @@ luci-i18n-commands-zh-cn
 # luci-i18n-wol-zh-cn
 # luci-app-ddns-go
 # luci-i18n-ddns-go-zh-cn
-luci-app-cron
 luci-app-diskman
 luci-i18n-diskman-zh-cn
 luci-app-hd-idle
