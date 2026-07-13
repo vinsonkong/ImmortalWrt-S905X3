@@ -57,7 +57,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
-            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl coreutils
+            libssl-dev genisoimage gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl coreutils
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
@@ -157,6 +157,7 @@ jobs:
             EXTRA_IMAGE_NAME="n5105" \
             PACKAGES="$PACKAGES" \
             V=s
+            CONFIG_ISO_IMAGES=n
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
