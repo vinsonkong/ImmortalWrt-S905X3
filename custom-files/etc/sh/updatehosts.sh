@@ -1,6 +1,6 @@
 #!/bin/bash
 # === 配置区 ===
-HOSTS_FILE="/etc/hosts-new/hosts.combined"
+HOSTS_FILE="/www/hosts-new/hosts.combined"
 LOG_FILE="/var/log/hosts-update.log"  # OpenWrt下为tmpfs，需持久化请改/root/
 LOCK_FILE="/tmp/hosts-update.lock"
 
