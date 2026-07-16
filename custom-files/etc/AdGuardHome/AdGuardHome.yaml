@@ -151,12 +151,6 @@ filters:
 whitelist_filters: []
 user_rules:
   - '! - 彻底禁用小米应用商店核心域名 -'
-  - '||app.mi.com^'
-  - '||api.app.mi.com^'
-  - '||store.mi.com^'
-  - '||market.xiaomi.com^'
-  - '||app.market.xiaomi.com^'
-  - '||storeconfig.mi.com^'
   - '||mi.com^'
   - '||miui.com^'
   - '||xiaomi.com^'
