@@ -1,0 +1,78 @@
+
+config smartdns
+	option enabled '0'
+	option server_name 'SmartDNS'
+	option port '6653'
+	option auto_set_dnsmasq '0'
+	option tcp_server '1'
+	option tls_server '0'
+	option doh_server '0'
+	option ipv6_server '1'
+	option bind_device '0'
+	option dualstack_ip_selection '1'
+	option serve_expired '1'
+	option cache_persist '1'
+	option resolve_local_hostnames '1'
+	option force_https_soa '0'
+	option rr_ttl_min '600'
+	option seconddns_port '6553'
+	option seconddns_tcp_server '1'
+	option log_output_mode 'file'
+	option log_file '/tmp/smartdns.log'
+	option log_level 'info'
+	option speed_check_mode 'ping,tcp:80,tcp:443'
+	option response_mode 'fastest-ip'
+	option cache_size '65536'
+	option prefetch_domain '1'
+	option mdns_lookup '1'
+	option old_port '6653'
+	option old_enabled '0'
+	option old_auto_set_dnsmasq '0'
+
+config server
+	option enabled '1'
+	option name 'AliDNS-DoH'
+	option ip 'https://dns.alidns.com/dns-query'
+
+config server
+	option enabled '1'
+	option name 'Tencent-DoH'
+	option ip 'https://doh.pub/dns-query'
+
+config server
+	option enabled '1'
+	option name 'AliDNS-IP'
+	option ip '223.5.5.5'
+
+config server
+	option enabled '1'
+	option name 'Tencent-IP'
+	option ip '119.29.29.29'
+
+config server
+	option enabled '1'
+	option name 'Google-DoH'
+	option ip 'https://dns.google/dns-query'
+	option group 'foreign'
+	option exclude_default_group '1'
+
+config server
+	option enabled '1'
+	option name 'Cloudflare-DoH'
+	option ip 'https://cloudflare-dns.com/dns-query'
+	option group 'foreign'
+	option exclude_default_group '1'
+
+config server
+	option enabled '1'
+	option name 'Quad9-DoH'
+	option ip 'https://dns.quad9.net/dns-query'
+	option group 'foreign'
+	option exclude_default_group '1'
+
+config client-rule
+
+config domain-rule
+
+config ip-rule
+
