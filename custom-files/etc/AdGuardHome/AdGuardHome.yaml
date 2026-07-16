@@ -72,8 +72,8 @@ dns:
   private_networks: []
   use_private_ptr_resolvers: true
   local_ptr_upstreams:
-    - 192.168.30.1
-    - '[/30.168.192.in-addr.arpa/]192.168.30.1'
+    - 192.168.2.254
+    - '[/2.168.192.in-addr.arpa/]192.168.2.254'
   use_dns64: false
   dns64_prefixes: []
   serve_http3: false
