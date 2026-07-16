@@ -1,8 +1,8 @@
 
 config smartdns
-	option enabled '0'
+	option enabled '1'
 	option server_name 'SmartDNS'
-	option port '6653'
+	option port '6553'
 	option auto_set_dnsmasq '0'
 	option tcp_server '1'
 	option tls_server '0'
@@ -15,7 +15,7 @@ config smartdns
 	option resolve_local_hostnames '1'
 	option force_https_soa '0'
 	option rr_ttl_min '600'
-	option seconddns_port '6553'
+	option seconddns_port '6653'
 	option seconddns_tcp_server '1'
 	option log_output_mode 'file'
 	option log_file '/tmp/smartdns.log'
@@ -25,8 +25,8 @@ config smartdns
 	option cache_size '65536'
 	option prefetch_domain '1'
 	option mdns_lookup '1'
-	option old_port '6653'
-	option old_enabled '0'
+	option old_port '6553'
+	option old_enabled '1'
 	option old_auto_set_dnsmasq '0'
 
 config server
