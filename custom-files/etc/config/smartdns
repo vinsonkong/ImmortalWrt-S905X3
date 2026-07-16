@@ -33,71 +33,61 @@ config server
 	option enabled '1'
 	option name 'GD-Telecom-1'
 	option ip '202.96.128.86'
-	option server_group 'default'
+	option type 'udp'
 
 config server
 	option enabled '1'
 	option name 'GD-Telecom-2'
 	option ip '202.96.134.33'
-	option server_group 'default'
 
 config server
 	option enabled '1'
 	option name 'GD-Unicom-1'
 	option ip '210.21.196.6'
-	option server_group 'default'
 
 config server
 	option enabled '1'
 	option name 'GD-Unicom-2'
 	option ip '221.5.88.88'
-	option server_group 'default'
 
 config server
 	option enabled '1'
 	option name 'GD-Mobile-1'
 	option ip '211.136.192.6'
-	option server_group 'default'
 
 config server
 	option enabled '1'
 	option name 'GD-Mobile-2'
 	option ip '211.139.163.6'
-	option server_group 'default'
 
 config server
 	option enabled '1'
 	option name 'AliDNS-DoH'
 	option ip 'https://dns.alidns.com/dns-query'
 	option type 'udp'
-	option server_group 'default'
 
 config server
 	option enabled '1'
 	option name 'Tencent-DoH'
 	option ip 'https://doh.pub/dns-query'
 	option type 'udp'
-	option server_group 'default'
 
 config server
 	option enabled '1'
 	option name 'AliDNS-IP'
 	option ip '223.5.5.5'
 	option type 'udp'
-	option server_group 'default'
 
 config server
 	option enabled '1'
 	option name 'Tencent-IP'
 	option ip '119.29.29.29'
 	option type 'udp'
-	option server_group 'default'
 
 config server
 	option enabled '1'
 	option name 'Google-DoH'
 	option ip 'https://dns.google/dns-query'
-	option group 'foreign'
 	option exclude_default_group '1'
 	option type 'udp'
 	option server_group 'foreign'
@@ -106,7 +96,6 @@ config server
 	option enabled '1'
 	option name 'Cloudflare-DoH'
 	option ip 'https://cloudflare-dns.com/dns-query'
-	option group 'foreign'
 	option exclude_default_group '1'
 	option type 'udp'
 	option server_group 'foreign'
@@ -115,7 +104,6 @@ config server
 	option enabled '1'
 	option name 'Quad9-DoH'
 	option ip 'https://dns.quad9.net/dns-query'
-	option group 'foreign'
 	option exclude_default_group '1'
 	option type 'udp'
 	option server_group 'foreign'
