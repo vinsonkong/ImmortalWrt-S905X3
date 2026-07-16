@@ -246,3 +246,5 @@ luci-i18n-openlist-zh-cn
 # luci-i18n-appfilter-zh-cn
 # adguardhome
 luci-app-adguardhome
+luci-i18n-smartdns-zh-cn
+
