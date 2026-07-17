@@ -46,10 +46,10 @@ config command
 	option command '/usr/bin/custom-firstboot'
 
 config command
-	option name '还原自定义配置'
+	option name '(通用)还原自定义配置'
 	option command '/usr/bin/custom-restore'
 
 config command
-	option name '全量备份'
+	option name '(通用)全量备份'
 	option command '/usr/bin/custom-backup'
 
