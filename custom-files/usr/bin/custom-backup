@@ -1,0 +1,62 @@
+#!/bin/sh
+#========================================================================
+# Amlogic /etc 纯复制单份备份脚本（排除非配置文件）
+# 目标: /mnt/backup/etc (始终只保留一份最新备份)
+#========================================================================
+
+BACKUP_DIR="/mnt/backup"
+TARGET_NAME="etc"
+SOURCE="/etc"
+BACKUP_PATH="${BACKUP_DIR}/${TARGET_NAME}"
+
+INFO="\033[94m[INFO]\033[0m"
+ERROR="\033[91m[ERROR]\033[0m"
+SUCCESS="\033[92m[SUCCESS]\033[0m"
+
+# 需要排除的非配置目录/文件（相对于 /etc）
+EXCLUDE_LIST="
+    --exclude=./cache
+    --exclude=./cups/logs
+    --exclude=./log
+    --exclude=./logs
+    --exclude=./run
+    --exclude=./tmp
+    --exclude=./systemd/journal
+    --exclude=./systemd/timesyncd.conf.d/*.conf
+    --exclude=*.log
+    --exclude=*.tmp
+    --exclude=*.pid
+    --exclude=*.sock
+"
+
+error_exit() { echo -e "${ERROR} $1"; exit 1; }
+
+# ==================== 1. 前置校验 ====================
+[ "$(id -u)" -eq 0 ] || error_exit "请以 root 权限运行"
+[ -d "$SOURCE" ] || error_exit "源目录 [$SOURCE] 不存在"
+mkdir -p "$BACKUP_DIR" 2>/dev/null || error_exit "无法创建备份目录 [$BACKUP_DIR]"
+
+# ==================== 2. 安全移除旧备份 ====================
+if [ -e "$BACKUP_PATH" ]; then
+    echo -e "${INFO} 移除旧备份..."
+    rm -rf "$BACKUP_PATH" || error_exit "无法删除旧备份"
+fi
+
+# ==================== 3. 纯复制备份（带排除规则） ====================
+echo -e "${INFO} 开始复制核心配置（已排除日志/缓存/临时文件）..."
+cd "$SOURCE" || error_exit "无法进入源目录"
+# shellcheck disable=SC2086
+tar cf - $EXCLUDE_LIST . | (cd "$BACKUP_PATH" 2>/dev/null || mkdir -p "$BACKUP_PATH" && cd "$BACKUP_PATH") && tar xf - 
+# 注：上面管道写法在某些sh下可能有问题，改用更兼容的方式：
+TEMP_TAR="/tmp/.etc_backup_$$.tar"
+tar cf "$TEMP_TAR" $EXCLUDE_LIST . || { rm -f "$TEMP_TAR"; error_exit "打包源配置失败"; }
+mkdir -p "$BACKUP_PATH" || { rm -f "$TEMP_TAR"; error_exit "无法创建备份目录"; }
+tar xf "$TEMP_TAR" -C "$BACKUP_PATH" || { rm -f "$TEMP_TAR"; error_exit "解压到备份目录失败"; }
+rm -f "$TEMP_TAR"
+
+# ==================== 4. 验证并落盘 ====================
+[ -d "$BACKUP_PATH" ] || error_exit "备份目录未生成"
+FILE_COUNT=$(find "$BACKUP_PATH" -maxdepth 1 | wc -l)
+[ "$FILE_COUNT" -gt 1 ] || error_exit "备份目录为空，备份异常"
+sync
+echo -e "${SUCCESS} ✅ 备份完成: $BACKUP_PATH"
