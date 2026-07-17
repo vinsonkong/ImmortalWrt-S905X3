@@ -1,35 +1,36 @@
 #!/bin/sh
 #========================================================================
-# OpenWrt 通用 /etc 配置还原脚本（二级回滚 + 清理重启）
-# 自动适配 OverlayFS / Btrfs / EXT4 / XFS / F2FS
+# OpenWrt 通用 /etc 配置还原脚本
+# 流程: 暂存/tmp → 一级覆盖(不删原文件) → 失败清理并回退/tmp 
+#       → 再失败二级(Btrfs快照/恢复出厂)
+# 自动适配 OverlayFS / EXT4 / XFS / F2FS / Btrfs
 #========================================================================
 
-BACKUP_DIR="${BACKUP_DIR:-/mnt/backup}"
-TARGET_NAME="etc"
-SOURCE="${BACKUP_DIR}/${TARGET_NAME}"
+BACKUP_DIR="/mnt/backup"
+SOURCE="${BACKUP_DIR}/etc"
+BTRFS_SNAP_PATH="/.snapshots/etc-000"
+TEMP_BAK="/tmp/etc.rollback_$(date +%Y%m%d%H%M%S)"
 
 INFO="\033[94m[INFO]\033[0m"
 WARN="\033[93m[WARN]\033[0m"
 ERROR="\033[91m[ERROR]\033[0m"
 SUCCESS="\033[92m[SUCCESS]\033[0m"
 
-error_exit() { echo -e "${ERROR} $1"; exit 1; }
+error_exit() { printf "%b %s\n" "${ERROR}" "$1"; exit 1; }
 
 # ==================== 1. 智能探测真实还原目标 ====================
 detect_target() {
-    # OverlayFS: 仅操作上层可写目录，避免破坏 /rom 只读底层
     if mount | grep -qE "on / type overlay|on /etc type overlay"; then
         UPPER=$(mount | grep -E "on / type overlay|on /etc type overlay" \
             | sed -n 's/.*upperdir=$[^,]*$.*/\1/p' | head -n1)
         if [ -d "$UPPER/etc" ]; then
             RESTORE_TARGET="$UPPER/etc"
-            echo -e "${INFO} 检测到 OverlayFS，还原至可写层: $RESTORE_TARGET"
+            printf "%b 检测到 OverlayFS，还原至可写层: %s\n" "${INFO}" "$RESTORE_TARGET"
             return
         fi
     fi
-    # 兜底：纯文件系统环境
     RESTORE_TARGET="/etc"
-    echo -e "${INFO} 标准环境，还原至: $RESTORE_TARGET"
+    printf "%b 标准环境，还原至: %s\n" "${INFO}" "$RESTORE_TARGET"
 }
 
 # ==================== 2. 前置校验 ====================
@@ -37,42 +38,89 @@ detect_target() {
 [ -d "$SOURCE" ] || error_exit "备份源 [$SOURCE] 不存在，请检查 ${BACKUP_DIR} 挂载状态"
 detect_target
 
-# ==================== 3. 原子暂存当前配置 ====================
-TEMP_BAK="${RESTORE_TARGET}.rollback_$(date +%Y%m%d%H%M%S)"
-echo -e "${INFO} 暂存当前配置到 [$TEMP_BAK]"
-mv "$RESTORE_TARGET" "$TEMP_BAK" || error_exit "无法暂存当前配置，可能有进程占用，请先停止相关服务"
+# ==================== 3. 暂存原配置到 /tmp ====================
+printf "%b 暂存当前配置到 [%s]\n" "${INFO}" "$TEMP_BAK"
+cp -a "$RESTORE_TARGET" "$TEMP_BAK" || error_exit "无法暂存当前配置到 /tmp，请检查 /tmp 可用空间"
 
-# ==================== 4. 一级：覆盖还原 ====================
-RESTORE_OK=0
-echo -e "${INFO} [1/2] 执行配置还原..."
-mkdir -p "$RESTORE_TARGET" 2>/dev/null
+# ==================== 4. 一级：覆盖还原（不删除原配置） ====================
+LEVEL1_OK=0
+printf "%b [1/3] 执行覆盖还原（保留原文件）...\n" "${INFO}"
+# 仅覆盖写入，不预先 rm 原目录，保证原子性
 cp -a "$SOURCE"/. "$RESTORE_TARGET"/ 2>/dev/null
 
-# 验证还原结果：目录存在且非空
 if [ -d "$RESTORE_TARGET" ] && [ "$(find "$RESTORE_TARGET" -maxdepth 1 | wc -l)" -gt 1 ]; then
-    RESTORE_OK=1
+    LEVEL1_OK=1
 fi
 
-# ==================== 5. 二级：复制回滚（安全兜底） ====================
-if [ "$RESTORE_OK" -ne 1 ]; then
-    echo -e "${WARN} [2/2] 还原失败！尝试复制回滚..."
+# ==================== 5. 一级失败：删除配置 + 从 /tmp 回退 ====================
+TMP_ROLLBACK_OK=0
+if [ "$LEVEL1_OK" -ne 1 ]; then
+    printf "%b [1/3] 覆盖还原失败，清理并回退 /tmp 原配置...\n" "${WARN}"
+    # 覆盖失败后才执行删除操作
     rm -rf "$RESTORE_TARGET" 2>/dev/null
-    if cp -a "$TEMP_BAK"/. "$RESTORE_TARGET"/ 2>/dev/null; then
-        rm -rf "$TEMP_BAK"
-        error_exit "配置还原失败，已通过复制回滚恢复原始状态（未重启，请排查原因）"
+    mkdir -p "$RESTORE_TARGET" 2>/dev/null
+    cp -a "$TEMP_BAK"/. "$RESTORE_TARGET"/ 2>/dev/null
+
+    if [ -d "$RESTORE_TARGET" ] && [ "$(find "$RESTORE_TARGET" -maxdepth 1 | wc -l)" -gt 1 ]; then
+        TMP_ROLLBACK_OK=1
+        printf "%b ✅ 已清理并成功回退 /tmp 原配置\n" "${SUCCESS}"
+    else
+        printf "%b /tmp 回退也失败，进入二级回滚\n" "${WARN}"
     fi
-    # 回滚也失败：保留 TEMP_BAK 供手动抢救
-    error_exit "⚠️ 回滚也失败！请手动恢复: mv $TEMP_BAK $RESTORE_TARGET"
 fi
 
-# ==================== 6. 成功路径：OpenWrt 专属清理 + 重启 ====================
-echo -e "${INFO} 还原验证通过，执行 OpenWrt 专属清理..."
-rm -rf "$TEMP_BAK" /tmp/* /var/run/* /var/state/* /var/lock/* 2>/dev/null
+# ==================== 6. 二级回滚：Btrfs 快照 / 恢复出厂 ====================
+if [ "$LEVEL1_OK" -ne 1 ] && [ "$TMP_ROLLBACK_OK" -ne 1 ]; then
+    printf "%b [2/3] 触发二级回滚...\n" "${ERROR}"
+    rm -rf "$RESTORE_TARGET" 2>/dev/null
 
-# 重建 rc.d 自启动软链接，防止还原后服务丢失
+    ROOT_FSTYPE=$(df -T / 2>/dev/null | tail -n1 | awk '{print $2}')
+    if [ "$ROOT_FSTYPE" = "btrfs" ] && command -v btrfs >/dev/null 2>&1; then
+        printf "%b 检测到 Btrfs，尝试从 [%s] 恢复快照...\n" "${INFO}" "$BTRFS_SNAP_PATH"
+        if [ -d "$BTRFS_SNAP_PATH" ]; then
+            mkdir -p "$RESTORE_TARGET" 2>/dev/null
+            cp -a "$BTRFS_SNAP_PATH"/. "$RESTORE_TARGET"/ 2>/dev/null
+            if [ -d "$RESTORE_TARGET" ] && [ "$(find "$RESTORE_TARGET" -maxdepth 1 | wc -l)" -gt 1 ]; then
+                printf "%b ✅ Btrfs 快照回滚成功\n" "${SUCCESS}"
+            else
+                printf "%b 快照内容无效，降级为恢复出厂\n" "${WARN}"
+                rm -rf "$RESTORE_TARGET" 2>/dev/null
+                _DO_FACTORY_RESET=1
+            fi
+        else
+            printf "%b 快照路径不存在，降级为恢复出厂\n" "${WARN}"
+            _DO_FACTORY_RESET=1
+        fi
+    else
+        printf "%b 非 Btrfs 环境，直接触发恢复出厂\n" "${WARN}"
+        _DO_FACTORY_RESET=1
+    fi
+
+    # 执行恢复出厂
+    if [ "${_DO_FACTORY_RESET:-0}" -eq 1 ]; then
+        printf "%b [3/3] 执行 OpenWrt 恢复出厂设置...\n" "${ERROR}"
+        rm -rf "$TEMP_BAK" 2>/dev/null
+        if command -v jffs2reset >/dev/null 2>&1; then
+            jffs2reset -y >/dev/null 2>&1
+        elif command -v firstboot >/dev/null 2>&1; then
+            firstboot -y >/dev/null 2>&1
+        else
+            error_exit "⚠️ jffs2reset/firstboot 均不可用，请手动重刷固件"
+        fi
+        sync
+        printf "%b ✅ 已触发恢复出厂设置！3秒后重启...\n" "${WARN}"
+        sleep 3
+        reboot
+        exit 0
+    fi
+fi
+
+# ==================== 7. 成功路径：清理 + 重启 ====================
+printf "%b 还原验证通过，执行 OpenWrt 专属清理...\n" "${INFO}"
+rm -rf "$TEMP_BAK" /tmp/* /var/run/* /var/state/* /var/lock/* 2>/dev/null
 [ -x /etc/init.d/boot ] && /etc/init.d/boot enable 2>/dev/null
 
 sync
-echo -e "${SUCCESS} ✅ 配置还原完成！3秒后重启..."
+printf "%b ✅ 配置还原完成！3秒后重启...\n" "${SUCCESS}"
 sleep 3
 reboot
