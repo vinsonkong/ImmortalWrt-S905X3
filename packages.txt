@@ -129,6 +129,7 @@ luci-app-lucky
 luci-i18n-lucky-zh-cn
 
 # === 多媒体与流媒体处理 ===
+ffprobe
 ffmpeg
 libffmpeg-full
 
