@@ -46,7 +46,6 @@ env:
 
 jobs:
   build:
-    # ✅ 修复核心：升级到 ubuntu-24.04 以获得 coreutils >= 9.0
     runs-on: ubuntu-24.04
     name: Build for ${{ inputs.device_board }}
 
