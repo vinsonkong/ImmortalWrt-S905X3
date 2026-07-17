@@ -43,5 +43,13 @@ config internal 'diag'
 
 config command
 	option name '恢复出厂'
-	option command '/usr/bin/firstbootcustom'
+	option command '/usr/bin/custom-firstboot'
+
+config command
+	option name '还原自定义配置'
+	option command '/usr/bin/custom-restore'
+
+config command
+	option name '备份'
+	option command '/usr/bin/custom-backup'
 
