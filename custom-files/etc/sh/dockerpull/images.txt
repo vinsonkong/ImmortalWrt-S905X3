@@ -1,0 +1,31 @@
+# 脚本docker-pull-bg.sh拉取镜像列表
+# 注释掉的不拉取
+#
+
+
+linuxserver/jellyfin:10.11.11
+
+ghcr.io/moontechlab/lunatv:latest
+
+
+
+
+#  ----- 容器安装windows -----
+# dockurr/windows:latest
+# dockurr/windows:6.01
+# dockurr/windows:5.11
+
+
+#  ----- 社区版onlyoffice，移除人数限制移动端编辑多核心中文字体 -----
+# 186184848/documentserver:latest
+
+#  ----- 文件预览 -----
+# keking/kkfileview:v2.2.2.1
+# basemetas/fileview:latest
+
+
+# ----- 数据库 -----
+redis:8-alpine
+# redis:7-alpine
+
+
