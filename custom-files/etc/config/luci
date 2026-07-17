@@ -50,6 +50,6 @@ config command
 	option command '/usr/bin/custom-restore'
 
 config command
-	option name '备份'
+	option name '全量备份'
 	option command '/usr/bin/custom-backup'
 
