@@ -42,7 +42,7 @@ config internal 'diag'
 	option route 'immortalwrt.org'
 
 config command
-	option name '恢复出厂'
+	option name 'btrfs固件恢复出厂'
 	option command '/usr/bin/custom-firstboot'
 
 config command
