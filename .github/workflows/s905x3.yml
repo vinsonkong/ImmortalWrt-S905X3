@@ -46,7 +46,8 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    # ✅ 修复核心：升级到 ubuntu-24.04 以获得 coreutils >= 9.0
+    runs-on: ubuntu-24.04
     name: Build for ${{ inputs.device_board }}
 
     steps:
@@ -73,7 +74,11 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
-            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl coreutils
+            libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl
+          # ✅ 显式升级 coreutils 确保 cp --update=OPTION 可用
+          sudo apt-get install -y -qq --only-upgrade coreutils
+          echo "🔍 coreutils version:"
+          cp --version | head -1
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
