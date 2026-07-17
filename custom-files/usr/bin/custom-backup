@@ -1,28 +1,27 @@
 #!/bin/sh
 #========================================================================
-# Amlogic /etc 纯复制单份备份脚本（排除非配置文件）
-# 目标: /mnt/backup/etc (始终只保留一份最新备份)
+# OpenWrt 通用 /etc 纯复制单份备份脚本（排除非配置文件）
+# 自动适配 OverlayFS / Btrfs / EXT4，始终只保留一份最新备份
 #========================================================================
 
-BACKUP_DIR="/mnt/backup"
+BACKUP_DIR="${BACKUP_DIR:-/mnt/backup}"
 TARGET_NAME="etc"
-SOURCE="/etc"
 BACKUP_PATH="${BACKUP_DIR}/${TARGET_NAME}"
 
 INFO="\033[94m[INFO]\033[0m"
 ERROR="\033[91m[ERROR]\033[0m"
 SUCCESS="\033[92m[SUCCESS]\033[0m"
 
-# 需要排除的非配置目录/文件（相对于 /etc）
+# OpenWrt 专属排除列表（相对于源路径）
 EXCLUDE_LIST="
-    --exclude=./cache
-    --exclude=./cups/logs
-    --exclude=./log
-    --exclude=./logs
     --exclude=./run
     --exclude=./tmp
-    --exclude=./systemd/journal
-    --exclude=./systemd/timesyncd.conf.d/*.conf
+    --exclude=./cache
+    --exclude=./log
+    --exclude=./logs
+    --exclude=./opkg-lists
+    --exclude=./rc.d
+    --exclude=./config/.running
     --exclude=*.log
     --exclude=*.tmp
     --exclude=*.pid
@@ -31,30 +30,46 @@ EXCLUDE_LIST="
 
 error_exit() { echo -e "${ERROR} $1"; exit 1; }
 
-# ==================== 1. 前置校验 ====================
-[ "$(id -u)" -eq 0 ] || error_exit "请以 root 权限运行"
-[ -d "$SOURCE" ] || error_exit "源目录 [$SOURCE] 不存在"
-mkdir -p "$BACKUP_DIR" 2>/dev/null || error_exit "无法创建备份目录 [$BACKUP_DIR]"
+# ==================== 1. 智能探测真实可写源路径 ====================
+detect_source() {
+    # OverlayFS: 仅备份上层可写目录，避免复制 /rom 只读底层
+    if mount | grep -qE "on / type overlay|on /etc type overlay"; then
+        UPPER=$(mount | grep -E "on / type overlay|on /etc type overlay" \
+            | sed -n 's/.*upperdir=$[^,]*$.*/\1/p' | head -n1)
+        if [ -d "$UPPER/etc" ]; then
+            SOURCE="$UPPER/etc"
+            echo -e "${INFO} 检测到 OverlayFS，仅备份可写层: $SOURCE"
+            return
+        fi
+    fi
+    # 兜底：Btrfs子卷 / EXT4 / XFS 等纯文件系统
+    SOURCE="/etc"
+    echo -e "${INFO} 使用标准路径: $SOURCE"
+}
 
-# ==================== 2. 安全移除旧备份 ====================
+# ==================== 2. 前置校验 ====================
+[ "$(id -u)" -eq 0 ] || error_exit "请以 root 权限运行"
+detect_source
+[ -d "$SOURCE" ] || error_exit "源目录 [$SOURCE] 不存在"
+mkdir -p "$BACKUP_DIR" 2>/dev/null || error_exit "无法创建备份目录 [$BACKUP_DIR]，请检查存储设备挂载"
+
+# ==================== 3. 安全移除旧备份 ====================
 if [ -e "$BACKUP_PATH" ]; then
     echo -e "${INFO} 移除旧备份..."
-    rm -rf "$BACKUP_PATH" || error_exit "无法删除旧备份"
+    rm -rf "$BACKUP_PATH" || error_exit "无法删除旧备份，可能被进程占用"
 fi
 
-# ==================== 3. 纯复制备份（带排除规则） ====================
+# ==================== 4. 流式复制备份（带排除规则） ====================
 echo -e "${INFO} 开始复制核心配置（已排除日志/缓存/临时文件）..."
-cd "$SOURCE" || error_exit "无法进入源目录"
-# shellcheck disable=SC2086
-tar cf - $EXCLUDE_LIST . | (cd "$BACKUP_PATH" 2>/dev/null || mkdir -p "$BACKUP_PATH" && cd "$BACKUP_PATH") && tar xf - 
-# 注：上面管道写法在某些sh下可能有问题，改用更兼容的方式：
-TEMP_TAR="/tmp/.etc_backup_$$.tar"
-tar cf "$TEMP_TAR" $EXCLUDE_LIST . || { rm -f "$TEMP_TAR"; error_exit "打包源配置失败"; }
-mkdir -p "$BACKUP_PATH" || { rm -f "$TEMP_TAR"; error_exit "无法创建备份目录"; }
-tar xf "$TEMP_TAR" -C "$BACKUP_PATH" || { rm -f "$TEMP_TAR"; error_exit "解压到备份目录失败"; }
-rm -f "$TEMP_TAR"
+mkdir -p "$BACKUP_PATH" || error_exit "无法创建备份目标目录"
 
-# ==================== 4. 验证并落盘 ====================
+# 使用管道流式传输，避免 /tmp 空间不足导致打包失败
+# shellcheck disable=SC2086
+tar cf - -C "$SOURCE" $EXCLUDE_LIST . | tar xf - -C "$BACKUP_PATH"
+TAR_EXIT=${PIPESTATUS[0]:-$?}
+[ "$TAR_EXIT" -eq 0 ] || error_exit "备份传输失败 (exit=$TAR_EXIT)"
+
+# ==================== 5. 验证并落盘 ====================
 [ -d "$BACKUP_PATH" ] || error_exit "备份目录未生成"
 FILE_COUNT=$(find "$BACKUP_PATH" -maxdepth 1 | wc -l)
 [ "$FILE_COUNT" -gt 1 ] || error_exit "备份目录为空，备份异常"
