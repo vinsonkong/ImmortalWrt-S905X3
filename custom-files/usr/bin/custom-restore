@@ -1,0 +1,73 @@
+#!/bin/sh
+#========================================================================
+# Amlogic Btrfs 配置还原脚本（三级回滚 + 清理重启）
+#========================================================================
+
+BACKUP_DIR="/mnt/backup"
+SNAP_NAME="etc"
+TARGET="/etc"
+FALLBACK_SNAP="/.snapshots/etc-000"  # 终极兜底出厂快照路径
+
+INFO="\033[94m[INFO]\033[0m"
+WARN="\033[93m[WARN]\033[0m"
+ERROR="\033[91m[ERROR]\033[0m"
+SUCCESS="\033[92m[SUCCESS]\033[0m"
+
+error_exit() { echo -e "${ERROR} $1"; exit 1; }
+
+# ==================== 1. 前置校验 ====================
+[ "$(id -u)" -eq 0 ] || error_exit "请以 root 权限运行"
+SOURCE="${BACKUP_DIR}/${SNAP_NAME}"
+[ -e "$SOURCE" ] || error_exit "备份源 [$SOURCE] 不存在，请检查 ${BACKUP_DIR} 挂载状态"
+
+# ==================== 2. 原子暂存当前 /etc ====================
+TEMP_BAK="${TARGET}.rollback_$(date +%Y%m%d%H%M%S)"
+echo -e "${INFO} 暂存当前配置到 [$TEMP_BAK]"
+mv "$TARGET" "$TEMP_BAK" || error_exit "无法暂存当前 ${TARGET}，可能有进程占用"
+
+# ==================== 3. 一级：覆盖还原 ====================
+RESTORE_OK=0
+if btrfs subvolume show "$SOURCE" >/dev/null 2>&1; then
+    echo -e "${INFO} [1/3] 通过 Btrfs 快照还原..."
+    btrfs subvolume snapshot "$SOURCE" "$TARGET" && RESTORE_OK=1
+else
+    echo -e "${INFO} [1/3] 通过文件复制还原..."
+    cp -a "$SOURCE" "$TARGET" && RESTORE_OK=1
+fi
+
+# ==================== 4. 二级：复制回滚 ====================
+if [ "$RESTORE_OK" -ne 1 ] || [ ! -e "$TARGET" ]; then
+    echo -e "${WARN} [2/3] 还原失败！尝试复制回滚..."
+    rm -rf "$TARGET" 2>/dev/null
+    if cp -a "$TEMP_BAK" "$TARGET"; then
+        echo -e "${WARN} 复制回滚成功，但原始还原已失败"
+        # 复制回滚成功仍视为整体失败，不执行清理重启，直接退出
+        rm -rf "$TEMP_BAK"
+        error_exit "配置还原失败，已通过复制回滚恢复原始状态（未重启）"
+    fi
+fi
+
+# ==================== 5. 三级：快照回滚（终极兜底） ====================
+# 仅当复制回滚也失败时触发
+if [ ! -e "$TARGET" ]; then
+    echo -e "${ERROR} [3/3] 复制回滚失败！尝试出厂快照回滚..."
+    rm -rf "$TARGET" 2>/dev/null
+    if [ -d "$FALLBACK_SNAP" ] && btrfs subvolume snapshot "$FALLBACK_SNAP" "$TARGET" 2>/dev/null; then
+        echo -e "${WARN} 已通过出厂快照 [$FALLBACK_SNAP] 回滚"
+        rm -rf "$TEMP_BAK"
+        error_exit "配置还原及复制回滚均失败，已降级至出厂快照（未重启）"
+    else
+        rm -rf "$TEMP_BAK" 2>/dev/null
+        error_exit "⚠️ 三级回滚全部失败！系统可能无法启动，请手动恢复: mv $TEMP_BAK $TARGET"
+    fi
+fi
+
+# ==================== 6. 成功路径：清理 + 重启 ====================
+# 仅当一级还原成功且 TARGET 存在时才执行
+echo -e "${INFO} 还原验证通过，清理运行时残留..."
+rm -rf "$TEMP_BAK" /tmp/* /var/run/* /var/state/* 2>/dev/null
+sync
+
+echo -e "${SUCCESS} ✅ 配置还原完成！3秒后重启..."
+sleep 3
+reboot
