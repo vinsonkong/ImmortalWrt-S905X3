@@ -1,0 +1,4 @@
+#!/bin/sh
+export FULLBACKUP=1
+sh /usr/bin/custom/backup >/dev/null 2>&1
+printf '%s\n' "✅ 全量备份执行完成 "
