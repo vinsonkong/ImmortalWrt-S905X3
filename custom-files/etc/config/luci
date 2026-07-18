@@ -44,6 +44,10 @@ config internal 'diag'
 config command
 	option name '重启'
 	option command '/sbin/reboot'
+	
+config command
+	option name '关机'
+	option command '/sbin/poweroff'
 
 config command
 	option name '后台静默拉取docker镜像'
