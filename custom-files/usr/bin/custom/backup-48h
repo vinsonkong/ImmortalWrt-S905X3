@@ -1,0 +1,6 @@
+#!/bin/sh
+export FULLBACKUP=0
+export INCREMENTAL_HOURS=48
+sh /usr/bin/custom/backup >/dev/null 2>&1
+printf '%s\n' "✅ 增量备份执行完成 (窗口: ${INCREMENTAL_HOURS}h)"
+
