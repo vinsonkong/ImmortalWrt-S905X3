@@ -2,6 +2,7 @@
 #========================================================================
 # OpenWrt 通用 /etc 配置备份脚本（全量 / 增量双模式）
 # 自动适配 OverlayFS / Btrfs / EXT4，始终排除运行时临时文件
+# 排除规则统一读取自 /etc/backup-exclude.lst
 #========================================================================
 #
 # 📖 使用方式说明
@@ -27,6 +28,7 @@
 # ========================================================================
 
 BACKUP_DIR="/mnt/backup/etc"
+EXCLUDE_FILE="/etc/backup-exclude.lst"
 FULLBACKUP="${FULLBACKUP:-1}"
 INCREMENTAL_HOURS="${INCREMENTAL_HOURS:-24}"
 
@@ -52,14 +54,41 @@ detect_source() {
     printf "%b 使用标准路径: %s\n" "${INFO}" "$SOURCE"
 }
 
-# ==================== 2. 前置校验 ====================
+# ==================== 2. 构建 find 排除参数（从统一列表动态生成） ====================
+build_find_excludes() {
+    FIND_EXCLUDE=""
+    if [ ! -f "$EXCLUDE_FILE" ]; then
+        printf "%b 排除列表 [%s] 不存在，增量备份将不排除任何文件\n" "${WARN}" "$EXCLUDE_FILE"
+        return
+    fi
+    while IFS= read -r pattern || [ -n "$pattern" ]; do
+        # 跳过空行和注释
+        case "$pattern" in
+            ""|\#*) continue ;;
+        esac
+        case "$pattern" in
+            ./*)
+                # 目录排除：转换为 find 的 -path 通配符
+                dir_name="${pattern#./}"
+                FIND_EXCLUDE="$FIND_EXCLUDE ! -path \"*/${dir_name}/*\" ! -name \"${dir_name}\""
+                ;;
+            \*.*)
+                # 通配符文件排除
+                FIND_EXCLUDE="$FIND_EXCLUDE ! -name \"$pattern\""
+                ;;
+            *)
+                # 精确文件名排除
+                FIND_EXCLUDE="$FIND_EXCLUDE ! -name \"$pattern\""
+                ;;
+        esac
+    done < "$EXCLUDE_FILE"
+}
+
+# ==================== 3. 前置校验 ====================
 [ "$(id -u)" -eq 0 ] || error_exit "请以 root 权限运行"
 detect_source
 [ -d "$SOURCE" ] || error_exit "源目录 [$SOURCE] 不存在"
 mkdir -p "$BACKUP_DIR" 2>/dev/null || error_exit "无法创建备份目录 [$BACKUP_DIR]，请检查存储设备挂载"
-
-# ==================== 3. 构建排除参数（POSIX 兼容） ====================
-EXCLUDE_ARGS="--exclude=./run --exclude=./tmp --exclude=./cache --exclude=./log --exclude=./logs --exclude=./opkg-lists --exclude=./rc.d --exclude=./config/.running --exclude=*.log --exclude=*.tmp --exclude=*.pid --exclude=*.sock"
 
 # ==================== 4. 执行备份 ====================
 if [ "$FULLBACKUP" -eq 1 ]; then
@@ -70,8 +99,13 @@ if [ "$FULLBACKUP" -eq 1 ]; then
         rm -rf "$BACKUP_DIR" || error_exit "无法删除旧备份，可能被进程占用"
         mkdir -p "$BACKUP_DIR" || error_exit "无法重建备份目录"
     fi
-    # shellcheck disable=SC2086
-    tar cf - -C "$SOURCE" $EXCLUDE_ARGS . | tar xf - -C "$BACKUP_DIR"
+
+    if [ -f "$EXCLUDE_FILE" ]; then
+        tar cf - -C "$SOURCE" --exclude-from="$EXCLUDE_FILE" . | tar xf - -C "$BACKUP_DIR"
+    else
+        printf "%b 排除列表不存在，执行无排除全量备份\n" "${WARN}"
+        tar cf - -C "$SOURCE" . | tar xf - -C "$BACKUP_DIR"
+    fi
     TAR_EXIT=$?
 else
     # ---------- 增量备份（按修改时间过滤） ----------
@@ -92,14 +126,10 @@ else
     fi
     touch -t "$PAST_TS" "$REF_FILE"
 
-    # 查找指定时间内修改的文件（排除规则在 find 中预过滤）
+    # 动态构建 find 排除参数并执行查找
+    build_find_excludes
     FILE_LIST="/tmp/.etc_backup_list_$$"
-    find "$SOURCE" -newer "$REF_FILE" -type f \
-        ! -path "*/run/*" ! -path "*/tmp/*" ! -path "*/cache/*" \
-        ! -path "*/log/*" ! -path "*/logs/*" ! -path "*/opkg-lists/*" \
-        ! -path "*/rc.d/*" ! -path "*/config/.running*" \
-        ! -name "*.log" ! -name "*.tmp" ! -name "*.pid" ! -name "*.sock" \
-        > "$FILE_LIST" 2>/dev/null
+    eval "find \"$SOURCE\" -newer \"$REF_FILE\" -type f $FIND_EXCLUDE" > "$FILE_LIST" 2>/dev/null
 
     CHANGED_COUNT=$(wc -l < "$FILE_LIST")
     if [ "$CHANGED_COUNT" -eq 0 ]; then
