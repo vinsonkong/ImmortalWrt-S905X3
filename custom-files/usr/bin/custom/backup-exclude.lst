@@ -1,0 +1,12 @@
+./run
+./tmp
+./cache
+./log
+./logs
+./opkg-lists
+./rc.d
+./config/.running
+*.log
+*.tmp
+*.pid
+*.sock
