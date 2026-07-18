@@ -67,17 +67,21 @@ config command
 
 config command
 	option name 'btrfs固件恢复出厂'
-	option command '/usr/bin/custom-firstboot'
+	option command '/usr/bin/custom/firstboot'
 
 config command
 	option name '(通用)还原自定义配置'
-	option command '/usr/bin/custom-restore'
+	option command '/usr/bin/custom/restore'
 
 config command
 	option name '(通用)全量备份'
-	option command '/usr/bin/custom-backup > /dev/null 2>&1 && echo "执行完成"'
+	option command '/usr/bin/custom/backup-full'
 
 config command
 	option name '增量备份(24小时)'
-	option command 'FULLBACKUP=0 /usr/bin/custom-backup '
+	option command '/usr/bin/custom/backup-24h'
+
+config command
+	option name '增量备份6小时'
+	option command '/usr/bin/custom/backup-6h'
 
