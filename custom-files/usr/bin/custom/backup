@@ -39,80 +39,49 @@ SUCCESS="\033[92m[SUCCESS]\033[0m"
 
 error_exit() { printf "%b %s\n" "${ERROR}" "$1"; exit 1; }
 
-# ==================== 1. 智能探测真实可写源路径 ====================
 detect_source() {
     if mount | grep -qE "on / type overlay|on /etc type overlay"; then
         UPPER=$(mount | grep -E "on / type overlay|on /etc type overlay" \
             | sed -n 's/.*upperdir=$[^,]*$.*/\1/p' | head -n1)
         if [ -d "$UPPER/etc" ]; then
             SOURCE="$UPPER/etc"
-            printf "%b 检测到 OverlayFS，仅备份可写层: %s\n" "${INFO}" "$SOURCE"
+            printf "%b OverlayFS可写层: %s\n" "${INFO}" "$SOURCE"
             return
         fi
     fi
     SOURCE="/etc"
-    printf "%b 使用标准路径: %s\n" "${INFO}" "$SOURCE"
 }
 
-# ==================== 2. 构建 find 排除参数（从统一列表动态生成） ====================
 build_find_excludes() {
     FIND_EXCLUDE=""
-    if [ ! -f "$EXCLUDE_FILE" ]; then
-        printf "%b 排除列表 [%s] 不存在，增量备份将不排除任何文件\n" "${WARN}" "$EXCLUDE_FILE"
-        return
-    fi
+    [ -f "$EXCLUDE_FILE" ] || return
     while IFS= read -r pattern || [ -n "$pattern" ]; do
-        # 跳过空行和注释
+        case "$pattern" in ""|\#*) continue ;; esac
         case "$pattern" in
-            ""|\#*) continue ;;
-        esac
-        case "$pattern" in
-            ./*)
-                # 目录排除：转换为 find 的 -path 通配符
-                dir_name="${pattern#./}"
-                FIND_EXCLUDE="$FIND_EXCLUDE ! -path \"*/${dir_name}/*\" ! -name \"${dir_name}\""
-                ;;
-            \*.*)
-                # 通配符文件排除
-                FIND_EXCLUDE="$FIND_EXCLUDE ! -name \"$pattern\""
-                ;;
-            *)
-                # 精确文件名排除
-                FIND_EXCLUDE="$FIND_EXCLUDE ! -name \"$pattern\""
-                ;;
+            ./*) dir_name="${pattern#./}"; FIND_EXCLUDE="$FIND_EXCLUDE ! -path \"*/${dir_name}/*\" ! -name \"${dir_name}\"" ;;
+            \*.*) FIND_EXCLUDE="$FIND_EXCLUDE ! -name \"$pattern\"" ;;
+            *) FIND_EXCLUDE="$FIND_EXCLUDE ! -name \"$pattern\"" ;;
         esac
     done < "$EXCLUDE_FILE"
 }
 
-# ==================== 3. 前置校验 ====================
-[ "$(id -u)" -eq 0 ] || error_exit "请以 root 权限运行"
+[ "$(id -u)" -eq 0 ] || error_exit "请以root权限运行"
 detect_source
-[ -d "$SOURCE" ] || error_exit "源目录 [$SOURCE] 不存在"
-mkdir -p "$BACKUP_DIR" 2>/dev/null || error_exit "无法创建备份目录 [$BACKUP_DIR]，请检查存储设备挂载"
+[ -d "$SOURCE" ] || error_exit "源目录[$SOURCE]不存在"
+mkdir -p "$BACKUP_DIR" 2>/dev/null || error_exit "无法创建备份目录[$BACKUP_DIR]"
 
-# ==================== 4. 执行备份 ====================
 if [ "$FULLBACKUP" -eq 1 ]; then
-    # ---------- 全量备份 ----------
     printf "%b 执行全量备份...\n" "${INFO}"
-    if [ -e "$BACKUP_DIR" ]; then
-        printf "%b 移除旧的全量备份...\n" "${INFO}"
-        rm -rf "$BACKUP_DIR" || error_exit "无法删除旧备份，可能被进程占用"
-        mkdir -p "$BACKUP_DIR" || error_exit "无法重建备份目录"
-    fi
-
+    [ -e "$BACKUP_DIR" ] && { rm -rf "$BACKUP_DIR" || error_exit "无法删除旧备份"; mkdir -p "$BACKUP_DIR" || error_exit "无法重建备份目录"; }
     if [ -f "$EXCLUDE_FILE" ]; then
         tar cf - -C "$SOURCE" --exclude-from="$EXCLUDE_FILE" . | tar xf - -C "$BACKUP_DIR"
     else
-        printf "%b 排除列表不存在，执行无排除全量备份\n" "${WARN}"
         tar cf - -C "$SOURCE" . | tar xf - -C "$BACKUP_DIR"
     fi
     TAR_EXIT=$?
 else
-    # ---------- 增量备份（按修改时间过滤） ----------
-    printf "%b 执行增量备份（%s小时内修改的文件）...\n" "${INFO}" "$INCREMENTAL_HOURS"
+    printf "%b 增量备份(%sh内变更)...\n" "${INFO}" "$INCREMENTAL_HOURS"
     mkdir -p "$BACKUP_DIR" 2>/dev/null
-
-    # 生成时间戳参考文件（BusyBox date 双兜底）
     REF_FILE="/tmp/.etc_backup_ref_$$"
     PAST_TS=$(date -d "-${INCREMENTAL_HOURS} hours" "+%Y%m%d%H%M.%S" 2>/dev/null)
     if [ -z "$PAST_TS" ]; then
@@ -120,45 +89,40 @@ else
         PAST_EPOCH=$((NOW_EPOCH - INCREMENTAL_HOURS * 3600))
         PAST_TS=$(date -d "@${PAST_EPOCH}" "+%Y%m%d%H%M.%S" 2>/dev/null)
     fi
-    if [ -z "$PAST_TS" ]; then
-        rm -f "$REF_FILE" 2>/dev/null
-        error_exit "当前 BusyBox date 不支持时间偏移计算，请使用 FULLBACKUP=1"
-    fi
+    [ -z "$PAST_TS" ] && { rm -f "$REF_FILE" 2>/dev/null; error_exit "BusyBox date不支持时间偏移，请使用FULLBACKUP=1"; }
     touch -t "$PAST_TS" "$REF_FILE"
-
-    # 动态构建 find 排除参数并执行查找
     build_find_excludes
     FILE_LIST="/tmp/.etc_backup_list_$$"
     eval "find \"$SOURCE\" -newer \"$REF_FILE\" -type f $FIND_EXCLUDE" > "$FILE_LIST" 2>/dev/null
-
     CHANGED_COUNT=$(wc -l < "$FILE_LIST")
     if [ "$CHANGED_COUNT" -eq 0 ]; then
-        printf "%b 过去 %s 小时内无配置文件变更，跳过备份\n" "${WARN}" "$INCREMENTAL_HOURS"
-        rm -f "$REF_FILE" "$FILE_LIST" 2>/dev/null
-        exit 0
+        printf "%b 无变更文件，跳过\n" "${WARN}"
+        rm -f "$REF_FILE" "$FILE_LIST" 2>/dev/null; exit 0
     fi
-
-    printf "%b 发现 %s 个变更文件，执行增量复制...\n" "${INFO}" "$CHANGED_COUNT"
+    printf "%b %s个变更文件，增量复制...\n" "${INFO}" "$CHANGED_COUNT"
     while IFS= read -r filepath; do
         REL_PATH="${filepath#${SOURCE}/}"
         DEST_FILE="${BACKUP_DIR}/${REL_PATH}"
-        DEST_DIR=$(dirname "$DEST_FILE")
-        mkdir -p "$DEST_DIR" 2>/dev/null
+        mkdir -p "$(dirname "$DEST_FILE")" 2>/dev/null
         cp -a "$filepath" "$DEST_FILE" 2>/dev/null
     done < "$FILE_LIST"
-
     rm -f "$REF_FILE" "$FILE_LIST" 2>/dev/null
     TAR_EXIT=0
 fi
 
-# ==================== 5. 验证并落盘 ====================
-if [ "$TAR_EXIT" -ne 0 ]; then
-    error_exit "备份传输失败 (exit=$TAR_EXIT)"
+printf "%b 清理空文件夹...\n" "${INFO}"
+if find /tmp -maxdepth 0 -empty >/dev/null 2>&1; then
+    find "$BACKUP_DIR" -mindepth 1 -type d -empty -delete 2>/dev/null
+else
+    find "$BACKUP_DIR" -mindepth 1 -depth -type d 2>/dev/null | while IFS= read -r dir; do
+        [ -z "$(ls -A "$dir" 2>/dev/null)" ] && rmdir "$dir" 2>/dev/null
+    done
 fi
+CLEANED_COUNT=$(find "$BACKUP_DIR" -mindepth 1 -type d -empty 2>/dev/null | wc -l)
+[ "$CLEANED_COUNT" -eq 0 ] && printf "%b ✅ 无空文件夹\n" "${SUCCESS}" || printf "%b ⚠️ %s个空文件夹未清理\n" "${WARN}" "$CLEANED_COUNT"
 
+[ "$TAR_EXIT" -ne 0 ] && error_exit "备份传输失败(exit=$TAR_EXIT)"
 [ -d "$BACKUP_DIR" ] || error_exit "备份目录未生成"
-FILE_COUNT=$(find "$BACKUP_DIR" -maxdepth 1 | wc -l)
-[ "$FILE_COUNT" -gt 1 ] || error_exit "备份目录为空，备份异常"
-
+[ "$(find "$BACKUP_DIR" -maxdepth 1 | wc -l)" -gt 1 ] || error_exit "备份目录为空"
 sync
 printf "%b ✅ 备份完成: %s\n" "${SUCCESS}" "$BACKUP_DIR"
