@@ -24,6 +24,13 @@ echo "停止dockerd"
 sleep 2
 echo "停止adguardhome"
 
+/etc/init.d/nfs stop
+sleep 2
+echo "停止nfs"
+
+/etc/init.d/samba4 stop
+sleep 2
+echo "停止samba4"
 
 
 
