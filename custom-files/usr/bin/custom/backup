@@ -28,7 +28,7 @@
 # ========================================================================
 
 BACKUP_DIR="/mnt/backup/etc"
-EXCLUDE_FILE="/etc/backup-exclude.lst"
+EXCLUDE_FILE="/usr/bin/custom/backup-exclude.lst"
 FULLBACKUP="${FULLBACKUP:-1}"
 INCREMENTAL_HOURS="${INCREMENTAL_HOURS:-24}"
 
