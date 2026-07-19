@@ -70,10 +70,8 @@ dns:
   bootstrap_prefer_ipv6: false
   upstream_timeout: 10s
   private_networks: []
-  use_private_ptr_resolvers: true
-  local_ptr_upstreams:
-    - 192.168.2.254
-    - '[/2.168.192.in-addr.arpa/]192.168.2.254'
+  use_private_ptr_resolvers: false
+  local_ptr_upstreams: []
   use_dns64: false
   dns64_prefixes: []
   serve_http3: false
@@ -148,12 +146,30 @@ filters:
     url: http://127.0.0.1/hosts-new/hosts.combined
     name: CustomHosts
     id: 18464518465648
+  - enabled: true
+    url: https://raw.githubusercontent.com/cjx82630/cjxlist/master/cjx-annoyance.txt
+    name: CJX's Annoyance（去烦扰）
+    id: 1784351538
+  - enabled: true
+    url: https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblockdns.txt
+    name: ‌217heidai/adblockfilters
+    id: 1784351551
 whitelist_filters: []
 user_rules:
   - '! - 彻底禁用小米应用商店核心域名 -'
   - '||mi.com^'
   - '||miui.com^'
   - '||xiaomi.com^'
+  - '! - 测试'
+  - 0.0.0.0 broadcast.chat.bilibili.com
+  - '||biliapi.net^'
+  - '||biligame.com^'
+  - '@@||fqnovel.com^'
+  - '||byteimg.com^'
+  - '@@||googleapis.com^'
+  - '@@||chengzijianzhan.com^'
+  - '@@||bytetcc.com^'
+  - '||comfylink.com^'
 dhcp:
   enabled: false
   interface_name: ""
@@ -223,7 +239,7 @@ filtering:
   safesearch_cache_size: 1048576
   parental_cache_size: 1048576
   cache_time: 30
-  filters_update_interval: 24
+  filters_update_interval: 72
   blocked_response_ttl: 10
   filtering_enabled: true
   rewrites_enabled: true
@@ -234,7 +250,7 @@ clients:
   runtime_sources:
     whois: true
     arp: true
-    rdns: true
+    rdns: false
     dhcp: true
     hosts: true
   persistent: []
