@@ -6,7 +6,7 @@ config wifi-device 'radio0'
 	option htmode 'VHT80'
 	option country 'CN'
 	option cell_density '0'
-	option channel '36'
+	option channel '157'
 	option disabled '1'
 
 config wifi-iface 'default_radio0'
