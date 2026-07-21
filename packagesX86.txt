@@ -45,7 +45,7 @@ jq
 iconv
 hostapd-common
 
-# === 2. N5105 专属内核与硬件驱动 ===
+# === 2. N5105 专属内核、硬件与 Wi-Fi 驱动 ===
 kmod-igc
 kmod-igb
 kmod-r8125
@@ -54,6 +54,9 @@ i915-firmware-dmc
 kmod-9pnet
 kmod-9pvirtio
 kmod-vhost-net
+# Wi-Fi 无线核心驱动
+kmod-cfg80211
+kmod-mac80211
 
 # === 3. 磁盘管理与文件系统 ===
 block-mount
@@ -85,14 +88,15 @@ kmod-fs-ntfs3
 kmod-fs-ksmbd
 kmod-fs-cifs
 
-# === 4. USB 设备与存储支持 ===
+# === 4. USB 核心、存储与基础外设 ===
 kmod-usb-core
 kmod-usb3
 kmod-usb-storage
 kmod-usb-storage-uas
 kmod-usb-printer
+usbutils
 
-# === 5. 网络基础、拨号与多线多拨 ===
+# === 5. 网络基础、路由、拨号与多线多拨 ===
 curl
 wget-ssl
 uclient-fetch
@@ -112,7 +116,7 @@ mwan3
 luci-app-mwan3
 luci-app-syncdial
 
-# === 补充：USB 网络与手机共享 (USB Tethering) ===
+# === 6. USB 网络共享与 4G/5G 蜂窝网络 ===
 # 支持安卓/鸿蒙手机 USB 共享网络
 kmod-usb-net
 kmod-usb-net-rndis
@@ -120,9 +124,6 @@ kmod-usb-net-cdc-ether
 kmod-usb-net-cdc-ncm
 # 支持苹果 iPhone USB 共享网络 (可选)
 kmod-usb-net-ipheth
-usbutils
-
-# === 补充：USB 4G/5G 上网卡底层驱动 (Modem) ===
 # 支持各类 4G/5G 模块的串口识别
 kmod-usb-serial
 kmod-usb-serial-option
@@ -131,22 +132,20 @@ kmod-usb-serial-qualcomm
 kmod-usb-serial-sierrawireless
 kmod-usb-acm
 
-# === 补充：USB 摄像头与视频流监控支持 ===
-# 1. 核心视频驱动与 UVC (USB Video Class) 免驱摄像头支持
+# === 7. USB 摄像头与视频流监控 ===
+# 核心视频驱动与 UVC (USB Video Class) 免驱摄像头支持
 kmod-video-core
 kmod-video-uvc
 kmod-video-videobuf2
 kmod-i2c-core
-
-# 2. 视频设备调试与控制工具 (包含 v4l2-ctl 等)
+# 视频设备调试与控制工具 (包含 v4l2-ctl 等)
 v4l-utils
+# 轻量级 HTTP MJPEG 推流 (适合网页、手机 APP 直接观看)
+mjpg-streamer
+# RTSP 推流服务器 (适合接入 VLC、PotPlayer、群晖 Surveillance 或 NVR 录像机)
+v4l2rtspserver
 
-# 3. 视频流媒体服务器 (提供两种主流推流方式)
-mjpg-streamer      # 轻量级 HTTP MJPEG 推流 (适合网页、手机 APP 直接观看)
-v4l2rtspserver     # RTSP 推流服务器 (适合接入 VLC、PotPlayer、群晖 Surveillance 或 NVR 录像机)
-
-
-# === 6. Docker 容器环境 ===
+# === 8. Docker 容器环境 ===
 docker
 dockerd
 containerd
@@ -157,7 +156,7 @@ luci-lib-docker
 luci-app-dockerman
 luci-i18n-dockerman-zh-cn
 
-# === 7. 虚拟组网与内网穿透 ===
+# === 9. 虚拟组网与内网穿透 ===
 luci-app-easytier
 luci-app-zerotier
 luci-i18n-zerotier-zh-cn
@@ -167,7 +166,7 @@ luci-i18n-zerotier-zh-cn
 # luci-app-socat
 # luci-i18n-socat-zh-cn
 
-# === 8. 局域网共享与打印 ===
+# === 10. 局域网共享、NAS 与打印 ===
 samba4-server
 luci-app-samba4
 luci-i18n-samba4-zh-cn
@@ -181,7 +180,7 @@ luci-i18n-nfs-zh-cn
 luci-app-usb-printer
 luci-i18n-usb-printer-zh-cn
 
-# === 9. LuCI 核心框架与基础模块 ===
+# === 11. LuCI 核心框架与基础模块 ===
 luci
 luci-base
 luci-compat
@@ -196,7 +195,7 @@ luci-mod-network
 luci-mod-status
 luci-mod-system
 
-# === 10. LuCI 网络协议支持 ===
+# === 12. LuCI 网络协议支持 ===
 luci-proto-3g
 luci-proto-ipip
 luci-proto-ipv6
@@ -206,7 +205,7 @@ luci-proto-ppp
 luci-proto-qmi
 luci-proto-relay
 
-# === 11. Web 服务器与 PHP 运行环境 ===
+# === 13. Web 服务器与 PHP 运行环境 ===
 uhttpd
 uhttpd-mod-ubus
 liblucihttp
@@ -219,14 +218,12 @@ php8-mod-session
 php8-mod-zip
 php8-mod-mbstring
 
-# === 12. 主题与外观 ===
+# === 14. 主题、外观与软件包管理 ===
 luci-theme-argon
-
-# === 13. 软件包管理 ===
 luci-app-package-manager
 luci-i18n-package-manager-zh-cn
 
-# === 14. 常用 LuCI 应用程序 ===
+# === 15. 常用 LuCI 应用程序 ===
 luci-app-firewall
 luci-i18n-firewall-zh-cn
 luci-app-upnp
@@ -252,17 +249,17 @@ luci-i18n-appfilter-zh-cn
 luci-app-adguardhome
 luci-app-access-control
 
-# === 15. 下载工具 ===
+# === 16. 下载工具 ===
 aria2
 luci-app-aria2
 luci-i18n-aria2-zh-cn
 
-# === 16. Lucky 大吉面板 ===
+# === 17. Lucky 大吉面板 ===
 lucky
 luci-app-lucky
 luci-i18n-lucky-zh-cn
 
-# === 17. 同步与文件列表 ===
+# === 18. 同步与文件列表 ===
 syncthing
 luci-app-syncthing
 luci-i18n-syncthing-zh-cn
@@ -270,18 +267,12 @@ openlist
 luci-app-openlist
 luci-i18n-openlist-zh-cn
 
-# === 18. 多媒体与流媒体处理 ===
+# === 19. 多媒体与流媒体处理 ===
 ffmpeg
 libffmpeg-full
 
-# === 19. 终端与远程管理 ===
+# === 20. 终端、远程管理与时区 ===
 ttyd
 openssh-sftp-server
-
-# === 20. 时区数据 ===
 zoneinfo-asia
 zoneinfo-core
-
-# === Wi-Fi 无线驱动  ===
-kmod-cfg80211
-kmod-mac80211
