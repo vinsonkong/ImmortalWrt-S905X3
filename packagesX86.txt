@@ -112,6 +112,26 @@ mwan3
 luci-app-mwan3
 luci-app-syncdial
 
+# === 补充：USB 网络与手机共享 (USB Tethering) ===
+# 支持安卓/鸿蒙手机 USB 共享网络
+kmod-usb-net
+kmod-usb-net-rndis
+kmod-usb-net-cdc-ether
+kmod-usb-net-cdc-ncm
+# 支持苹果 iPhone USB 共享网络 (可选)
+kmod-usb-net-ipheth
+usbutils
+
+# === 补充：USB 4G/5G 上网卡底层驱动 (Modem) ===
+# 支持各类 4G/5G 模块的串口识别
+kmod-usb-serial
+kmod-usb-serial-option
+kmod-usb-serial-wwan
+kmod-usb-serial-qualcomm
+kmod-usb-serial-sierrawireless
+kmod-usb-acm
+
+
 # === 6. Docker 容器环境 ===
 docker
 dockerd
