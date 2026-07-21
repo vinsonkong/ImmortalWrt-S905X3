@@ -40,7 +40,7 @@ on:
 env:
   DIY_SCRIPT: "diy.sh"
   CUSTOM_FILES_DIR: "custom-files"
-  CUSTOM_FILES_AA_DIR: "custom-files-aa" # ✅ 新增自定义配置文件夹
+  CUSTOM_FILES_AA_DIR: "custom-files-s905x3" # ✅ 新增自定义配置文件夹
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packages.txt"
   BUILDER_DIR: "openwrt"
