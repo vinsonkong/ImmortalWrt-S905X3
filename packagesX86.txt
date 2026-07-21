@@ -131,6 +131,20 @@ kmod-usb-serial-qualcomm
 kmod-usb-serial-sierrawireless
 kmod-usb-acm
 
+# === 补充：USB 摄像头与视频流监控支持 ===
+# 1. 核心视频驱动与 UVC (USB Video Class) 免驱摄像头支持
+kmod-video-core
+kmod-video-uvc
+kmod-video-videobuf2
+kmod-i2c-core
+
+# 2. 视频设备调试与控制工具 (包含 v4l2-ctl 等)
+v4l-utils
+
+# 3. 视频流媒体服务器 (提供两种主流推流方式)
+mjpg-streamer      # 轻量级 HTTP MJPEG 推流 (适合网页、手机 APP 直接观看)
+v4l2rtspserver     # RTSP 推流服务器 (适合接入 VLC、PotPlayer、群晖 Surveillance 或 NVR 录像机)
+
 
 # === 6. Docker 容器环境 ===
 docker
