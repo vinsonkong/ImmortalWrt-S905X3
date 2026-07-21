@@ -114,6 +114,7 @@ wpad-basic
 wwan
 mwan3
 luci-app-mwan3
+luci-i18n-mwan3-zh-cn
 luci-app-syncdial
 
 # === 6. USB 网络共享与 4G/5G 蜂窝网络 ===
@@ -245,6 +246,9 @@ luci-i18n-filebrowser-go-zh-cn
 appfilter
 luci-app-appfilter
 luci-i18n-appfilter-zh-cn
+smartdns
+luci-app-smartdns
+luci-i18n-smartdns-zh-cn
 # adguardhome
 luci-app-adguardhome
 luci-app-access-control
