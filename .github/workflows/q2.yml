@@ -1,4 +1,4 @@
-name: s905x3 with ImageBuilder
+name: q2 with ImageBuilder
 
 on:
   workflow_dispatch:
@@ -212,8 +212,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: x96maxs-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
-          name: x96max ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
+          tag_name: q2-${{ inputs.immortalwrt_version }}-build${{ github.run_number }}
+          name: q2 ${{ inputs.immortalwrt_version }} (Build ${{ github.run_number }})
           body: |
             ## ImmortalWrt Firmware (ImageBuilder)
 
