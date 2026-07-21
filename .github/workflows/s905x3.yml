@@ -40,7 +40,7 @@ on:
 env:
   DIY_SCRIPT: "diy.sh"
   CUSTOM_FILES_DIR: "custom-files"
-  CUSTOM_FILES_AA_DIR: "custom-files-s905x3" # ✅ 新增自定义配置文件夹
+  CUSTOM_FILES_PLUS_DIR: "custom-files-s905x3" # ✅ 新增自定义配置文件夹
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packages.txt"
   BUILDER_DIR: "openwrt"
@@ -144,7 +144,7 @@ jobs:
           inject_files "${{ env.CUSTOM_FILES_DIR }}" "Default Custom Files"
 
           # 2. ✅ 注入新增的 custom-files-aa（后注入，同名文件会覆盖上面的）
-          inject_files "${{ env.CUSTOM_FILES_AA_DIR }}" "Custom Files AA"
+          inject_files "${{ env.CUSTOM_FILES_PLUS_DIR }}" "Custom Files AA"
 
           # 3. 注入自定义 IPK
           if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ] && find "${{ env.CUSTOM_PACKAGES_DIR }}" -name "*.ipk" -print -quit | grep -q .; then
