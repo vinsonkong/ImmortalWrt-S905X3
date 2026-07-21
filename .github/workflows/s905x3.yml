@@ -40,7 +40,7 @@ on:
 env:
   DIY_SCRIPT: "diy.sh"
   CUSTOM_FILES_DIR: "custom-files"
-  CUSTOM_FILES_PLUS_DIR: "custom-files-s905x3" # ✅ 新增自定义配置文件夹
+  CUSTOM_FILES_PLUS_DIR: "custom-files-s905x3" # ✅ 设备专用覆盖层
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packages.txt"
   BUILDER_DIR: "openwrt"
@@ -75,7 +75,6 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
             libssl-dev gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl
-          # ✅ 显式升级 coreutils 确保 cp --update=OPTION 可用
           sudo apt-get install -y -qq --only-upgrade coreutils
           echo "🔍 coreutils version:"
           cp --version | head -1
@@ -118,7 +117,7 @@ jobs:
           mkdir -p "$BUILDER_FILES" "${{ env.BUILDER_DIR }}/packages"
 
           # ==========================================
-          # 通用文件注入函数（避免重复代码）
+          # 通用文件注入函数
           # ==========================================
           inject_files() {
             local SRC_DIR="$1"
@@ -127,39 +126,44 @@ jobs:
             if [ -d "$SRC_DIR" ] && [ "$(ls -A "$SRC_DIR" 2>/dev/null)" ]; then
               echo "📂 Injecting $LABEL from $SRC_DIR ..."
               cp -rv "$SRC_DIR"/* "$BUILDER_FILES/"
-              
-              # 修复 init.d 脚本权限
-              find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
-              
-              # 检查 easytier（仅在首次注入时提示，或每次都检查）
-              if [ -f "$BUILDER_FILES/etc/init.d/easytier" ]; then
-                echo "✅ easytier found and marked executable"
-              fi
             else
               echo "⏭️ No files found in $SRC_DIR ($LABEL), skipping"
             fi
           }
 
-          # 1. 注入默认自定义文件
+          # 1. 注入通用自定义文件（底层）
           inject_files "${{ env.CUSTOM_FILES_DIR }}" "Default Custom Files"
 
-          # 2. ✅ 注入新增的 custom-files-aa（后注入，同名文件会覆盖上面的）
-          inject_files "${{ env.CUSTOM_FILES_PLUS_DIR }}" "Custom Files AA"
+          # 2. ✅ 注入设备专用覆盖层（后注入，同名文件覆盖通用层）
+          inject_files "${{ env.CUSTOM_FILES_PLUS_DIR }}" "Device-Specific Overlay (s905x3)"
 
-          # 3. 注入自定义 IPK
-          if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ] && find "${{ env.CUSTOM_PACKAGES_DIR }}" -name "*.ipk" -print -quit | grep -q .; then
-            cp -v "${{ env.CUSTOM_PACKAGES_DIR }}"/*.ipk "${{ env.BUILDER_DIR }}/packages/"
-            echo "✅ Custom IPKs injected"
+          # 3. 注入自定义 IPK（使用 find 避免 glob 无匹配时报错）
+          if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ]; then
+            IPK_COUNT=$(find "${{ env.CUSTOM_PACKAGES_DIR }}" -maxdepth 1 -name "*.ipk" | wc -l)
+            if [ "$IPK_COUNT" -gt 0 ]; then
+              find "${{ env.CUSTOM_PACKAGES_DIR }}" -maxdepth 1 -name "*.ipk" -exec cp -v {} "${{ env.BUILDER_DIR }}/packages/" \;
+              echo "✅ $IPK_COUNT custom IPK(s) injected"
+            else
+              echo "⏭️ No .ipk files found in ${{ env.CUSTOM_PACKAGES_DIR }}"
+            fi
           else
-            echo "⏭️ No custom IPKs found"
+            echo "⏭️ Custom packages directory not found"
           fi
 
-          # 4. 统一权限修复（对合并后的所有文件生效）
+          # 4. 统一权限修复（对合并后的最终文件树生效）
           echo "🔐 Fixing permissions for all injected files..."
+          find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
           find "$BUILDER_FILES/usr/bin" "$BUILDER_FILES/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
           [ -f "$BUILDER_FILES/etc/rc.local" ] && chmod +x "$BUILDER_FILES/etc/rc.local"
           [ -d "$BUILDER_FILES/etc/dropbear" ] && chmod 700 "$BUILDER_FILES/etc/dropbear"
           find "$BUILDER_FILES/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
+
+          # 统一检查关键服务
+          if [ -f "$BUILDER_FILES/etc/init.d/easytier" ]; then
+            echo "✅ easytier found and marked executable"
+          else
+            echo "ℹ️ easytier not found in injected files (optional)"
+          fi
 
           echo "✅ All injections completed"
 
@@ -167,10 +171,8 @@ jobs:
         run: |
           cd "${{ env.BUILDER_DIR }}"
 
-          # sha256 兼容处理
           command -v sha256 &>/dev/null || sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
 
-          # 读取包列表（过滤注释和空行）
           PACKAGES=""
           if [ -f "../${{ env.PACKAGES_LIST_FILE }}" ]; then
             PACKAGES=$(grep -vE '^\s*#|^\s*$' "../${{ env.PACKAGES_LIST_FILE }}" | tr '\n' ' ')
