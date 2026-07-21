@@ -1,0 +1,57 @@
+
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.0.0.0'
+
+config globals 'globals'
+	option ula_prefix 'fd14:ffa1:33db::/48'
+	option packet_steering '1'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth0'
+	list ports 'eth1'
+	list ports 'eth2'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '192.168.10.1'
+	option netmask '255.255.255.0'
+	option ip6assign '60'
+	option gateway '192.168.30.1'
+
+config interface 'wan'
+	option device 'eth3'
+	option proto 'static'
+	option gateway '192.168.30.1'
+	list ipaddr '192.168.30.11/24'
+
+config interface 'wan6'
+	option device 'eth3'
+	option proto 'dhcpv6'
+	option reqaddress 'try'
+	option reqprefix 'auto'
+	option norelease '1'
+
+config interface 'docker'
+	option device 'docker0'
+	option proto 'none'
+	option auto '0'
+
+config device
+	option type 'bridge'
+	option name 'docker0'
+
+config interface 'usbwan'
+	option proto 'dhcp'
+	option device 'usb0'
+
+config interface 'EasyTier'
+	option proto 'none'
+	option device 'tun0'
+	option ifname 'tun0'
+
