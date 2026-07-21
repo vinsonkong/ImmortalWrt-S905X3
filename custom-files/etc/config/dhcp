@@ -12,7 +12,6 @@ config dnsmasq
 	option leasefile '/tmp/dhcp.leases'
 	option localservice '0'
 	option ednspacket_max '1232'
-	list addnhosts '/etc/hosts-new/hosts.combined'
 	list addnhosts '/www/hosts-new/hosts.combined'
 	option port '5553'
 	option noresolv '1'
