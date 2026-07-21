@@ -40,6 +40,7 @@ on:
 env:
   DIY_SCRIPT: "diy.sh"
   CUSTOM_FILES_DIR: "custom-files"
+  CUSTOM_FILES_AA_DIR: "custom-files-aa" # ✅ 新增自定义配置文件夹
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packages.txt"
   BUILDER_DIR: "openwrt"
@@ -116,23 +117,36 @@ jobs:
           BUILDER_FILES="${{ env.BUILDER_DIR }}/files"
           mkdir -p "$BUILDER_FILES" "${{ env.BUILDER_DIR }}/packages"
 
-          # 1. 注入自定义文件并修复权限
-          if [ -d "${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_FILES_DIR }}" 2>/dev/null)" ]; then
-            cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "$BUILDER_FILES/"
-
-            echo "🔐 Fixing permissions for ALL injected init.d scripts..."
-            find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
-
-            if [ -f "$BUILDER_FILES/etc/init.d/easytier" ]; then
-              echo "✅ easytier found and marked executable"
+          # ==========================================
+          # 通用文件注入函数（避免重复代码）
+          # ==========================================
+          inject_files() {
+            local SRC_DIR="$1"
+            local LABEL="$2"
+            
+            if [ -d "$SRC_DIR" ] && [ "$(ls -A "$SRC_DIR" 2>/dev/null)" ]; then
+              echo "📂 Injecting $LABEL from $SRC_DIR ..."
+              cp -rv "$SRC_DIR"/* "$BUILDER_FILES/"
+              
+              # 修复 init.d 脚本权限
+              find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
+              
+              # 检查 easytier（仅在首次注入时提示，或每次都检查）
+              if [ -f "$BUILDER_FILES/etc/init.d/easytier" ]; then
+                echo "✅ easytier found and marked executable"
+              fi
             else
-              echo "⚠️ easytier not found in injected files! Please check repo path structure."
+              echo "⏭️ No files found in $SRC_DIR ($LABEL), skipping"
             fi
-          else
-            echo "⏭️ No custom files to inject"
-          fi
+          }
 
-          # 2. 注入自定义 IPK
+          # 1. 注入默认自定义文件
+          inject_files "${{ env.CUSTOM_FILES_DIR }}" "Default Custom Files"
+
+          # 2. ✅ 注入新增的 custom-files-aa（后注入，同名文件会覆盖上面的）
+          inject_files "${{ env.CUSTOM_FILES_AA_DIR }}" "Custom Files AA"
+
+          # 3. 注入自定义 IPK
           if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ] && find "${{ env.CUSTOM_PACKAGES_DIR }}" -name "*.ipk" -print -quit | grep -q .; then
             cp -v "${{ env.CUSTOM_PACKAGES_DIR }}"/*.ipk "${{ env.BUILDER_DIR }}/packages/"
             echo "✅ Custom IPKs injected"
@@ -140,13 +154,14 @@ jobs:
             echo "⏭️ No custom IPKs found"
           fi
 
-          # 3. 通用权限修复
+          # 4. 统一权限修复（对合并后的所有文件生效）
+          echo "🔐 Fixing permissions for all injected files..."
           find "$BUILDER_FILES/usr/bin" "$BUILDER_FILES/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
           [ -f "$BUILDER_FILES/etc/rc.local" ] && chmod +x "$BUILDER_FILES/etc/rc.local"
           [ -d "$BUILDER_FILES/etc/dropbear" ] && chmod 700 "$BUILDER_FILES/etc/dropbear"
           find "$BUILDER_FILES/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
 
-          echo "✅ Injection completed"
+          echo "✅ All injections completed"
 
       - name: Build Rootfs with ImageBuilder
         run: |
@@ -203,9 +218,6 @@ jobs:
             | Version | `${{ inputs.immortalwrt_version }}` |
             | Device | `${{ inputs.device_board }}` |
             | Kernel | `${{ inputs.kernel_version }}` |
-
-            ### ⚠️ Flash Instructions
-            1. Default IP: `192.168.1.1` (ophub default)
             
             ### 🔧 DTB Troubleshooting
             If the box fails to boot or Ethernet doesn't work, edit `/boot/uEnv.txt` in the BOOT partition and change the `FDT` line to match your specific device model.
