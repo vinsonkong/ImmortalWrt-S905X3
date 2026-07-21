@@ -33,6 +33,10 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     name: Build for N5105 (x86_64)
+    
+    # ✅ 修复 1：授予 GITHUB_TOKEN 创建 Release 和上传文件的权限
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -146,16 +150,17 @@ jobs:
 
       - name: Build SquashFS Firmware with ImageBuilder
         run: |
+          set -e # ✅ 修复 2：遇到任何错误立即退出，防止静默失败
           cd "${{ env.BUILDER_DIR }}"
 
           # sha256 兼容处理
           command -v sha256 &>/dev/null || sudo ln -sf "$(command -v sha256sum)" /usr/local/bin/sha256
 
-          # 强制指定 SquashFS 格式 (关闭 ext4，开启 squashfs)
-          sed -i 's/CONFIG_TARGET_ROOTFS_EXT4FS=y/CONFIG_TARGET_ROOTFS_EXT4FS=n/g' .config
-          sed -i 's/# CONFIG_TARGET_ROOTFS_SQUASHFS is not set/CONFIG_TARGET_ROOTFS_SQUASHFS=y/g' .config
-          echo "CONFIG_TARGET_ROOTFS_SQUASHFS=y" >> .config
-          echo "✅ Forced SquashFS rootfs"
+          # ✅ 修复 3：删除了强制关闭 EXT4FS 的代码（这会导致不生成 img.gz）。
+          # 仅关闭 ISO 和 VMDK 镜像以节省编译时间。
+          sed -i 's/CONFIG_ISO_IMAGES=y/CONFIG_ISO_IMAGES=n/g' .config
+          sed -i 's/CONFIG_VMDK_IMAGES=y/CONFIG_VMDK_IMAGES=n/g' .config
+          echo "✅ Disabled ISO and VMDK generation to save time"
 
           # 读取包列表（过滤注释和空行）
           PACKAGES=""
@@ -167,22 +172,26 @@ jobs:
           fi
 
           echo "🚀 Starting ImageBuilder for x86_64..."
-          # ✅ 修复：CONFIG_ISO_IMAGES=n 必须作为 make 变量传入，不能悬空
           make image PROFILE=generic \
             FILES="files" \
             ROOTFS_PARTSIZE=2048 \
             EXTRA_IMAGE_NAME="n5105" \
             PACKAGES="$PACKAGES" \
-            CONFIG_ISO_IMAGES=n \
             V=s
+
+          # ✅ 新增：列出 bin 目录下的所有文件，方便在日志中确认
+          echo "📂 Generated files:"
+          ls -lh bin/targets/x86/64/
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
         with:
           name: IWrt-${{ inputs.immortalwrt_version }}-N5105-squashfs
+          # ✅ 修复 4：放宽匹配规则，精准匹配 squashfs 固件，去掉 -n5105 的强依赖
           path: |
-            ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*-n5105.img.gz
+            ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*squashfs*.img.gz
             ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*.manifest
+          if-no-files-found: error
 
       - name: Upload Firmware to Release
         uses: softprops/action-gh-release@v2
@@ -209,6 +218,7 @@ jobs:
             ### 🔧 N5105 Notes
             - 默认生成 `combined-efi.img.gz` (支持 UEFI 启动) 和 `combined.img.gz` (Legacy BIOS)。N5105 请使用 **efi** 版本。
             - SquashFS 格式支持在 LuCI 中"恢复出厂设置"（Reset to defaults）。
+          # ✅ 修复 4：同步放宽 Release 的文件匹配规则
           files: |
-            ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*-n5105.img.gz
+            ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*squashfs*.img.gz
             ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*.manifest
