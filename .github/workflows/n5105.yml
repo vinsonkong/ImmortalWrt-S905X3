@@ -24,13 +24,14 @@ on:
 env:
   DIY_SCRIPT: "diyX86.sh"
   CUSTOM_FILES_DIR: "custom-files"
+  CUSTOM_FILES_PLUS_DIR: "custom-files-n5105" # ✅ N5105 设备专用覆盖层
   CUSTOM_PACKAGES_DIR: "custom-packages"
   PACKAGES_LIST_FILE: "packagesX86.txt"
   BUILDER_DIR: "openwrt"
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Build for N5105 (x86_64)
 
     steps:
@@ -57,26 +58,23 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential libncurses5-dev gawk git subversion \
-            libssl-dev genisoimage gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl coreutils
+            libssl-dev genisoimage gettext unzip zlib1g-dev wget file zstd qemu-utils xz-utils curl perl
+          sudo apt-get install -y -qq --only-upgrade coreutils
+          echo "🔍 coreutils version:"
+          cp --version | head -1
 
       - name: Download & Extract ImmortalWrt ImageBuilder
         run: |
           VERSION="${{ inputs.immortalwrt_version }}"
           BASE_URL="https://downloads.immortalwrt.org/releases/${VERSION}/targets/x86/64"
 
-          # 23.05 使用 tar.xz，24.10+ 使用 tar.zst (若遇 404 可微调)
           [[ "$VERSION" == "23.05."* ]] && EXT="tar.xz" || EXT="tar.zst"
 
           BUILDER_URL="${BASE_URL}/immortalwrt-imagebuilder-${VERSION}-x86-64.Linux-x86_64.${EXT}"
           echo "📥 Downloading: $BUILDER_URL"
           wget -q --show-progress "$BUILDER_URL" -O "imagebuilder.${EXT}"
 
-          if [[ "$EXT" == "tar.zst" ]]; then
-            tar --use-compress-program=unzstd -xf "imagebuilder.${EXT}"
-          else
-            tar -xf "imagebuilder.${EXT}"
-          fi
-          
+          tar -xf "imagebuilder.${EXT}"
           mv immortalwrt-imagebuilder-*-x86-64.Linux-x86_64 "${{ env.BUILDER_DIR }}"
 
           if [ ! -d "${{ env.BUILDER_DIR }}" ]; then
@@ -102,31 +100,49 @@ jobs:
           BUILDER_FILES="${{ env.BUILDER_DIR }}/files"
           mkdir -p "$BUILDER_FILES" "${{ env.BUILDER_DIR }}/packages"
 
-          # 1. 注入自定义文件并修复权限
-          if [ -d "${{ env.CUSTOM_FILES_DIR }}" ] && [ "$(ls -A "${{ env.CUSTOM_FILES_DIR }}" 2>/dev/null)" ]; then
-            cp -rv "${{ env.CUSTOM_FILES_DIR }}"/* "$BUILDER_FILES/"
+          # ==========================================
+          # 通用文件注入函数
+          # ==========================================
+          inject_files() {
+            local SRC_DIR="$1"
+            local LABEL="$2"
+            
+            if [ -d "$SRC_DIR" ] && [ "$(ls -A "$SRC_DIR" 2>/dev/null)" ]; then
+              echo "📂 Injecting $LABEL from $SRC_DIR ..."
+              cp -rv "$SRC_DIR"/* "$BUILDER_FILES/"
+            else
+              echo "⏭️ No files found in $SRC_DIR ($LABEL), skipping"
+            fi
+          }
 
-            echo "🔐 Fixing permissions for ALL injected init.d scripts..."
-            find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
+          # 1. 注入通用自定义文件（底层）
+          inject_files "${{ env.CUSTOM_FILES_DIR }}" "Default Custom Files"
+
+          # 2. ✅ 注入 N5105 设备专用覆盖层（后注入，同名文件覆盖通用层）
+          inject_files "${{ env.CUSTOM_FILES_PLUS_DIR }}" "Device-Specific Overlay (N5105)"
+
+          # 3. 注入自定义 IPK（使用 find 避免 glob 无匹配时报错）
+          if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ]; then
+            IPK_COUNT=$(find "${{ env.CUSTOM_PACKAGES_DIR }}" -maxdepth 1 -name "*.ipk" | wc -l)
+            if [ "$IPK_COUNT" -gt 0 ]; then
+              find "${{ env.CUSTOM_PACKAGES_DIR }}" -maxdepth 1 -name "*.ipk" -exec cp -v {} "${{ env.BUILDER_DIR }}/packages/" \;
+              echo "✅ $IPK_COUNT custom IPK(s) injected"
+            else
+              echo "⏭️ No .ipk files found in ${{ env.CUSTOM_PACKAGES_DIR }}"
+            fi
           else
-            echo "⏭️ No custom files to inject"
+            echo "⏭️ Custom packages directory not found"
           fi
 
-          # 2. 注入自定义 IPK
-          if [ -d "${{ env.CUSTOM_PACKAGES_DIR }}" ] && find "${{ env.CUSTOM_PACKAGES_DIR }}" -name "*.ipk" -print -quit | grep -q .; then
-            cp -v "${{ env.CUSTOM_PACKAGES_DIR }}"/*.ipk "${{ env.BUILDER_DIR }}/packages/"
-            echo "✅ Custom IPKs injected"
-          else
-            echo "⏭️ No custom IPKs found"
-          fi
-
-          # 3. 通用权限修复
+          # 4. 统一权限修复（对合并后的最终文件树生效）
+          echo "🔐 Fixing permissions for all injected files..."
+          find "$BUILDER_FILES/etc/init.d" -type f -exec chmod +x {} \; 2>/dev/null || true
           find "$BUILDER_FILES/usr/bin" "$BUILDER_FILES/etc/sh" -type f -exec chmod +x {} \; 2>/dev/null || true
           [ -f "$BUILDER_FILES/etc/rc.local" ] && chmod +x "$BUILDER_FILES/etc/rc.local"
           [ -d "$BUILDER_FILES/etc/dropbear" ] && chmod 700 "$BUILDER_FILES/etc/dropbear"
           find "$BUILDER_FILES/etc/dropbear" -type f -exec chmod 600 {} \; 2>/dev/null || true
 
-          echo "✅ Injection completed"
+          echo "✅ All injections completed"
 
       - name: Build SquashFS Firmware with ImageBuilder
         run: |
@@ -151,13 +167,14 @@ jobs:
           fi
 
           echo "🚀 Starting ImageBuilder for x86_64..."
+          # ✅ 修复：CONFIG_ISO_IMAGES=n 必须作为 make 变量传入，不能悬空
           make image PROFILE=generic \
             FILES="files" \
             ROOTFS_PARTSIZE=2048 \
             EXTRA_IMAGE_NAME="n5105" \
             PACKAGES="$PACKAGES" \
+            CONFIG_ISO_IMAGES=n \
             V=s
-            CONFIG_ISO_IMAGES=n
 
       - name: Upload Firmware to Artifact
         uses: actions/upload-artifact@v4
@@ -191,7 +208,7 @@ jobs:
             
             ### 🔧 N5105 Notes
             - 默认生成 `combined-efi.img.gz` (支持 UEFI 启动) 和 `combined.img.gz` (Legacy BIOS)。N5105 请使用 **efi** 版本。
-            - SquashFS 格式支持在 LuCI 中“恢复出厂设置”（Reset to defaults）。
+            - SquashFS 格式支持在 LuCI 中"恢复出厂设置"（Reset to defaults）。
           files: |
             ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*-n5105.img.gz
             ${{ env.BUILDER_DIR }}/bin/targets/x86/64/*.manifest
