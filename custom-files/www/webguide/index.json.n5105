@@ -1,5 +1,5 @@
 {
-    "title": "X96max",
+    "title": "n5105",
     "user": "",
     "ipv6": "",
     "pins": [
@@ -27,78 +27,78 @@
     "apps": [
         {
             "txt": "路由器",
-            "url": "http:\/\/vinsonkong2014.eu.org:39310",
+            "url": "http:\/\/vinsonkong2014.eu.org:39510",
             "purl": "http:\/\/192.168.30.10\/"
         },
         {
             "txt": "文件管理",
-            "url": "http:\/\/vinsonkong2014.eu.org:39311",
+            "url": "http:\/\/vinsonkong2014.eu.org:39511",
             "purl": "http:\/\/192.168.30.10:39311"
         },
         {
             "txt": "LUCKY",
-            "url": "http:\/\/vinsonkong2014.eu.org:39390\/vinson",
+            "url": "http:\/\/vinsonkong2014.eu.org:39590\/vinson",
             "purl": "http:\/\/192.168.30.10:39390\/vinson"
         },
         {
             "txt": "jellyfin",
-            "url": "http:\/\/vinsonkong2014.eu.org:8096",
-            "purl": "http:\/\/192.168.30.10:8096"
+            "url": "http:\/\/vinsonkong2014.eu.org:39581",
+            "purl": "http:\/\/192.168.30.10:39381"
         },
         {
             "txt": "Aria2下载",
-            "url": "http:\/\/vinsonkong2014.eu.org:39310\/ariang\/#!\/downloading",
+            "url": "http:\/\/vinsonkong2014.eu.org:39510\/ariang\/#!\/downloading",
             "purl": "http:\/\/192.168.30.10\/ariang\/#!\/downloading"
         },
         {
             "txt": "AdguardHome",
-            "url": "http:\/\/vinsonkong2014.eu.org:39370",
+            "url": "http:\/\/vinsonkong2014.eu.org:39570",
             "purl": "http:\/\/192.168.30.10:39370"
         },
         {
             "txt": "miniserve",
-            "url": "http:\/\/vinsonkong2014.eu.org:39333",
+            "url": "http:\/\/vinsonkong2014.eu.org:39533",
             "purl": "http:\/\/192.168.30.10:39333"
         },
         {
             "txt": "WebDAV",
-            "url": "http:\/\/vinsonkong2014.eu.org:39334",
+            "url": "http:\/\/vinsonkong2014.eu.org:39534",
             "purl": "http:\/\/192.168.30.10:39334"
         },
         {
             "txt": "navidrome",
-            "url": "http:\/\/vinsonkong2014.eu.org:39335",
+            "url": "http:\/\/vinsonkong2014.eu.org:39535",
             "purl": "http:\/\/192.168.30.10:39335"
         },
         {
             "txt": "reader",
-            "url": "http:\/\/vinsonkong2014.eu.org:39389",
+            "url": "http:\/\/vinsonkong2014.eu.org:39589",
             "purl": "http:\/\/192.168.30.10:39389"
         },
         {
             "txt": "moontv",
-            "url": "http:\/\/vinsonkong2014.eu.org:39395",
+            "url": "http:\/\/vinsonkong2014.eu.org:39595",
             "purl": "http:\/\/192.168.30.10:39395"
         },
         {
             "txt": "Syncthing",
-            "url": "http:\/\/vinsonkong2014.eu.org:39331",
+            "url": "http:\/\/vinsonkong2014.eu.org:39531",
             "purl": "http:\/\/192.168.30.10:39331"
         },
         {
             "txt": "Openlist",
-            "url": "http:\/\/vinsonkong2014.eu.org:39319",
+            "url": "http:\/\/vinsonkong2014.eu.org:39519",
             "purl": "http:\/\/192.168.30.10:39319"
         },
         {
             "txt": "homeassistant",
-            "url": "http:\/\/vinsonkong2014.eu.org:39316",
+            "url": "http:\/\/vinsonkong2014.eu.org:39516",
             "purl": "http:\/\/192.168.30.10:39316"
         },
         {
             "txt": "摄像头",
-            "url": "http:\/\/vinsonkong2014.eu.org:39612\/?action=stream",
-            "purl": "http:\/\/192.168.30.10:39612\/?action=stream"
+            "url": "http:\/\/vinsonkong2014.eu.org:39512\/?action=stream",
+            "purl": "http:\/\/192.168.30.10:39312\/?action=stream"
         }
     ]
 }
