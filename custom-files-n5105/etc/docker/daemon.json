@@ -1,1 +1,1 @@
-daemon.json
+{ "data-root": "\/mnt\/nvme0n1p3\/docker\/", "log-level": "warn", "iptables": true, "ip6tables": false, "registry-mirrors": [ "https:\/\/docker.m.daocloud.io", "https:\/\/docker.1ms.run", "https:\/\/hub-mirror.c.163.com" ], "dns": [ "223.5.5.5", "119.29.29.29", "8.8.8.8" ] }
