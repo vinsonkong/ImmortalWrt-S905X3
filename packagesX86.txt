@@ -87,6 +87,9 @@ kmod-fs-exfat
 kmod-fs-ntfs3
 kmod-fs-ksmbd
 kmod-fs-cifs
+kmod-kvm-x86
+kmod-kvm-intel
+kmod-kvm-amd
 
 # === 4. USB 核心、存储与基础外设 ===
 kmod-usb-core
