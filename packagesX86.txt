@@ -276,3 +276,10 @@ ttyd
 openssh-sftp-server
 zoneinfo-asia
 zoneinfo-core
+
+# 百度网盘
+baidusdk
+baidudrive
+luci-app-baidudrive
+luci-i18n-baidudrive-zh-cn
+app-meta-baidudrive
