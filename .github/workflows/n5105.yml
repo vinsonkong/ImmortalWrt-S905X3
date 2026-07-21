@@ -174,7 +174,7 @@ jobs:
           echo "🚀 Starting ImageBuilder for x86_64..."
           make image PROFILE=generic \
             FILES="files" \
-            ROOTFS_PARTSIZE=2048 \
+            ROOTFS_PARTSIZE=4096 \
             EXTRA_IMAGE_NAME="n5105" \
             PACKAGES="$PACKAGES" \
             V=s
