@@ -63,7 +63,6 @@ iucode-tool
 kmod-i2c-i801
 kmod-button-hotplug
 kmod-itco-wdt
-kmod-acpi-button
 # 硬件监控与温控风扇
 kmod-hwmon-coretemp
 kmod-hwmon-it87
@@ -325,8 +324,6 @@ kmod-leds-gpio
 kmod-sound-hda-core
 kmod-sound-hda-codec-realtek
 alsa-utils
-# CPU 调频工具
-cpufrequtils
 
 
 # 百度网盘
