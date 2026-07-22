@@ -2,7 +2,7 @@
 
 # ================= 配置项 =================
 TITLE="n5105"
-INTERFACE="br-lan"
+INTERFACE="eth3"
 STATE="/tmp/last_ipv6.txt"
 WEB_PORT="39380"
 PUSHPLUS_TOKEN="d3ab6649fb294bc8bd2bca56b58b6728"
