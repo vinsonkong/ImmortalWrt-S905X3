@@ -332,10 +332,10 @@ luci-app-baidudrive
 luci-i18n-baidudrive-zh-cn
 app-meta-baidudrive
 
-luci-app-timecontrol_3.2.4-r20260322_all.ipk
-luci-i18n-timecontrol-zh-cn_25.365.61778~aca7171_all.ipk
+luci-app-timecontrol
+luci-i18n-timecontrol-zh-cn
 
 homebox
-ookla-speedtest_1.2.0-r1_x86_64.ipk
-luci-app-netspeedtest_5.2.1-r20260322_all.ipk
-luci-i18n-netspeedtest-zh-cn_26.088.59292~0c936e9_all.ipk
+ookla-speedtest
+luci-app-netspeedtest
+luci-i18n-netspeedtest-zh-cn
