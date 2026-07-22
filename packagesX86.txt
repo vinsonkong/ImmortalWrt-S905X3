@@ -51,6 +51,24 @@ kmod-igb
 kmod-r8125
 kmod-e1000e
 i915-firmware-dmc
+# Intel 核显驱动与完整固件 (Docker 硬件转码必备)
+kmod-drm-i915
+i915-firmware
+i915-firmware-guc
+i915-firmware-huc
+i915-firmware-gsc
+# CPU 微码与底层硬件控制
+intel-microcode
+iucode-tool
+kmod-i2c-i801
+kmod-button-hotplug
+kmod-itco-wdt
+kmod-acpi-button
+# 硬件监控与温控风扇
+kmod-hwmon-coretemp
+kmod-hwmon-it87
+kmod-hwmon-nct6775
+kmod-hwmon-pwmfan
 kmod-9pnet
 kmod-9pvirtio
 kmod-vhost-net
@@ -87,6 +105,9 @@ kmod-fs-exfat
 kmod-fs-ntfs3
 kmod-fs-ksmbd
 kmod-fs-cifs
+# 存储控制器驱动
+kmod-nvme
+kmod-ata-ahci
 kmod-kvm-x86
 kmod-kvm-intel
 kmod-kvm-amd
@@ -126,6 +147,8 @@ kmod-usb-net
 kmod-usb-net-rndis
 kmod-usb-net-cdc-ether
 kmod-usb-net-cdc-ncm
+# 支持 USB 2.5G/千兆网卡 (RTL8156/8153)
+kmod-usb-net-rtl8152-vendor
 # 支持苹果 iPhone USB 共享网络 (可选)
 kmod-usb-net-ipheth
 # 支持各类 4G/5G 模块的串口识别
@@ -283,6 +306,28 @@ ttyd
 openssh-sftp-server
 zoneinfo-asia
 zoneinfo-core
+
+# === 21. 进阶扩展：万兆网卡、加密、音频与灯控 (按需启用) ===
+# PCIe 扩展万兆/高速网卡
+kmod-ixgbe
+kmod-i40e
+kmod-atlantic
+kmod-mlx5-core
+# 硬件加密算法加速 (WireGuard/IPSec)
+kmod-crypto-chacha20poly1305
+kmod-crypto-gcm
+kmod-crypto-sha256
+kmod-crypto-sha512
+# 机箱 GPIO 按键与 LED 控制
+kmod-gpio-button-hotplug
+kmod-leds-gpio
+# 板载声卡 (HDMI/3.5mm 音频输出)
+kmod-sound-hda-core
+kmod-sound-hda-codec-realtek
+alsa-utils
+# CPU 调频工具
+cpufrequtils
+
 
 # 百度网盘
 baidusdk
