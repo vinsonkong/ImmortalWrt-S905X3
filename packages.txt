@@ -124,7 +124,7 @@ kmod-cfg80211
 kmod-mac80211
 
 # === Lucky 大吉面板 ===
-lucky
+lucky-arm64
 luci-app-lucky
 luci-i18n-lucky-zh-cn
 
@@ -250,17 +250,17 @@ luci-app-adguardhome
 luci-i18n-smartdns-zh-cn
 
 # 百度网盘
-baidusdk
-baidudrive
+baidusdk-arm64
+baidudrive-arm64
 luci-app-baidudrive
-luci-i18n-baidudrive-zh-cn
 app-meta-baidudrive
+luci-i18n-baidudrive-zh-cn
 
 
 luci-app-timecontrol
 luci-i18n-timecontrol-zh-cn
 
-homebox
-ookla-speedtest
+homebox-arm64
+ookla-speedtest-arm64
 luci-app-netspeedtest
 luci-i18n-netspeedtest-zh-cn
