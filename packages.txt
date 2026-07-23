@@ -259,7 +259,7 @@ luci-i18n-smartdns-zh-cn
 luci-app-timecontrol
 luci-i18n-timecontrol-zh-cn
 
-homebox-arm64
-ookla-speedtest-arm64
+homebox
+ookla-speedtest
 luci-app-netspeedtest
 luci-i18n-netspeedtest-zh-cn
