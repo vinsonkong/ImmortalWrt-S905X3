@@ -1,0 +1,12 @@
+
+config baidudrive
+	option enabled '1'
+	option host '0.0.0.0'
+	option port '39337'
+	option sdk_host '127.0.0.1'
+	option sdk_port '8001'
+	option download_path '/'
+	option log_level '7'
+	option data_dir '/mnt/mmcblk2p4/BaiduDrive'
+	option macid '02172e4be910'
+
