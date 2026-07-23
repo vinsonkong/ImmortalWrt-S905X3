@@ -1,0 +1,23 @@
+{
+    "luci-app-timecontrol": {
+        "description": "Grant access to Time Control",
+        "read": {
+            "ubus": {
+                "timecontrol": ["*"],
+                "luci": ["getLog"]
+            },
+            "uci": ["timecontrol"],
+            "file": {
+                "/var/log/timecontrol.log": ["read"],
+                "/tmp/timecontrol.log": ["read"]
+            }
+        },
+        "write": {
+            "ubus": {
+                "timecontrol": ["*"]
+            },
+            "uci": ["timecontrol"]
+        }
+    }
+}
+
