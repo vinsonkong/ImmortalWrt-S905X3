@@ -332,6 +332,8 @@ luci-app-baidudrive
 luci-i18n-baidudrive-zh-cn
 app-meta-baidudrive
 
+luci-i18n-sqm-zh-cn
+
 luci-app-timecontrol
 luci-i18n-timecontrol-zh-cn
 
