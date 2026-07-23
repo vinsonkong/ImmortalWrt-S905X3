@@ -249,3 +249,18 @@ luci-i18n-openlist-zh-cn
 luci-app-adguardhome
 luci-i18n-smartdns-zh-cn
 
+# 百度网盘
+baidusdk
+baidudrive
+luci-app-baidudrive
+luci-i18n-baidudrive-zh-cn
+app-meta-baidudrive
+
+
+luci-app-timecontrol
+luci-i18n-timecontrol-zh-cn
+
+homebox
+ookla-speedtest
+luci-app-netspeedtest
+luci-i18n-netspeedtest-zh-cn
