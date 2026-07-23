@@ -76,7 +76,7 @@ dns:
     - 10.0.30.0/24
   use_private_ptr_resolvers: true
   local_ptr_upstreams:
-    - 192.168.2.254
+    - 192.168.30.1
   use_dns64: false
   dns64_prefixes: []
   serve_http3: false
