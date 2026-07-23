@@ -250,11 +250,11 @@ luci-app-adguardhome
 luci-i18n-smartdns-zh-cn
 
 # 百度网盘
-luci-app-baidudrive
-luci-i18n-baidudrive-zh-cn
-baidusdk-arm64
-baidudrive-arm64
-app-meta-baidudrive
+# luci-app-baidudrive
+# luci-i18n-baidudrive-zh-cn
+# baidusdk-arm64
+# baidudrive-arm64
+# app-meta-baidudrive
 
 luci-app-timecontrol
 luci-i18n-timecontrol-zh-cn
