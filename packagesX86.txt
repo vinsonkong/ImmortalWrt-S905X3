@@ -276,7 +276,7 @@ luci-app-smartdns
 luci-i18n-smartdns-zh-cn
 # adguardhome
 luci-app-adguardhome
-luci-app-access-control
+# luci-app-access-control
 
 # === 16. 下载工具 ===
 aria2
