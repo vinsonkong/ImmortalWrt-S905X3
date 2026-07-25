@@ -257,6 +257,7 @@ kmod-bluetooth
 bluez-daemon‌
 bluez-utils‌
 pulseaudio-daemon‌
+pulseaudio-daemon-avahi
 pulseaudio-tools
 kmod-usb-core
 kmod-usb-ohci
