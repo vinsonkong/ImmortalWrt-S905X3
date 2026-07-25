@@ -253,3 +253,10 @@ luci-app-timecontrol
 luci-i18n-timecontrol-zh-cn
 
 
+kmod-bluetooth
+bluez-daemon‌
+bluez-utils‌
+pulseaudio-daemon‌
+kmod-usb-core
+kmod-usb-ohci
+kmod-usb-uhci
