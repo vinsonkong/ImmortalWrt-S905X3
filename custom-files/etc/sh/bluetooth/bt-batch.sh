@@ -2,7 +2,7 @@
 # 用法: ./bt-batch.sh pair   (执行批量配对和信任)
 #       ./bt-batch.sh connect (执行批量连接)
 
-MAC_FILE="./mac.txt"
+MAC_FILE="/etc/sh/bluetooth/mac.txt"
 ACTION=$1
 
 # 检查参数
