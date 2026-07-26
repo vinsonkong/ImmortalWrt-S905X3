@@ -1,0 +1,79 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2024 OpenWrt MPD Service
+
+START=99
+STOP=01
+
+USE_PROCD=1
+PROG=/usr/bin/mpd
+CONFIG=/etc/mpd.conf
+
+# 与 mpd.conf 保持一致的路径变量
+LOG_DIR="/tmp/mpd"
+DB_DIR="/var/lib/mpd"
+PLAYLIST_DIR="$DB_DIR/playlists"
+MUSIC_DIR="/mnt/mmcblk2p4/music"
+
+# PulseAudio Root 模式运行时必需的环境变量
+# 必须与你 pulseaudio init.d 中的 RUNTIME_DIR 一致
+PA_RUNTIME_DIR="/var/run/pulse"
+
+start_service() {
+    # 1. 创建临时日志目录 (/tmp 是 tmpfs，重启后丢失)
+    mkdir -p "$LOG_DIR"
+    chmod 755 "$LOG_DIR"
+
+    # 2. 创建持久化数据库和播放列表目录
+    mkdir -p "$DB_DIR" "$PLAYLIST_DIR"
+    chmod 755 "$DB_DIR" "$PLAYLIST_DIR"
+
+    # 3. 检查音乐目录是否可访问（防止挂载未完成时 MPD 启动失败）
+    if [ ! -d "$MUSIC_DIR" ]; then
+        logger -t mpd "WARNING: Music directory $MUSIC_DIR not found, waiting 5s..."
+        sleep 5
+        if [ ! -d "$MUSIC_DIR" ]; then
+            logger -t mpd "ERROR: Music directory $MUSIC_DIR still not available after retry"
+            # 不退出，允许 MPD 启动后通过 auto_update 或客户端 update 命令恢复
+        fi
+    fi
+
+    # 4. 确保 PulseAudio runtime 目录存在且权限正确
+    # MPD 以 root 连接 PA 时需要读取此目录下的 socket
+    if [ ! -d "$PA_RUNTIME_DIR" ]; then
+        logger -t mpd "WARNING: PulseAudio runtime dir $PA_RUNTIME_DIR missing"
+    fi
+
+    # 5. 启动服务实例
+    procd_open_instance
+
+    # 核心：传递 PulseAudio 所需的环境变量
+    procd_set_param env XDG_RUNTIME_DIR="$PA_RUNTIME_DIR"
+    procd_set_param env HOME="/root"
+    procd_set_param env PULSE_RUNTIME_PATH="$PA_RUNTIME_DIR"
+
+    # 使用 --no-daemon 让 procd 完全接管进程生命周期
+    procd_set_param command "$PROG" --no-daemon "$CONFIG"
+
+    # 显式指定运行用户（与 mpd.conf 中的 user "root" 保持一致）
+    procd_set_param user root
+    procd_set_param group root
+
+    # 正确的 respawn 语法: threshold(秒) timeout(秒) retry(次)
+    # 含义: 在 3600秒窗口内，如果进程退出超过 5次，则停止重启
+    procd_set_param respawn 3600 5 5
+
+    # 将 stdout/stderr 重定向到 syslog
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+
+    procd_close_instance
+}
+
+stop_service() {
+    procd_kill "$PROG"
+}
+
+reload_service() {
+    # SIGHUP 使 MPD 重新加载配置并更新数据库
+    procd_send_signal "$PROG" HUP
+}
