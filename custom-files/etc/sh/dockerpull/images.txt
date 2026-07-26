@@ -6,7 +6,7 @@
 linuxserver/jellyfin:10.11.11
 
 ghcr.io/moontechlab/lunatv:latest
-
+zenman94/ympd
 
 
 
