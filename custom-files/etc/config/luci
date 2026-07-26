@@ -89,3 +89,10 @@ config command
 	option name '增量备份6小时'
 	option command '/usr/bin/custom/backup-6h'
 
+config command
+	option name '蓝牙配对'
+	option command '/etc/sh/bluetooth/pair.sh'
+
+config command
+	option name '蓝牙连接'
+	option command '/etc/sh/bluetooth/connect.sh'
