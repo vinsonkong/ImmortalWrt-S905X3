@@ -261,3 +261,5 @@ pulseaudio-tools
 kmod-usb-core
 kmod-usb-ohci
 kmod-usb-uhci
+mpd
+mpc
