@@ -44,7 +44,7 @@ config internal 'diag'
 config command
 	option name '重启'
 	option command '/sbin/reboot'
-	
+
 config command
 	option name '关机'
 	option command '/sbin/poweroff'
@@ -96,3 +96,4 @@ config command
 config command
 	option name '蓝牙连接'
 	option command '/etc/sh/bluetooth/connect.sh'
+
