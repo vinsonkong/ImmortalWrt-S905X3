@@ -43,8 +43,11 @@ for MAC in $VALID_MACS; do
         bluetoothctl <<EOF
 agent on
 default-agent
+scan on
+sleep 10
 pair $MAC
 trust $MAC
+scan off
 quit
 EOF
         echo "[$MAC] 配对与信任指令已发送"
