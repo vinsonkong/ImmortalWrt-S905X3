@@ -10,7 +10,7 @@ CONFIG=/etc/mpd.conf
 
 # 与 mpd.conf 保持一致的路径变量
 LOG_DIR="/tmp/mpd"
-DB_DIR="/var/lib/mpd"
+DB_DIR="/mnt/mmcblk2p4/tools/mpd"
 PLAYLIST_DIR="$DB_DIR/playlists"
 MUSIC_DIR="/mnt/mmcblk2p4/music"
 
