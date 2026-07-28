@@ -1,6 +1,6 @@
 #!/bin/sh /etc/rc.common
 
-START=95
+START=99
 
 start() {
     modprobe snd_soc_meson_axg_fifo
