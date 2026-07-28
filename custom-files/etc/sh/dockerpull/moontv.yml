@@ -1,0 +1,32 @@
+services:
+  moontv-core:
+    image: ghcr.io/moontechlab/lunatv:latest
+    container_name: moontv-core
+    restart: unless-stopped
+    ports:
+      - '39395:3000'
+    environment:
+      - USERNAME=vinsonkong
+      - PASSWORD=14371250kong
+      - NEXT_PUBLIC_STORAGE_TYPE=redis
+      - REDIS_URL=redis://moontv-redis:6379
+      - NEXT_PUBLIC_ENABLE_REGISTER=true
+      - NEXT_PUBLIC_DOUBAN_PROXY_TYPE=cmliussss-cdn-tencent
+      - NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE=cmliussss-cdn-tencent
+      - NEXT_PUBLIC_DOUBAN_CACHE_TIMEOUT=7200
+    networks:
+      - moontv-network
+    depends_on:
+      - moontv-redis
+  moontv-redis:
+    image: redis:8-alpine
+    container_name: moontv-redis
+    restart: unless-stopped
+    networks:
+      - moontv-network
+    # 如需持久化
+    volumes:
+      - /etc/sh/dockerpull/moontv-data:/data
+networks:
+  moontv-network:
+    driver: bridge
