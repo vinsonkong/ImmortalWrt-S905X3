@@ -96,9 +96,9 @@
             "purl": "http:\/\/192.168.30.10:39316"
         },
         {
-            "txt": "摄像头",
-            "url": "http:\/\/vinsonkong2014.eu.org:39812\/?action=stream",
-            "purl": "http:\/\/192.168.30.10:39312\/?action=stream"
+            "txt": "YMPD",
+            "url": "http:\/\/vinsonkong2014.eu.org:39885",
+            "purl": "http:\/\/192.168.30.10:39385"
         }
     ]
 }
