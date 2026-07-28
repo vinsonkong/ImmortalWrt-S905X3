@@ -1,8 +1,8 @@
 
 config defaults
-	option input 'ACCEPT'
+	option input 'REJECT'
 	option output 'ACCEPT'
-	option forward 'ACCEPT'
+	option forward 'REJECT'
 	option flow_offloading '1'
 	option flow_offloading_hw '1'
 	option fullcone '1'
@@ -17,12 +17,14 @@ config zone
 
 config zone
 	option name 'wan'
-	option input 'ACCEPT'
+	option input 'REJECT'
 	option output 'ACCEPT'
-	option forward 'ACCEPT'
+	option forward 'REJECT'
+	option masq '1'
 	option mtu_fix '1'
+	list network 'wan'
+	list network 'wan6'
 	list network 'wwan'
-	list network 'wwan6'
 
 config forwarding
 	option src 'lan'
@@ -134,6 +136,7 @@ config rule 'easytier_udp'
 	option src 'wan'
 	option proto 'all'
 	option dest_port '11010'
+	option enabled '1'
 
 config zone 'easytierzone'
 	option input 'ACCEPT'
@@ -200,16 +203,6 @@ config include 'zerotier_forward'
 	option path '/var/run/zerotier-one/_fw4/forward.nft'
 	option position 'chain-pre'
 	option chain 'forward'
-
-config rule
-	option src 'wan'
-	option name 'Allow-WAN-IPv6'
-	option dest_port '39300-39399'
-	option target 'ACCEPT'
-
-config forwarding
-	option src 'wan'
-	option dest 'lan'
 
 config rule 'easytier_tcp_udp'
 	option name 'easytier_tcp_udp'
