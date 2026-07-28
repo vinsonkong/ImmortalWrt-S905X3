@@ -18,6 +18,7 @@ config interface 'lan'
 	option device 'br-lan'
 	option proto 'static'
 	list ipaddr '192.168.2.100/24'
+	option gateway '192.168.2.254'
 
 config interface 'lan6'
 	option proto 'dhcpv6'
