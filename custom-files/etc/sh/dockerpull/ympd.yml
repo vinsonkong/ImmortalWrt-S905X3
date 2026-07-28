@@ -4,7 +4,7 @@ services:
     image: zenman94/ympd
     container_name: ympd
     environment:
-      - MPD_SERVER=192.168.2.100
+      - MPD_SERVER=172.17.0.1
       - MPD_PORT=6600
     ports:
       - "39385:8080"
