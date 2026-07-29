@@ -1,0 +1,107 @@
+
+config core 'main'
+	option lang 'auto'
+	option mediaurlbase '/luci-static/argon'
+	option resourcebase '/luci-static/resources'
+	option ubuspath '/ubus/'
+
+config extern 'flash_keep'
+	option uci '/etc/config/'
+	option dropbear '/etc/dropbear/'
+	option openvpn '/etc/openvpn/'
+	option passwd '/etc/passwd'
+	option opkg '/etc/opkg.conf'
+	option firewall '/etc/firewall.user'
+	option uploads '/lib/uci/upload/'
+
+config internal 'languages'
+	option zh_cn '简体中文 (Simplified Chinese)'
+
+config internal 'sauth'
+	option sessionpath '/tmp/luci-sessions'
+	option sessiontime '3600'
+
+config internal 'ccache'
+	option enable '1'
+
+config internal 'themes'
+	option Argon '/luci-static/argon'
+	option Bootstrap '/luci-static/bootstrap'
+	option BootstrapDark '/luci-static/bootstrap-dark'
+	option BootstrapLight '/luci-static/bootstrap-light'
+
+config internal 'apply'
+	option rollback '90'
+	option holdoff '4'
+	option timeout '5'
+	option display '1.5'
+
+config internal 'diag'
+	option dns 'immortalwrt.org'
+	option ping 'immortalwrt.org'
+	option route 'immortalwrt.org'
+
+config command
+	option name '重启'
+	option command '/sbin/reboot'
+
+config command
+	option name '关机'
+	option command '/sbin/poweroff'
+
+config command
+	option name '后台静默拉取docker镜像'
+	option command '/etc/sh/dockerpull/docker-pull-bg.sh /etc/sh/dockerpull/images.txt --silent'
+
+config command
+	option name 'docker部署moontv'
+	option command 'docker-compose -f /etc/sh/dockerpull/moontv.yml up -d'
+
+config command
+	option name 'docker部署YMPD'
+	option command 'docker-compose -f /etc/sh/dockerpull/ympd.yml up -d'
+
+config command
+	option name 'docker部署jellyfin'
+	option command 'docker-compose -f /mnt/mmcblk2p4/tools/jellyfin/docker-compose.yml up -d'
+
+config command
+	option name '卸载jellyfin容器'
+	option command 'docker-compose -f /mnt/mmcblk2p4/tools/jellyfin/docker-compose.yml down -v'
+
+config command
+	option name '卸载moontv容器'
+	option command 'docker-compose -f /etc/sh/dockerpull/moontv.yml down -v'
+
+config command
+	option name 'btrfs固件恢复出厂'
+	option command '/usr/bin/custom/firstboot'
+
+config command
+	option name '(通用)还原自定义配置'
+	option command '/usr/bin/custom/restore'
+
+config command
+	option name '(通用)全量备份'
+	option command '/usr/bin/custom/backup-full'
+
+config command
+	option name '增量备份(24小时)'
+	option command '/usr/bin/custom/backup-24h'
+
+config command
+	option name '增量备份6小时'
+	option command '/usr/bin/custom/backup-6h'
+
+config command
+	option name '蓝牙配对'
+	option command '/etc/sh/bluetooth/pair.sh'
+
+config command
+	option name '蓝牙连接'
+	option command '/etc/sh/bluetooth/connect.sh'
+
+config command
+	option name '安装istoreos应用商店'
+	option command '/etc/sh/install_istore.sh'
+
