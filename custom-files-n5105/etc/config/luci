@@ -63,11 +63,11 @@ config command
 
 config command
 	option name 'docker部署jellyfin'
-	option command 'docker-compose -f /mnt/mmcblk2p4/tools/jellyfin/docker-compose.yml up -d'
+	option command 'docker-compose -f /mnt/nvme0n1p3/tools/jellyfin/docker-compose.yml up -d'
 
 config command
 	option name '卸载jellyfin容器'
-	option command 'docker-compose -f /mnt/mmcblk2p4/tools/jellyfin/docker-compose.yml down -v'
+	option command 'docker-compose -f /mnt/nvme0n1p3/tools/jellyfin/docker-compose.yml down -v'
 
 config command
 	option name '卸载moontv容器'
