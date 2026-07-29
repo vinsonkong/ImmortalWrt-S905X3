@@ -14,4 +14,10 @@ start() {
     modprobe snd_soc_meson_g12a_tohdmitx
     modprobe snd_soc_meson_g12a_toacodec
     modprobe snd_soc_meson_axg_sound_card
+    modprobe ge2d
+    modprobe v4l2_h264
+    modprobe v4l2_mem2mem
+    modprobe v4l2_cci
+    modprobe v4l2_vp9
+    modprobe meson_vdec
 }
