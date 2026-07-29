@@ -55,7 +55,11 @@ config command
 
 config command
 	option name 'docker部署moontv'
-	option command 'docker-compose -f /mnt/mmcblk2p4/tools/moontv/docker-compose.yml up -d'
+	option command 'docker-compose -f /etc/sh/dockerpull/moontv.yml up -d'
+
+config command
+	option name 'docker部署YMPD'
+	option command 'docker-compose -f /etc/sh/dockerpull/ympd.yml up -d'
 
 config command
 	option name 'docker部署jellyfin'
@@ -67,7 +71,7 @@ config command
 
 config command
 	option name '卸载moontv容器'
-	option command 'docker-compose -f /mnt/mmcblk2p4/tools/moontv/docker-compose.yml down -v'
+	option command 'docker-compose -f /etc/sh/dockerpull/moontv.yml down -v'
 
 config command
 	option name 'btrfs固件恢复出厂'
@@ -96,4 +100,8 @@ config command
 config command
 	option name '蓝牙连接'
 	option command '/etc/sh/bluetooth/connect.sh'
+
+config command
+	option name '安装istoreos应用商店'
+	option command '/etc/sh/install_istore.sh'
 
