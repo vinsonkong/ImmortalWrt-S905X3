@@ -260,13 +260,11 @@ bluez-libs
 bluez-daemon
 bluez-utils
 bluez-utils-extra
-kmod-input-uinput
 alsa-utils
 alsa-lib
 alsa-ucm-conf
 pulseaudio-daemon-avahi
 pulseaudio-tools
-kmod-pps
 
 kmod-usb-core
 kmod-usb-ohci
