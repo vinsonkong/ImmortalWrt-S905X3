@@ -1,0 +1,81 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+
+USE_PROCD=1
+
+# 定义模块加载顺序（严格按依赖层级）
+# 1. 核心框架 -> 2. 硬件加速 -> 3. 算法辅助 -> 4. 平台驱动
+MEDIA_MODULES="
+    v4l2_mem2mem
+    ge2d
+    v4l2_h264
+    v4l2_vp9
+    meson_vdec
+"
+
+# 声卡模块（保持原有顺序，已验证正确）
+AUDIO_MODULES="
+    snd_soc_meson_axg_fifo
+    snd_soc_meson_axg_frddr
+    snd_soc_meson_axg_toddr
+    snd_soc_meson_axg_tdmout
+    snd_soc_meson_axg_tdm_interface
+    snd_soc_meson_axg_tdm_formatter
+    snd_soc_meson_aiu
+    snd_soc_meson_codec_glue
+    snd_soc_meson_g12a_tohdmitx
+    snd_soc_meson_g12a_toacodec
+    snd_soc_meson_axg_sound_card
+"
+
+load_modules() {
+    local mods="$1"
+    local mod
+    for mod in $mods; do
+        # 跳过空行和注释
+        [ -z "$mod" ] && continue
+        
+        if modprobe "$mod" 2>/dev/null; then
+            logger -t meson-media "Loaded: $mod"
+        else
+            # 模块不存在时仅记录警告，不中断后续加载
+            logger -t meson-media "WARN: Failed to load $mod (may not exist for this platform)"
+        fi
+    done
+}
+
+unload_modules() {
+    local mods="$1"
+    local mod
+    # 逆序卸载以避免依赖冲突
+    echo "$mods" | awk 'NF{a[++n]=$0} END{for(i=n;i>=1;i--) print a[i]}' | while read mod; do
+        [ -z "$mod" ] && continue
+        if lsmod | grep -q "^${mod} "; then
+            rmmod "$mod" 2>/dev/null && \
+                logger -t meson-media "Unloaded: $mod" || \
+                logger -t meson-media "WARN: Failed to unload $mod"
+        fi
+    done
+}
+
+start_service() {
+    logger -t meson-media "Starting media modules..."
+    
+    # 先加载音频，再加载视频（避免 DMA 资源竞争时的优先级问题）
+    load_modules "$AUDIO_MODULES"
+    load_modules "$MEDIA_MODULES"
+    
+    logger -t meson-media "Media modules initialization complete"
+}
+
+stop_service() {
+    logger -t meson-media "Stopping media modules..."
+    
+    # 先卸载视频，再卸载音频（与启动顺序相反）
+    unload_modules "$MEDIA_MODULES"
+    unload_modules "$AUDIO_MODULES"
+    
+    logger -t meson-media "Media modules stopped"
+}
