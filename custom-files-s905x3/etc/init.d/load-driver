@@ -1,8 +1,12 @@
 #!/bin/sh /etc/rc.common
 
 START=99
+STOP=10
 
-start() {
+USE_PROCD=1
+
+start_service() {
+    # 声卡相关模块
     modprobe snd_soc_meson_axg_fifo
     modprobe snd_soc_meson_axg_frddr
     modprobe snd_soc_meson_axg_toddr
@@ -14,10 +18,33 @@ start() {
     modprobe snd_soc_meson_g12a_tohdmitx
     modprobe snd_soc_meson_g12a_toacodec
     modprobe snd_soc_meson_axg_sound_card
+
+    # 视频解码/编码相关模块
     modprobe ge2d
     modprobe v4l2_h264
     modprobe v4l2_mem2mem
     modprobe v4l2_cci
     modprobe v4l2_vp9
     modprobe meson_vdec
+}
+
+stop_service() {
+    # 按加载的逆序卸载，避免依赖冲突
+    rmmod meson_vdec
+    rmmod v4l2_vp9
+    rmmod v4l2_cci
+    rmmod v4l2_mem2mem
+    rmmod v4l2_h264
+    rmmod ge2d
+    rmmod snd_soc_meson_axg_sound_card
+    rmmod snd_soc_meson_g12a_toacodec
+    rmmod snd_soc_meson_g12a_tohdmitx
+    rmmod snd_soc_meson_codec_glue
+    rmmod snd_soc_meson_aiu
+    rmmod snd_soc_meson_axg_tdm_formatter
+    rmmod snd_soc_meson_axg_tdm_interface
+    rmmod snd_soc_meson_axg_tdmout
+    rmmod snd_soc_meson_axg_toddr
+    rmmod snd_soc_meson_axg_frddr
+    rmmod snd_soc_meson_axg_fifo
 }
