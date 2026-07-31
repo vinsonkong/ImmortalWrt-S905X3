@@ -253,17 +253,17 @@ luci-app-timecontrol
 luci-i18n-timecontrol-zh-cn
 
 
-kmod-bluetooth	
-mpd-full
-mpc
-bluez-libs
-bluez-daemon
-bluez-utils
-alsa-utils
-alsa-lib
-alsa-ucm-conf
-pulseaudio-daemon-avahi
-pulseaudio-tools
+# kmod-bluetooth	
+# mpd-full
+# mpc
+# bluez-libs
+# bluez-daemon
+# bluez-utils
+# alsa-utils
+# alsa-lib
+# alsa-ucm-conf
+# pulseaudio-daemon-avahi
+# pulseaudio-tools
 
 kmod-usb-core
 kmod-usb-ohci
