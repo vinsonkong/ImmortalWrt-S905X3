@@ -32,6 +32,13 @@ echo "停止nfs"
 sleep 2
 echo "停止samba4"
 
+/etc/init.d/mpd stop
+sleep 2
+echo "停止mpd"
+
+/etc/init.d/pulseaudio stop
+sleep 2
+echo "停止pulseaudio"
 
 
 # Encountered a serious error, abort the script execution
