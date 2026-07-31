@@ -1,0 +1,60 @@
+#!/bin/sh /etc/rc.common
+# OpenWrt init script for miniserve webdav server
+
+USE_PROCD=1
+START=99
+STOP=10
+
+SERVICE_NAME="miniserve"
+SERVICE_DAEMON="/usr/bin/miniserve"
+SERVICE_PORT="39333"
+SERVICE_DIR="/mnt"
+USER="root"
+
+# 认证信息 (分离变量，避免密码中包含特殊字符或空格时出错)
+AUTH_USER="vinsonkong"
+AUTH_PASS="14371250kong"
+
+start_service() {
+    # 1. 前置检查：确保外部存储已挂载且二进制文件存在
+    if [ ! -x "$SERVICE_DAEMON" ]; then
+        echo "Error: $SERVICE_DAEMON not found or not executable. Is the SD card mounted?" >&2
+        return 1  # 返回 1 退出，不触发 respawn
+    fi
+
+    # 2. 前置检查：确保目标共享目录存在
+    if [ ! -d "$SERVICE_DIR" ]; then
+        echo "Error: Directory $SERVICE_DIR does not exist." >&2
+        return 1
+    fi
+
+    procd_open_instance
+    
+    # 3. 设置命令及参数 (直接传递，安全且支持带空格的参数)
+    procd_set_param command "$SERVICE_DAEMON" \
+        --auth "${AUTH_USER}:${AUTH_PASS}" \
+        --enable-webdav \
+        --hide-version-footer \
+        --upload-files \
+        --mkdir \
+        --qrcode \
+        --port "$SERVICE_PORT" \
+        "$SERVICE_DIR"
+        
+    # 4. 设置运行用户
+    procd_set_param user "$USER"
+    
+    # 5. 设置环境变量 (miniserve 生成二维码或读取配置时可能需要 HOME)
+    procd_set_param env HOME=/root
+    
+    # 6. 开启标准输出和错误输出到系统日志 (强烈建议开启，方便排错)
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    
+    # 7. 设置进程守护 (崩溃自动重启)
+    procd_set_param respawn
+    
+    procd_close_instance
+}
+
+# 注意：不要定义 stop_service() 和 reload_service()，让 procd 和 rc.common 自动接管！
