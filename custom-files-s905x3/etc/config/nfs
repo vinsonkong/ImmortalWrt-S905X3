@@ -6,22 +6,22 @@ config share
 	option options 'rw,fsid=2,sync,no_root_squash,insecure,no_subtree_check'
 
 config share
-	option enabled '1'
+	option enabled '0'
 	option path '/mnt'
 	option clients '*'
 	option options 'rw,fsid=1,sync,no_root_squash,insecure,no_subtree_check'
 
 config mount
-	option enabled '1'
+	option enabled '0'
 	option source '192.168.30.11:/mnt/nvme0n1p3'
 	option target '/mnt/nfs/n5105'
-	option delay '5'
+	option delay '120'
 	option options 'rw,nolock'
 
 config mount
 	option enabled '0'
-	option source '192.168.30.100:/mnt/mmcblk2p4'
+	option source '192.168.193.196:/mnt/mmcblk2p4'
 	option target '/mnt/nfs/q2'
-	option delay '5'
+	option delay '120'
 	option options 'rw,nolock'
 
