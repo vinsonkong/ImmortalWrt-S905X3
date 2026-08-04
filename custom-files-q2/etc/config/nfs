@@ -15,12 +15,12 @@ config mount
 	option enabled '0'
 	option source '192.168.30.11:/mnt/nvme0n1p3'
 	option target '/mnt/nfs/n5105'
-	option delay '5'
+	option delay '90'
 	option options 'rw,nolock'
 
 config mount
 	option enabled '0'
-	option source '192.168.30.10:/mnt/mmcblk2p4'
+	option source '192.168.193.192:/mnt/mmcblk2p4'
 	option target '/mnt/nfs/x96max'
 	option delay '120'
 	option options 'rw,nolock'
