@@ -1,397 +1,407 @@
 #!/bin/bash
 #======================================================================================
-# OpenWrt A/B Partition Update Script (X96 Max+ Special Edition)
-# Features:
-# 1. A/B p2/p3 partition switch, only flash inactive rootfs
-# 2. No bootloader backup, no user config backup/restore
-# 3. /boot partition files untouched (mostly), only modify uEnv.txt root UUID
-# 4. Removed Docker specific logic and N1 specific fixes
+# Function: Update openwrt to emmc for Amlogic S9xxx STB
+# Copyright (C) 2020-- https://github.com/unifreq/openwrt_packit
+# Copyright (C) 2021-- https://github.com/ophub/luci-app-amlogic
+#======================================================================================
+#
+# The script supports directly setting parameters for update, skipping interactive selection
+# openwrt-update-amlogic ${OPENWRT_FILE} ${AUTO_MAINLINE_UBOOT} ${RESTORE_CONFIG}
+# E.g: openwrt-update-amlogic openwrt_s905d.img.gz yes restore
+# E.g: openwrt-update-amlogic openwrt_s905d.img.gz no no-restore
+
+# You can also execute the script directly, and interactively select related functions
+# E.g: openwrt-update-amlogic
+#
 #======================================================================================
 
-set -o pipefail
-
-#==================== Global Function Define ====================
+# Encountered a serious error, abort the script execution
 error_msg() {
-    echo -e "\033[31m[ERROR] ${1}\033[0m" >&2
+    echo -e "[ERROR] ${1}"
     exit 1
 }
 
-cleanup() {
-    echo -e "\n[CLEAN] Cleaning temporary resources..."
-    mountpoint -q "${SRC_ROOT_DIR}" && umount -l "${SRC_ROOT_DIR}" 2>/dev/null || true
-    mountpoint -q "${TARGET_ROOT_MP}" && umount -l "${TARGET_ROOT_MP}" 2>/dev/null || true
-    mountpoint -q "${WORK_P1}" && umount -l "${WORK_P1}" 2>/dev/null || true
-    mountpoint -q "${WORK_P2}" && umount -l "${WORK_P2}" 2>/dev/null || true
-    if [[ -n "${LOOP_DEV}" ]]; then
-        losetup -d "${LOOP_DEV}" 2>/dev/null || true
-    fi
-    rm -rf "${TMP_WORK_DIR}" "${SRC_ROOT_DIR}" "${TARGET_ROOT_MP}"
-    if [[ "${ORIG_IMG}" != "${IMG_NAME}" && -f "${IMG_NAME}" ]]; then
-        rm -f "${IMG_NAME}"
-    fi
-    sync
-    echo "[CLEAN] Cleanup finished"
-}
-
-fix_loopdev() {
-    local parentdev=${1##*/}
-    [[ ! -d "/sys/block/${parentdev}" ]] && return
-    local subdevs=$(lsblk -l -o NAME | grep -E "^${parentdev}.+$")
-    for subdev in ${subdevs}; do
-        [[ ! -d "/sys/block/${parentdev}/${subdev}" ]] && continue
-        source /sys/block/${parentdev}/${subdev}/uevent
-        [[ ! -b "/dev/${subdev}" ]] && mknod "/dev/${subdev}" b "${MAJOR}" "${MINOR}"
-        unset MAJOR MINOR DEVNAME DEVTYPE DISKSEQ PARTN PARTNAME
-    done
-}
-
-get_free_loop() {
-    losetup -D 2>/dev/null
-    local dev=$(losetup -f)
-    [[ -z "${dev}" ]] && error_msg "No free loop device available"
-    echo "${dev}"
-}
-
+# Get the partition name of the /boot file system
 get_boot_partition_name() {
-    df "/boot" 2>/dev/null | awk 'NR==2 {print $1}' | awk -F '/' '{print $3}'
-}
-
-get_root_partition_name() {
-    local dev
-    dev=$(findmnt -n -o SOURCE / 2>/dev/null)
-    if [[ -n "${dev}" ]]; then
-        basename "${dev}"
-        return
-    fi
-    local paths=("/" "/overlay" "/rom")
+    local paths="/boot"
     local partition_name
-    for path in "${paths[@]}"; do
-        partition_name=$(df "${path}" 2>/dev/null | awk 'NR==2 {print $1}' | awk -F '/' '{print $3}')
-        [[ -n "${partition_name}" ]] && break
-    done
+
+    partition_name=$(df "${paths}" | awk 'NR==2 {print $1}' | awk -F '/' '{print $3}')
+
     echo "${partition_name}"
 }
 
-get_root_partition_msg() {
-    local root_dev=$(findmnt -n -o SOURCE / 2>/dev/null)
-    if [[ -n "${root_dev}" && -b "${root_dev}" ]]; then
-        lsblk -l -o NAME,PATH,TYPE,UUID,MOUNTPOINT "${root_dev}" | grep part
-        return
-    fi
+# Get the partition name of the root file system
+get_root_partition_name() {
     local paths=("/" "/overlay" "/rom")
-    local partition_msg
+    local partition_name
+
     for path in "${paths[@]}"; do
-        partition_msg=$(lsblk -l -o NAME,PATH,TYPE,UUID,MOUNTPOINT | awk -v mp="${path}" '$3~/^part$/ && $5 == mp {print $0}')
+        partition_name=$(df "${path}" | awk 'NR==2 {print $1}' | awk -F '/' '{print $3}')
+        [[ -n "${partition_name}" ]] && break
+    done
+
+    echo "${partition_name}"
+}
+
+# Get the partition message of the root file system
+get_root_partition_msg() {
+    local paths=("/" "/overlay" "/rom")
+    local partition_name
+
+    for path in "${paths[@]}"; do
+        partition_msg=$(lsblk -l -o NAME,PATH,TYPE,UUID,MOUNTPOINT | awk '$3~/^part$/ && $5 ~ "^" "'"${path}"'" "$" {print $0}')
         [[ -n "${partition_msg}" ]] && break
     done
-    [[ -z "${partition_msg}" ]] && error_msg "Cannot find root partition message!"
+
+    [[ -z "${partition_msg}" ]] && error_msg "Cannot find the root partition message!"
     echo "${partition_msg}"
 }
 
-decompress_firmware() {
-    local src_file="$1"
-    local src_dir=$(dirname "${src_file}")
-    local src_base=$(basename "${src_file}")
-    local out_img=""
-    
-    cd "${src_dir}" || error_msg "Cannot cd to ${src_dir}"
+# Receive one-key command related parameters
+IMG_NAME="${1}"
+AUTO_MAINLINE_UBOOT="${2}"
+BACKUP_RESTORE_CONFIG="${3}"
 
-    case "$src_base" in
-        *.gz)
-            echo "[DECOMPRESS] Unpack gzip: $src_base"
-            gzip -df "$src_base" 2>/dev/null
-            out_img="${src_base%.gz}"
-            ;;
-        *.xz)
-            echo "[DECOMPRESS] Unpack xz: $src_base"
-            xz -df "$src_base" 2>/dev/null
-            out_img="${src_base%.xz}"
-            ;;
-        *.zip)
-            echo "[DECOMPRESS] Unpack zip: $src_base"
-            unzip -o "$src_base" 2>/dev/null
-            out_img=$(ls -1 *.img 2>/dev/null | head -n1)
-            ;;
-        *.7z)
-            echo "[DECOMPRESS] Unpack 7z: $src_base"
-            bsdtar -xmf "$src_base" 2>/dev/null || 7z x "$src_base" -aoa -y 2>/dev/null
-            out_img=$(ls -1 *.img 2>/dev/null | head -n1)
-            ;;
-        *.img)
-            out_img="$src_base"
-            ;;
-        *)
-            error_msg "Unsupported firmware format: $src_base"
-            ;;
-    esac
-    
-    [[ ! -f "$out_img" ]] && error_msg "Decompress failed, no .img found"
-    echo "$(pwd)/${out_img}"
+# Current device model
+MYDEVICE_NAME=$(cat /proc/device-tree/model | tr -d '\000')
+if [[ -z "${MYDEVICE_NAME}" ]]; then
+    error_msg "The device name is empty and cannot be recognized."
+elif [[ ! -f "/etc/flippy-openwrt-release" ]]; then
+    error_msg "The [ /etc/flippy-openwrt-release ] file is missing."
+else
+    echo -e "Current device: ${MYDEVICE_NAME} [ amlogic ]"
+    sleep 3
+fi
+
+# Check and repair partition mount points
+[[ -z "$(get_boot_partition_name)" || -z "$(get_root_partition_name)" ]] && {
+    echo -e "Partition mount point error, start repairing..."
+    openwrt-backup -g
 }
 
-#==================== Init Env ====================
-trap cleanup EXIT SIGINT SIGTERM
+# Find the partition where root is located
+ROOT_PTNAME="$(get_root_partition_name)"
 
-IMG_ARG="${1}"
-TMP_WORK_DIR=$(mktemp -d /tmp/ow-upgrade.XXXXXX)
-WORK_P1="${TMP_WORK_DIR}/boot_src"
-WORK_P2="${TMP_WORK_DIR}/root_src"
-SRC_ROOT_DIR=$(mktemp -d /tmp/src_root.XXXXXX)
-TARGET_ROOT_MP=$(mktemp -d /tmp/target_root.XXXXXX)
-mkdir -p "${WORK_P1}" "${WORK_P2}"
-
-# Check device
-MYDEVICE_NAME=$(cat /proc/device-tree/model 2>/dev/null | tr -d '\000')
-[[ -z "${MYDEVICE_NAME}" ]] && error_msg "Device model empty"
-[[ ! -f "/etc/flippy-openwrt-release" ]] && error_msg "Missing /etc/flippy-openwrt-release"
-echo -e "\033[32mCurrent Device: ${MYDEVICE_NAME} [Amlogic STB]\033[0m"
-
-# Check mount point
-BOOT_PT_RAW=$(get_boot_partition_name)
-ROOT_PT_RAW=$(get_root_partition_name)
-[[ -z "${BOOT_PT_RAW}" || -z "${ROOT_PT_RAW}" ]] && error_msg "Boot or Root partition not found"
-
-# Distinguish EMMC / USB / SD
-ROOT_PTNAME="${ROOT_PT_RAW}"
+# Find the disk where the partition is located, only supports mmcblk?p? sd?? hd?? vd?? and other formats
 case ${ROOT_PTNAME} in
-    mmcblk?p[1-4])
-        EMMC_NAME=$(echo "${ROOT_PTNAME}" | awk '{print substr($1, 1, length($1)-2)}')
-        if lsblk -l -o NAME | grep "${EMMC_NAME}boot0" >/dev/null; then
-            ROOT_DISK_TYPE="EMMC"
-        else
-            ROOT_DISK_TYPE="SD"
-        fi
-        PARTITION_NAME="p"
-        LB_PRE="${ROOT_DISK_TYPE}_"
-        ;;
-    [hsv]d[a-z][1-4])
-        EMMC_NAME=$(echo "${ROOT_PTNAME}" | awk '{print substr($1, 1, length($1)-1)}')
-        ROOT_DISK_TYPE="USB"
-        PARTITION_NAME=""
-        LB_PRE="${ROOT_DISK_TYPE}_"
-        ;;
-    *)
-        error_msg "Unrecognized disk partition: ${ROOT_PTNAME}"
-        ;;
+mmcblk?p[1-4])
+    EMMC_NAME=$(echo ${ROOT_PTNAME} | awk '{print substr($1, 1, length($1)-2)}')
+    if lsblk -l -o NAME | grep "${EMMC_NAME}boot0" >/dev/null; then
+        ROOT_DISK_TYPE="EMMC"
+    else
+        ROOT_DISK_TYPE="SD"
+    fi
+    PARTITION_NAME="p"
+    LB_PRE="${ROOT_DISK_TYPE}_"
+    ;;
+[hsv]d[a-z][1-4])
+    EMMC_NAME=$(echo ${ROOT_PTNAME} | awk '{print substr($1, 1, length($1)-1)}')
+    ROOT_DISK_TYPE="USB"
+    PARTITION_NAME=""
+    LB_PRE="${ROOT_DISK_TYPE}_"
+    ;;
+*)
+    error_msg "Unable to recognize the disk type of ${ROOT_PTNAME}!"
+    ;;
 esac
 
-cd "/mnt/${EMMC_NAME}${PARTITION_NAME}4/" || error_msg "Cannot cd to data partition"
+DOCKER_ROOT="/mnt/${EMMC_NAME}${PARTITION_NAME}4/docker/"
+cd /mnt/${EMMC_NAME}${PARTITION_NAME}4/
 mv -f /tmp/upload/* . 2>/dev/null && sync
 
-#==================== Step1 Load Firmware ====================
-ORIG_IMG=""
-RAW_INPUT_FILE=""
-
-if [[ -n "${IMG_ARG}" && -f "${IMG_ARG}" ]]; then
-    RAW_INPUT_FILE="${IMG_ARG}"
+if [[ "${IMG_NAME}" == *.img ]]; then
+    echo -e "Update using [ ${IMG_NAME} ] file. Please wait a moment ..."
+elif [ $(ls *.img -l 2>/dev/null | grep "^-" | wc -l) -ge 1 ]; then
+    IMG_NAME=$(ls *.img | head -n 1)
+    echo -e "Update using [ ${IMG_NAME} ] ] file. Please wait a moment ..."
+elif [ $(ls *.img.xz -l 2>/dev/null | grep "^-" | wc -l) -ge 1 ]; then
+    xz_file=$(ls *.img.xz | head -n 1)
+    echo -e "Update using [ ${xz_file} ] file. Please wait a moment ..."
+    xz -d "${xz_file}" 2>/dev/null
+    IMG_NAME=$(ls *.img | head -n 1)
+elif [ $(ls *.img.gz -l 2>/dev/null | grep "^-" | wc -l) -ge 1 ]; then
+    gz_file=$(ls *.img.gz | head -n 1)
+    echo -e "Update using [ ${gz_file} ] file. Please wait a moment ..."
+    gzip -df "${gz_file}" 2>/dev/null
+    IMG_NAME=$(ls *.img | head -n 1)
+elif [ $(ls *.7z -l 2>/dev/null | grep "^-" | wc -l) -ge 1 ]; then
+    gz_file=$(ls *.7z | head -n 1)
+    echo -e "Update using [ ${gz_file} ] file. Please wait a moment ..."
+    bsdtar -xmf "${gz_file}" 2>/dev/null
+    [ $? -eq 0 ] || 7z x "${gz_file}" -aoa -y 2>/dev/null
+    IMG_NAME=$(ls *.img | head -n 1)
+elif [ $(ls *.zip -l 2>/dev/null | grep "^-" | wc -l) -ge 1 ]; then
+    zip_file=$(ls *.zip | head -n 1)
+    echo -e "Update using [ ${zip_file} ] file. Please wait a moment ..."
+    unzip -o "${zip_file}" 2>/dev/null
+    IMG_NAME=$(ls *.img | head -n 1)
 else
-    for ext in img img.xz img.gz 7z zip; do
-        if [[ $(ls *.${ext} 2>/dev/null | wc -l) -ge 1 ]]; then
-            RAW_INPUT_FILE=$(ls *.${ext} | head -n 1)
+    echo -e "Please upload or specify the update openwrt firmware file."
+    echo -e "Upload method: system menu → Amlogic Service → Manually Upload Update"
+    echo -e "Specify method: Place the openwrt firmware file in [ /mnt/${EMMC_NAME}${PARTITION_NAME}4/ ]"
+    echo -e "The supported file suffixes are: *.img, *.img.xz, *.img.gz, *.7z, *.zip"
+    echo -e "After upload the openwrt firmware file, run again."
+    exit 1
+fi
+sync
+
+# check file
+if [ ! -f "${IMG_NAME}" ]; then
+    error_msg "No update file found."
+else
+    echo "Start update from [ ${IMG_NAME} ]"
+fi
+
+# Check the necessary dependencies
+DEPENDS="lsblk uuidgen grep awk btrfs mkfs.fat mkfs.btrfs md5sum fatlabel"
+echo "Check the necessary dependencies..."
+for dep in ${DEPENDS}; do
+    WITCH=$(busybox which ${dep})
+    if [ "${WITCH}" == "" ]; then
+        error_msg "Dependent command: ${dep} does not exist, upgrade cannot be performed, only flash through U disk/TF card!"
+    else
+        echo "${dep} path: ${WITCH}"
+    fi
+done
+echo "Check passed"
+
+# find boot partition
+BOOT_PART_MSG=$(lsblk -l -o NAME,PATH,TYPE,UUID,MOUNTPOINT | awk '$3~/^part$/ && $5 ~ /^\/boot$/ {print $0}')
+if [ "${BOOT_PART_MSG}" == "" ]; then
+    error_msg "Boot The partition does not exist, so the update cannot be continued!"
+fi
+BOOT_NAME=$(echo ${BOOT_PART_MSG} | awk '{print $1}')
+BOOT_PATH=$(echo ${BOOT_PART_MSG} | awk '{print $2}')
+BOOT_UUID=$(echo ${BOOT_PART_MSG} | awk '{print $4}')
+
+# 禁用配置备份恢复功能
+BR_FLAG=0
+echo -ne "Config backup/restore is disabled for x96max+"
+
+# find root partition
+ROOT_PART_MSG="$(get_root_partition_msg)"
+ROOT_NAME=$(echo ${ROOT_PART_MSG} | awk '{print $1}')
+ROOT_PATH=$(echo ${ROOT_PART_MSG} | awk '{print $2}')
+ROOT_UUID=$(echo ${ROOT_PART_MSG} | awk '{print $4}')
+
+# p2/p3 partition switch logic
+case ${ROOT_NAME} in
+${EMMC_NAME}${PARTITION_NAME}2)
+    NEW_ROOT_NAME="${EMMC_NAME}${PARTITION_NAME}3"
+    NEW_ROOT_LABEL="${LB_PRE}ROOTFS2"
+    ;;
+${EMMC_NAME}${PARTITION_NAME}3)
+    NEW_ROOT_NAME="${EMMC_NAME}${PARTITION_NAME}2"
+    NEW_ROOT_LABEL="${LB_PRE}ROOTFS1"
+    ;;
+*)
+    error_msg "ROOTFS The partition location is incorrect, so the update cannot continue!"
+    ;;
+esac
+echo "NEW_ROOT_NAME: [ ${NEW_ROOT_NAME} ]"
+
+# find new root partition
+NEW_ROOT_PART_MSG=$(lsblk -l -o NAME,PATH,TYPE,UUID,MOUNTPOINT | grep "${NEW_ROOT_NAME}" | awk '$3 ~ /^part$/ && $5 !~ /^\/$/ && $5 !~ /^\/boot$/ {print $0}')
+if [ "${NEW_ROOT_PART_MSG}" == "" ]; then
+    error_msg "The new ROOTFS partition does not exist, so the update cannot continue!"
+fi
+NEW_ROOT_NAME=$(echo ${NEW_ROOT_PART_MSG} | awk '{print $1}')
+NEW_ROOT_PATH=$(echo ${NEW_ROOT_PART_MSG} | awk '{print $2}')
+NEW_ROOT_UUID=$(echo ${NEW_ROOT_PART_MSG} | awk '{print $4}')
+NEW_ROOT_MP=$(echo ${NEW_ROOT_PART_MSG} | awk '{print $5}')
+echo "NEW_ROOT_MP: [ ${NEW_ROOT_MP} ]"
+
+# losetup
+losetup -f -P ${IMG_NAME}
+if [ ${?} -eq 0 ]; then
+    LOOP_DEV=$(losetup | grep "${IMG_NAME}" | awk '{print $1}')
+    if [ "${LOOP_DEV}" == "" ]; then
+        error_msg "loop device not found!"
+    fi
+else
+    error_msg "losetup [ ${IMG_NAME} ] failed!"
+fi
+
+# fix loopdev issue in kernel 5.19
+function fix_loopdev() {
+    local parentdev=${1##*/}
+    if [ ! -d /sys/block/${parentdev} ]; then
+        return
+    fi
+    subdevs=$(lsblk -l -o NAME | grep -E "^${parentdev}.+\$")
+    for subdev in ${subdevs}; do
+        if [ ! -d /sys/block/${parentdev}/${subdev} ]; then
+            return
+        elif [ -b /dev/${subdev} ]; then
+            continue
+        fi
+        source /sys/block/${parentdev}/${subdev}/uevent
+        mknod /dev/${subdev} b ${MAJOR} ${MINOR}
+        unset MAJOR MINOR DEVNAME DEVTYPE DISKSEQ PARTN PARTNAME
+    done
+}
+fix_loopdev ${LOOP_DEV}
+
+WAIT=3
+echo "The loopdev is [ $LOOP_DEV ], wait [ ${WAIT} ] seconds. "
+while [[ "${WAIT}" -ge "1" ]]; do
+    sleep 1
+    WAIT=$((WAIT - 1))
+done
+
+# umount loop devices (openwrt will auto mount some partition)
+MOUNTED_DEVS=$(lsblk -l -o NAME,PATH,MOUNTPOINT | grep "${LOOP_DEV}" | awk '$3 !~ /^$/ {print $2}')
+for dev in ${MOUNTED_DEVS}; do
+    while :; do
+        echo "umount [ ${dev} ] ... "
+        umount -f ${dev}
+        sleep 1
+        mnt=$(lsblk -l -o NAME,PATH,MOUNTPOINT | grep "${dev}" | awk '$3 !~ /^$/ {print $2}')
+        if [ "${mnt}" == "" ]; then
             break
+        else
+            echo "Retry ..."
         fi
     done
-    [[ -z "${RAW_INPUT_FILE}" ]] && error_msg "No firmware found in /mnt/${EMMC_NAME}${PARTITION_NAME}4/"
+done
+
+# mount src part
+WORK_DIR=${PWD}
+P1=${WORK_DIR}/boot
+P2=${WORK_DIR}/root
+mkdir -p $P1 $P2
+
+echo "Mount [ ${LOOP_DEV}p1 ] -> [ ${P1} ] ... "
+mount -t vfat -o ro ${LOOP_DEV}p1 ${P1}
+if [ $? -ne 0 ]; then
+    echo "Mount p1 [ ${LOOP_DEV}p1 ] failed!"
+    losetup -D
+    exit 1
 fi
 
-ORIG_IMG="${RAW_INPUT_FILE}"
-IMG_NAME=$(decompress_firmware "${RAW_INPUT_FILE}")
-echo -e "\033[32m[FIRMWARE] Image: ${IMG_NAME}\033[0m"
+echo "Mount [ ${LOOP_DEV}p2 ] -> [ ${P2} ] ... "
+ZSTD_LEVEL=6
+mount -t btrfs -o ro,compress=zstd:${ZSTD_LEVEL} ${LOOP_DEV}p2 ${P2}
+if [ $? -ne 0 ]; then
+    echo "Mount p2 [ ${LOOP_DEV}p2 ] failed!"
+    umount -f ${P1}
+    losetup -D
+    exit 1
+fi
 
-# Check dependencies
-DEPENDS="lsblk uuidgen grep awk btrfs-progs mkfs.fat mkfs.btrfs md5sum fatlabel losetup blkid parted findmnt bsdtar 7z unzip gzip xz partprobe"
-echo "[CHECK] Verifying dependencies..."
-for dep in ${DEPENDS}; do
-    WITCH=$(busybox which "${dep}" 2>/dev/null || which "${dep}" 2>/dev/null)
-    [[ -z "${WITCH}" ]] && error_msg "Missing dependency: ${dep}"
-done
-echo "[CHECK] All dependencies OK"
+#update version prompt
+source /boot/uEnv.txt 2>/dev/null
+CUR_FDTFILE=${FDT}
+echo -e "FDT Value [ ${CUR_FDTFILE} ]"
+cp /boot/uEnv.txt /tmp/uEnv.txt && sync
 
-#==================== Step2 Distinguish A/B Target ====================
-BOOT_PART_MSG=$(lsblk -l -o NAME,PATH,TYPE,UUID,MOUNTPOINT | awk '$3~/^part$/ && $5 ~ /^\/boot$/ {print $0}')
-[[ -z "${BOOT_PART_MSG}" ]] && error_msg "/boot partition not found"
-BOOT_NAME=$(echo "${BOOT_PART_MSG}" | awk '{print $1}')
-BOOT_PATH=$(echo "${BOOT_PART_MSG}" | awk '{print $2}')
-BOOT_UUID=$(echo "${BOOT_PART_MSG}" | awk '{print $4}')
+K510="1"
+[[ "$(hexdump -n 15 -x "${P1}/zImage" 2>/dev/null | head -n 1 | awk '{print $7}')" == "0108" ]] && K510="0"
+echo -e "K510 [ ${K510} ]"
 
-ROOT_PART_MSG=$(get_root_partition_msg)
-ROOT_NAME=$(echo "${ROOT_PART_MSG}" | awk '{print $1}')
-ROOT_PATH=$(echo "${ROOT_PART_MSG}" | awk '{print $2}')
-ROOT_UUID=$(echo "${ROOT_PART_MSG}" | awk '{print $4}')
+# flippy-openwrt-release info
+UBOOT_OVERLOAD=""
+MAINLINE_UBOOT=""
+ANDROID_UBOOT=""
+env_openwrt_file=""
 
-# Determine Target Partition (A/B Switch)
+if [ -f "${P2}/etc/flippy-openwrt-release" ]; then
+    env_openwrt_file="${P2}/etc/flippy-openwrt-release"
+elif [ -f "/etc/flippy-openwrt-release" ]; then
+    env_openwrt_file="/etc/flippy-openwrt-release"
+else
+    env_openwrt_file=""
+fi
+
+if [ -n "${env_openwrt_file}" ]; then
+    source "${env_openwrt_file}" 2>/dev/null
+    # Update the parameters used
+    UBOOT_OVERLOAD=${UBOOT_OVERLOAD}
+    MAINLINE_UBOOT=${MAINLINE_UBOOT}
+    ANDROID_UBOOT=${ANDROID_UBOOT}
+
+    # Unused parameters
+    FDTFILE=${FDTFILE}
+    U_BOOT_EXT=${U_BOOT_EXT}
+    KERNEL_VERSION=${KERNEL_VERSION}
+    SOC=${SOC}
+fi
+
+#format NEW_ROOT
+echo "umount [ ${NEW_ROOT_MP} ]"
+umount -f "${NEW_ROOT_MP}"
+if [[ "${?}" -ne "0" ]]; then
+    echo "Umount [ ${NEW_ROOT_MP} ] failed, Please restart and try again!"
+    umount -f ${P1}
+    umount -f ${P2}
+    losetup -D
+    exit 1
+fi
+
+echo "Format [ ${NEW_ROOT_PATH} ]"
+NEW_ROOT_UUID=$(uuidgen)
+mkfs.btrfs -f -U ${NEW_ROOT_UUID} -L ${NEW_ROOT_LABEL} -m single ${NEW_ROOT_PATH}
+if [ $? -ne 0 ]; then
+    echo "Format [ ${NEW_ROOT_PATH} ] failed!"
+    umount -f ${P1}
+    umount -f ${P2}
+    losetup -D
+    exit 1
+fi
+
+echo "Mount [ ${NEW_ROOT_PATH} ] -> [ /mnt/${NEW_ROOT_NAME} ]"
+mkdir -p /mnt/${NEW_ROOT_NAME}
+mount -t btrfs -o compress=zstd ${NEW_ROOT_PATH} /mnt/${NEW_ROOT_NAME}
+if [ $? -ne 0 ]; then
+    echo "Mount [ ${NEW_ROOT_PATH} ] failed!"
+    umount -f ${P1}
+    umount -f ${P2}
+    losetup -D
+    exit 1
+fi
+
+# 开始复制文件到新的root分区
+echo "Copying system files to new root partition..."
+rsync -aAXv --exclude={"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/lost+found"} ${P2}/ /mnt/${NEW_ROOT_NAME}/
+sync
+
+# 修改boot分区中的uEnv.txt文件（仅更新ROOTFS UUID）
+echo "Updating uEnv.txt with new ROOTFS UUID..."
+if [ -f /boot/uEnv.txt ]; then
+    cp /boot/uEnv.txt /boot/uEnv.txt.bak
+    # 仅更新ROOTUUID字段
+    sed -i "s/^ROOTUUID=.*/ROOTUUID=${NEW_ROOT_UUID}/" /boot/uEnv.txt
+    echo "uEnv.txt updated with new ROOTUUID: ${NEW_ROOT_UUID}"
+    sync
+fi
+
+# 卸载所有挂载点
+echo "Unmounting all partitions..."
+umount -f /mnt/${NEW_ROOT_NAME}
+umount -f ${P1}
+umount -f ${P2}
+losetup -D
+
+# 更新boot分区的启动标记（如果需要）
+echo "Updating boot flag..."
 case ${ROOT_NAME} in
-    ${EMMC_NAME}${PARTITION_NAME}2)
-        NEW_ROOT_NAME="${EMMC_NAME}${PARTITION_NAME}3"
-        NEW_ROOT_LABEL="${LB_PRE}ROOTFS2"
-        ;;
-    ${EMMC_NAME}${PARTITION_NAME}3)
-        NEW_ROOT_NAME="${EMMC_NAME}${PARTITION_NAME}2"
-        NEW_ROOT_LABEL="${LB_PRE}ROOTFS1"
-        ;;
-    *)
-        error_msg "Root partition /dev/${ROOT_NAME} is not p2 or p3"
-        ;;
+${EMMC_NAME}${PARTITION_NAME}2)
+    # 当前从p2启动，下次从p3启动
+    echo "Setting next boot to ${NEW_ROOT_NAME}"
+    ;;
+${EMMC_NAME}${PARTITION_NAME}3)
+    # 当前从p3启动，下次从p2启动
+    echo "Setting next boot to ${NEW_ROOT_NAME}"
+    ;;
 esac
 
-echo "[PART] Active root: /dev/${ROOT_NAME}"
-echo "[PART] Target inactive root: /dev/${NEW_ROOT_NAME} (${NEW_ROOT_LABEL})"
+# 完成提示
+echo "=================================================="
+echo "Update completed successfully!"
+echo "New root partition: ${NEW_ROOT_NAME}"
+echo "New root UUID: ${NEW_ROOT_UUID}"
+echo "Next reboot will boot from: ${NEW_ROOT_NAME}"
+echo "=================================================="
 
-NEW_ROOT_PART_MSG=$(lsblk -l -o NAME,PATH,TYPE,UUID,MOUNTPOINT | grep "${NEW_ROOT_NAME}" | awk '$3 ~ /^part$/ {print $0}')
-[[ -z "${NEW_ROOT_PART_MSG}" ]] && error_msg "Target partition ${NEW_ROOT_NAME} missing"
-NEW_ROOT_PATH=$(echo "${NEW_ROOT_PART_MSG}" | awk '{print $2}')
-NEW_ROOT_MP="${TARGET_ROOT_MP}"
-
-#==================== Step3 Loop Device & Mount ====================
-echo "[LOOP] Attaching image..."
-LOOP_DEV=$(get_free_loop)
-losetup "${LOOP_DEV}" "${IMG_NAME}" 2>/dev/null || error_msg "losetup failed"
-echo "[LOOP] Attached to ${LOOP_DEV}"
-
-partprobe "${LOOP_DEV}" 2>/dev/null
-fix_loopdev "${LOOP_DEV}"
-
-# Wait for nodes
-WAIT_SEC=5
-while [[ ${WAIT_SEC} -ge 1 ]]; do
-    sleep 1
-    partprobe "${LOOP_DEV}" 2>/dev/null
-    fix_loopdev "${LOOP_DEV}"
-    [[ -b "${LOOP_DEV}p1" && -b "${LOOP_DEV}p2" ]] && break
-    WAIT_SEC=$((WAIT_SEC - 1))
-done
-
-[[ ! -b "${LOOP_DEV}p1" || ! -b "${LOOP_DEV}p2" ]] && error_msg "Image partitions p1/p2 not found"
-
-# Unmount auto-mounted loop parts
-MOUNTED_LOOP=$(lsblk -l -o NAME,PATH,MOUNTPOINT | grep "${LOOP_DEV}" | awk '$3 !~ /^$/ {print $2}')
-for dev in ${MOUNTED_LOOP}; do
-    umount -f "${dev}" 2>/dev/null
-done
-
-echo "[MOUNT] Mounting image source..."
-mount -t vfat -o ro "${LOOP_DEV}p1" "${WORK_P1}" || error_msg "Mount image boot failed"
-mount -t btrfs -o ro "${LOOP_DEV}p2" "${WORK_P2}" || error_msg "Mount image root failed"
-
-#==================== Step4 Format & Copy Rootfs ====================
-echo "[FORMAT] Formatting target partition ${NEW_ROOT_PATH}..."
-umount -f "${NEW_ROOT_MP}" 2>/dev/null
-NEW_ROOT_UUID=$(uuidgen)
-mkfs.btrfs -f -U ${NEW_ROOT_UUID} -L ${NEW_ROOT_LABEL} "${NEW_ROOT_PATH}" >/dev/null || error_msg "Format failed"
-
-echo "[MOUNT] Mounting target ${NEW_ROOT_PATH}..."
-mount -t btrfs "${NEW_ROOT_PATH}" "${NEW_ROOT_MP}" || error_msg "Mount target failed"
-
-echo "[COPY] Copying rootfs data..."
-cd "${NEW_ROOT_MP}"
-# Clean target
-rm -rf ./* 2>/dev/null
-
-# Copy essential directories
-COPY_SRC="bin boot dev etc lib mnt opt overlay proc rom root sbin sys tmp usr www"
-for src in ${COPY_SRC}; do
-    if [[ -d "${WORK_P2}/${src}" ]]; then
-        echo "  Copying ${src}..."
-        (cd "${WORK_P2}" && tar cf - "${src}") | tar xf -
-    fi
-done
-
-# Create symlinks
-ln -sf lib/ lib64 2>/dev/null
-ln -sf tmp/ var 2>/dev/null
-
-# Create fstab
-cat >./etc/fstab <<EOF
-UUID=${NEW_ROOT_UUID} / btrfs compress=zstd:6 0 1
-LABEL=${LB_PRE}BOOT /boot vfat defaults 0 2
-EOF
-
-# Create fstab config
-mkdir -p ./etc/config
-cat >./etc/config/fstab <<EOF
-config global
-    option anon_swap '0'
-    option anon_mount '1'
-    option auto_swap '0'
-    option auto_mount '1'
-    option delay_root '5'
-    option check_fs '0'
-
-config mount
-    option target '/rom'
-    option uuid '${NEW_ROOT_UUID}'
-    option enabled '1'
-    option enabled_fsck '1'
-    option fstype 'btrfs'
-    option options 'compress=zstd:6'
-
-config mount
-    option target '/boot'
-    option label '${LB_PRE}BOOT'
-    option enabled '1'
-    option enabled_fsck '1'
-    option fstype 'vfat'
-EOF
-
-sync
-echo "[COPY] Rootfs copy complete."
-
-#==================== Step5 Update Boot Partition ====================
-echo "[BOOT] Updating boot partition..."
-cd /boot
-
-# 1. Copy missing files from image (do not delete existing ones unless necessary)
-# We only strictly need to ensure zImage and uInitrd are present and correct
-if [[ -f "${WORK_P1}/zImage" ]]; then
-    echo "  Updating zImage..."
-    cp -f "${WORK_P1}/zImage" ./zImage
-fi
-
-if [[ -f "${WORK_P1}/uInitrd" ]]; then
-    echo "  Updating uInitrd..."
-    cp -f "${WORK_P1}/uInitrd" ./uInitrd
-fi
-
-# Copy dtbs if missing (optional, usually safe to keep old ones if compatible)
-# cp -rn ${WORK_P1}/dtb/* ./dtb/ 2>/dev/null
-
-# 2. Update uEnv.txt
-if [[ -f "./uEnv.txt" ]]; then
-    echo "  Modifying uEnv.txt UUID..."
-    # Backup first
-    cp -f ./uEnv.txt ./uEnv.txt.bak
-    
-    # Update root UUID line
-    # Assuming line starts with APPEND= or contains root=UUID=
-    if grep -q "root=UUID=" ./uEnv.txt; then
-        sed -i "s/root=UUID=[^ ]*/root=UUID=${NEW_ROOT_UUID}/" ./uEnv.txt
-        # Ensure other flags are correct (optional, strictly following request to only modify UUID)
-    else
-        # If no UUID line, append it (unlikely case)
-        echo "APPEND=root=UUID=${NEW_ROOT_UUID} rootfstype=btrfs rootflags=compress=zstd:6" >> ./uEnv.txt
-    fi
-else
-    # Create uEnv.txt if missing (Critical fallback)
-    echo "  Creating uEnv.txt..."
-    FDT_FILE=$(ls dtb/amlogic/*.dtb 2>/dev/null | head -n1 | sed 's/dtb\///')
-    cat >./uEnv.txt <<EOF
-LINUX=/zImage
-INITRD=/uInitrd
-FDT=/dtb/amlogic/${FDT_FILE}
-APPEND=root=UUID=${NEW_ROOT_UUID} rootfstype=btrfs rootflags=compress=zstd:6 console=ttyAML0,115200n8 console=tty0 no_console_suspend consoleblank=0 fsck.fix=yes fsck.repair=yes net.ifnames=0
-EOF
-fi
-
-sync
-
-#==================== Step6 Finalize ====================
-cd /
-umount -f "${WORK_P1}" "${WORK_P2}" "${NEW_ROOT_MP}" 2>/dev/null
-losetup -d "${LOOP_DEV}" 2>/dev/null
-
-echo -e "\n\033[32m[SUCCESS] Update completed successfully!\033[0m"
-echo "Active Partition: /dev/${ROOT_NAME}"
-echo "New Partition: /dev/${NEW_ROOT_NAME} (UUID: ${NEW_ROOT_UUID})"
-echo "System will reboot in 3 seconds..."
-sleep 3
-reboot
+exit 0
