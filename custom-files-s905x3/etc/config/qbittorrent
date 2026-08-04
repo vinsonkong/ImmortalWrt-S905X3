@@ -1,5 +1,5 @@
 config qbittorrent 'config'
-	option enabled '1'
+	option enabled '0'
 	option download_dir '/mnt/mmcblk2p4/download/bt'
 	option http_port '39382'
 
