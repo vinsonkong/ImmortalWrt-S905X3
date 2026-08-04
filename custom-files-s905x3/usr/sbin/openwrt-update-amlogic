@@ -581,15 +581,6 @@ sync
 [ -d /mnt/${EMMC_NAME}${PARTITION_NAME}4/docker ] || mkdir -p /mnt/${EMMC_NAME}${PARTITION_NAME}4/docker
 rm -rf opt/docker && ln -sf /mnt/${EMMC_NAME}${PARTITION_NAME}4/docker/ opt/docker
 
-if [ -f /mnt/${NEW_ROOT_NAME}/etc/config/AdGuardHome ]; then
-    [ -d /mnt/${EMMC_NAME}${PARTITION_NAME}4/AdGuardHome/data ] || mkdir -p /mnt/${EMMC_NAME}${PARTITION_NAME}4/AdGuardHome/data
-    if [ ! -L /usr/bin/AdGuardHome ]; then
-        [ -d /usr/bin/AdGuardHome ] &&
-            cp -a /usr/bin/AdGuardHome/* /mnt/${EMMC_NAME}${PARTITION_NAME}4/AdGuardHome/
-    fi
-    ln -sf /mnt/${EMMC_NAME}${PARTITION_NAME}4/AdGuardHome /mnt/${NEW_ROOT_NAME}/usr/bin/AdGuardHome
-fi
-
 #rm -f /mnt/${NEW_ROOT_NAME}/usr/sbin/openwrt-install-amlogic
 #rm -f /mnt/${NEW_ROOT_NAME}/usr/sbin/openwrt-update-amlogic
 rm -f /mnt/${NEW_ROOT_NAME}/root/install-to-emmc.sh
