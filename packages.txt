@@ -223,6 +223,7 @@ luci-i18n-package-manager-zh-cn
 aria2
 luci-app-aria2
 luci-i18n-aria2-zh-cn
+luci-i18n-qbittorrent-zh-cn
 
 # === 局域网文件共享 (Samba/NFS/DLNA) ===
 samba4-server
