@@ -109,6 +109,7 @@ kmod-usb-printer
 # === USB 网络与 4G/5G 模组支持 ===
 kmod-usb-net-rndis
 kmod-usb-net-cdc-ether
+kmod-usb-acm
 usb-modeswitch
 wwan
 comgt
