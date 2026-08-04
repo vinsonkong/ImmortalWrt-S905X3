@@ -97,9 +97,27 @@ kmod-fs-ksmbd
 kmod-fs-cifs
 
 # === USB 设备与存储支持 ===
+kmod-usb-core
+kmod-usb-ohci
+kmod-usb-uhci
+kmod-usb2
+kmod-usb3
 kmod-usb-storage
 kmod-usb-storage-uas
 kmod-usb-printer
+
+# === USB 网络与 4G/5G 模组支持 ===
+kmod-usb-net-rndis
+kmod-usb-net-cdc-ether
+usb-modeswitch
+wwan
+comgt
+comgt-ncm
+uqmi
+luci-proto-3g
+luci-proto-ncm
+luci-proto-qmi
+luci-proto-mbim
 
 # === 网络基础与拨号工具 ===
 curl
@@ -110,12 +128,7 @@ iw
 iwinfo
 ppp
 ppp-mod-pppoe
-comgt
-comgt-ncm
-uqmi
-usb-modeswitch
 wpad-basic
-wwan
 
 # === Wi-Fi 无线驱动 (博通/通用) ===
 kmod-brcmfmac
@@ -123,15 +136,28 @@ kmod-brcmutil
 kmod-cfg80211
 kmod-mac80211
 
-# === Lucky 大吉面板 ===
-lucky
-luci-app-lucky
-luci-i18n-lucky-zh-cn
+# === 蓝牙与音频子系统 ===
+kmod-bluetooth
+bluez-libs
+bluez-daemon
+bluez-utils
+alsa-utils
+alsa-lib
+alsa-ucm-conf
+pulseaudio-daemon-avahi
+pulseaudio-tools
+mpd-full
+mpc
 
 # === 多媒体与流媒体处理 ===
 ffprobe
 ffmpeg
 libffmpeg-full
+
+# === Lucky 大吉面板 ===
+lucky
+luci-app-lucky
+luci-i18n-lucky-zh-cn
 
 # === 虚拟组网工具 ===
 luci-app-easytier
@@ -173,13 +199,10 @@ luci-mod-status
 luci-mod-system
 
 # === LuCI 网络协议支持 ===
-luci-proto-3g
 luci-proto-ipip
 luci-proto-ipv6
-luci-proto-ncm
 luci-proto-openconnect
 luci-proto-ppp
-luci-proto-qmi
 luci-proto-relay
 
 # === Web 服务器 (uhttpd) ===
@@ -215,6 +238,7 @@ luci-i18n-nfs-zh-cn
 # === 时区数据 ===
 zoneinfo-asia
 zoneinfo-core
+
 # === 常用 LuCI 应用程序 ===
 luci-app-amlogic
 luci-i18n-amlogic-zh-cn
@@ -248,32 +272,5 @@ luci-i18n-openlist-zh-cn
 # adguardhome
 luci-app-adguardhome
 luci-i18n-smartdns-zh-cn
-
 luci-app-timecontrol
 luci-i18n-timecontrol-zh-cn
-
-
-kmod-bluetooth	
-mpd-full
-mpc
-bluez-libs
-bluez-daemon
-bluez-utils
-alsa-utils
-alsa-lib
-alsa-ucm-conf
-pulseaudio-daemon-avahi
-pulseaudio-tools
-
-kmod-usb-core
-kmod-usb-ohci
-kmod-usb-uhci
-kmod-usb-net-rndis
-kmod-usb-net-cdc-ether
-usb-modeswitch
-kmod-usb2
-kmod-usb3
-luci-proto-ncm
-luci-proto-qmi
-luci-proto-mbim
-
