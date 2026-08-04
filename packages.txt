@@ -271,7 +271,8 @@ kmod-usb-uhci
 kmod-usb-net-rndis
 kmod-usb-net-cdc-ether
 usb-modeswitch
-kmod-usb2 kmod-usb3
+kmod-usb2
+kmod-usb3
 luci-proto-ncm
 luci-proto-qmi
 luci-proto-mbim
