@@ -274,3 +274,6 @@ luci-app-adguardhome
 luci-i18n-smartdns-zh-cn
 luci-app-timecontrol
 luci-i18n-timecontrol-zh-cn
+luci-i18n-watchcat-zh-cn
+
+
