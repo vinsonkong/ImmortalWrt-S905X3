@@ -277,4 +277,4 @@ luci-app-timecontrol
 luci-i18n-timecontrol-zh-cn
 luci-i18n-watchcat-zh-cn
 luci-i18n-3ginfo-lite-zh-cn
-
+luci-i18n-banip-zh-cn
