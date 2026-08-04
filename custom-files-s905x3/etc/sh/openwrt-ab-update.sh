@@ -490,5 +490,5 @@ echo -e "\033[32m=============================================\033[0m"
 
 sync
 sleep 3
-echo "reboot"
+echo "run /usr/bin/custom/restore or reboot"
 exit 0
