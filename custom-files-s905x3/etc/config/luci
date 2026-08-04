@@ -106,6 +106,10 @@ config command
 	option command '/etc/sh/install_istore.sh'
 
 config command
-	option name '升级固件'
-	option command '/etc/sh/openwrt-ab-update.sh'
+	option name '升级固件:only rootfs'
+	option command '/usr/bin/custom/update-only-rootfs'
+
+config command
+	option name '升级固件:boot+rootfs'
+	option command '/usr/bin/custom/update-boot-rootfs'
 
