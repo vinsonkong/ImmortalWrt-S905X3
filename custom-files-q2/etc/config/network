@@ -42,11 +42,6 @@ config device
 config interface 'wwan'
 	option proto 'dhcp'
 
-config route
-	option target '192.168.2.0/24'
-	option gateway '192.168.193.192'
-	option disabled '1'
-
 config interface 'EasyTier'
 	option proto 'none'
 	option device 'tun0'
