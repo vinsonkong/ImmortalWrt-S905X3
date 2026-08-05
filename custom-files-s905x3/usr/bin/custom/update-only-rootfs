@@ -1,14 +1,20 @@
 #!/bin/bash
 #======================================================================================
-# Function: Update openwrt to emmc for Amlogic S9xxx STB
+# Function: Update openwrt to emmc for Amlogic STB
+# Modified For X96Max+ (S905X3 meson-sm1) ONLY
+# Modify Rule:
+# 1. Default: Do NOT full overwrite boot partition, only update uEnv.txt
+# 2. Optional: full update boot partition / enable config backup restore
+# 3. Removed all docker/dockerman config code, remove other box model code
+# 4. System install to idle rootfs partition(A/B dual partition)
 # Copyright (C) 2020-- https://github.com/unifreq/openwrt_packit
 # Copyright (C) 2021-- https://github.com/ophub/luci-app-amlogic
 #======================================================================================
 #
 # The script supports directly setting parameters for update, skipping interactive selection
-# openwrt-update-amlogic ${OPENWRT_FILE} ${AUTO_MAINLINE_UBOOT} ${RESTORE_CONFIG}
-# E.g: openwrt-update-amlogic openwrt_s905d.img.gz yes restore
-# E.g: openwrt-update-amlogic openwrt_s905d.img.gz no no-restore
+# openwrt-update-amlogic ${OPENWRT_FILE} ${FULL_BOOT} ${RESTORE_CONFIG}
+# E.g: openwrt-update-amlogic openwrt_x96max+.img.gz yes restore
+# E.g: openwrt-update-amlogic openwrt_x96max+.img.gz no no-restore
 
 # You can also execute the script directly, and interactively select related functions
 # E.g: openwrt-update-amlogic
@@ -60,18 +66,20 @@ get_root_partition_msg() {
 
 # Receive one-key command related parameters
 IMG_NAME="${1}"
-AUTO_MAINLINE_UBOOT="${2}"
+AUTO_FULL_BOOT="${2}"
 BACKUP_RESTORE_CONFIG="${3}"
 
-# Current device model
+# Current device model restrict ONLY X96Max+
 MYDEVICE_NAME=$(cat /proc/device-tree/model | tr -d '\000')
 if [[ -z "${MYDEVICE_NAME}" ]]; then
     error_msg "The device name is empty and cannot be recognized."
 elif [[ ! -f "/etc/flippy-openwrt-release" ]]; then
     error_msg "The [ /etc/flippy-openwrt-release ] file is missing."
+elif [[ "${MYDEVICE_NAME}" != *"X96 Max Plus"* && "${MYDEVICE_NAME}" != *"x96-max-plus"* ]]; then
+    error_msg "This script only supports X96Max+! Other boxes are not allowed to run."
 else
-    echo -e "Current device: ${MYDEVICE_NAME} [ amlogic ]"
-    sleep 3
+    echo -e "Current device: ${MYDEVICE_NAME} [ amlogic X96Max+ S905X3 ]"
+    sleep 2
 fi
 
 # Check and repair partition mount points
@@ -106,15 +114,16 @@ mmcblk?p[1-4])
     ;;
 esac
 
-DOCKER_ROOT="/mnt/${EMMC_NAME}${PARTITION_NAME}4/docker/"
+# ==== REMOVED DOCKER PATH DEFINE ====
 cd /mnt/${EMMC_NAME}${PARTITION_NAME}4/
 mv -f /tmp/upload/* . 2>/dev/null && sync
 
+# Auto extract firmware
 if [[ "${IMG_NAME}" == *.img ]]; then
     echo -e "Update using [ ${IMG_NAME} ] file. Please wait a moment ..."
 elif [ $(ls *.img -l 2>/dev/null | grep "^-" | wc -l) -ge 1 ]; then
     IMG_NAME=$(ls *.img | head -n 1)
-    echo -e "Update using [ ${IMG_NAME} ] ] file. Please wait a moment ..."
+    echo -e "Update using [ ${IMG_NAME} ] file. Please wait a moment ..."
 elif [ $(ls *.img.xz -l 2>/dev/null | grep "^-" | wc -l) -ge 1 ]; then
     xz_file=$(ls *.img.xz | head -n 1)
     echo -e "Update using [ ${xz_file} ] file. Please wait a moment ..."
@@ -175,9 +184,63 @@ BOOT_NAME=$(echo ${BOOT_PART_MSG} | awk '{print $1}')
 BOOT_PATH=$(echo ${BOOT_PART_MSG} | awk '{print $2}')
 BOOT_UUID=$(echo ${BOOT_PART_MSG} | awk '{print $4}')
 
-# 禁用配置备份恢复功能
+# ====================== INTERACTIVE OPTION MENU ======================
+# Default variable init
 BR_FLAG=0
-echo -ne "Config backup/restore is disabled for x96max+"
+FULL_BOOT_UPDATE=0
+
+# If no input parameter, show interactive menu
+if [[ -z "${AUTO_FULL_BOOT}" && -z "${BACKUP_RESTORE_CONFIG}" ]]; then
+    echo ""
+    echo "==================== X96Max+ OpenWrt Upgrade Menu ===================="
+    echo "Default strategy: Keep all boot files, ONLY update uEnv.txt"
+    echo "1) Upgrade | Only update uEnv.txt  | NO config backup (RECOMMENDED DEFAULT)"
+    echo "2) Upgrade | Full overwrite boot   | NO config backup"
+    echo "3) Upgrade | Only update uEnv.txt  | ENABLE config backup & restore"
+    echo "4) Upgrade | Full overwrite boot   | ENABLE config backup & restore"
+    echo "======================================================================"
+    read -p "Please select operation number [1/2/3/4]:" MENU_OPT
+    case ${MENU_OPT} in
+        1)
+            FULL_BOOT_UPDATE=0
+            BR_FLAG=0
+            ;;
+        2)
+            FULL_BOOT_UPDATE=1
+            BR_FLAG=0
+            ;;
+        3)
+            FULL_BOOT_UPDATE=0
+            BR_FLAG=1
+            ;;
+        4)
+            FULL_BOOT_UPDATE=1
+            BR_FLAG=1
+            ;;
+        *)
+            error_msg "Invalid selection, exit!"
+            ;;
+    esac
+else
+    # Read commandline parameters for silent mode
+    if [[ ${BACKUP_RESTORE_CONFIG} == "restore" ]]; then
+        BR_FLAG=1
+    elif [[ ${BACKUP_RESTORE_CONFIG} == "no-restore" ]]; then
+        BR_FLAG=0
+    fi
+
+    if [[ ${AUTO_FULL_BOOT} == "yes" ]]; then
+        FULL_BOOT_UPDATE=1
+    elif [[ ${AUTO_FULL_BOOT} == "no" ]]; then
+        FULL_BOOT_UPDATE=0
+    fi
+fi
+
+echo "=============================================="
+echo "FULL_BOOT_UPDATE = ${FULL_BOOT_UPDATE} (1=full boot overwrite 0=only modify uEnv.txt)"
+echo "CONFIG_BACKUP_RESTORE = ${BR_FLAG}"
+echo "=============================================="
+sleep 1
 
 # find root partition
 ROOT_PART_MSG="$(get_root_partition_msg)"
@@ -185,7 +248,6 @@ ROOT_NAME=$(echo ${ROOT_PART_MSG} | awk '{print $1}')
 ROOT_PATH=$(echo ${ROOT_PART_MSG} | awk '{print $2}')
 ROOT_UUID=$(echo ${ROOT_PART_MSG} | awk '{print $4}')
 
-# p2/p3 partition switch logic
 case ${ROOT_NAME} in
 ${EMMC_NAME}${PARTITION_NAME}2)
     NEW_ROOT_NAME="${EMMC_NAME}${PARTITION_NAME}3"
@@ -212,6 +274,14 @@ NEW_ROOT_UUID=$(echo ${NEW_ROOT_PART_MSG} | awk '{print $4}')
 NEW_ROOT_MP=$(echo ${NEW_ROOT_PART_MSG} | awk '{print $5}')
 echo "NEW_ROOT_MP: [ ${NEW_ROOT_MP} ]"
 
+# backup old bootloader
+if [ ! -f /root/BackupOldBootloader.img ]; then
+    echo "Backup bootloader -> [ BackupOldBootloader.img ] ... "
+    dd if=/dev/${EMMC_NAME} of=/root/BackupOldBootloader.img bs=1M count=4 conv=fsync
+    echo "Backup bootloader complete."
+    echo
+fi
+
 # losetup
 losetup -f -P ${IMG_NAME}
 if [ ${?} -eq 0 ]; then
@@ -233,7 +303,7 @@ function fix_loopdev() {
     for subdev in ${subdevs}; do
         if [ ! -d /sys/block/${parentdev}/${subdev} ]; then
             return
-        elif [ -b /dev/${subdev} ]; then
+        elif [ -b /dev/${sub_dev} ]; then
             continue
         fi
         source /sys/block/${parentdev}/${subdev}/uevent
@@ -290,6 +360,8 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# ============ ALL DOCKER/DOCKERMAN CODE REMOVED ============
+
 #update version prompt
 source /boot/uEnv.txt 2>/dev/null
 CUR_FDTFILE=${FDT}
@@ -339,6 +411,8 @@ if [[ "${?}" -ne "0" ]]; then
     exit 1
 fi
 
+# ======= REMOVED N1 / Octopus Planet unsafe partition repair function =======
+
 echo "Format [ ${NEW_ROOT_PATH} ]"
 NEW_ROOT_UUID=$(uuidgen)
 mkfs.btrfs -f -U ${NEW_ROOT_UUID} -L ${NEW_ROOT_LABEL} -m single ${NEW_ROOT_PATH}
@@ -350,58 +424,364 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "Mount [ ${NEW_ROOT_PATH} ] -> [ /mnt/${NEW_ROOT_NAME} ]"
-mkdir -p /mnt/${NEW_ROOT_NAME}
-mount -t btrfs -o compress=zstd ${NEW_ROOT_PATH} /mnt/${NEW_ROOT_NAME}
+echo "Mount [ ${NEW_ROOT_PATH} ] -> [ ${NEW_ROOT_MP} ]"
+mount -t btrfs -o compress=zstd:${ZSTD_LEVEL} ${NEW_ROOT_PATH} ${NEW_ROOT_MP}
 if [ $? -ne 0 ]; then
-    echo "Mount [ ${NEW_ROOT_PATH} ] failed!"
+    echo "Mount [ ${NEW_ROOT_PATH} ] -> [ ${NEW_ROOT_MP} ] failed!"
     umount -f ${P1}
     umount -f ${P2}
     losetup -D
     exit 1
 fi
 
-# 开始复制文件到新的root分区
-echo "Copying system files to new root partition..."
-rsync -aAXv --exclude={"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/lost+found"} ${P2}/ /mnt/${NEW_ROOT_NAME}/
+# begin copy rootfs
+cd ${NEW_ROOT_MP}
+echo "Start copying data， From [ ${P2} ] TO [ ${NEW_ROOT_MP} ] ..."
+ENTRYS=$(ls)
+for entry in ${ENTRYS}; do
+    if [[ "${entry}" == "lost+found" ]]; then
+        continue
+    fi
+    echo "Remove old [ ${entry} ] ... "
+    rm -rf ${entry}
+    if [[ "${?}" -ne "0" ]]; then
+        error_msg "failed."
+    fi
+done
+
+echo "Create folder ... "
+btrfs subvolume create etc
+mkdir -p .snapshots .reserved bin boot dev lib opt mnt overlay proc rom root run sbin sys tmp usr www
+ln -sf lib/ lib64
+ln -sf tmp/ var
 sync
 
-# 修改boot分区中的uEnv.txt文件（仅更新ROOTFS UUID）
-echo "Updating uEnv.txt with new ROOTFS UUID..."
-if [ -f /boot/uEnv.txt ]; then
-    cp /boot/uEnv.txt /boot/uEnv.txt.bak
-    # 仅更新ROOTUUID字段
-    sed -i "s/^ROOTUUID=.*/ROOTUUID=${NEW_ROOT_UUID}/" /boot/uEnv.txt
-    echo "uEnv.txt updated with new ROOTUUID: ${NEW_ROOT_UUID}"
+COPY_SRC="root etc bin sbin lib opt usr www"
+echo "Copy data begin ... "
+for src in ${COPY_SRC}; do
+    echo "Copy [ ${src} ] ... "
+    (cd ${P2} && tar cf - ${src}) | tar xf -
     sync
+done
+
+# ======= REMOVED docker daemon.json generate logic =======
+
+cat >./etc/fstab <<EOF
+UUID=${NEW_ROOT_UUID} / btrfs compress=zstd:${ZSTD_LEVEL} 0 1
+LABEL=${LB_PRE}BOOT /boot vfat defaults 0 2
+#tmpfs /tmp tmpfs defaults,nosuid 0 0
+EOF
+
+cat >./etc/config/fstab <<EOF
+config  global
+        option anon_swap '0'
+        option anon_mount '1'
+        option auto_swap '0'
+        option auto_mount '1'
+        option delay_root '5'
+        option check_fs '0'
+
+config  mount
+        option target '/rom'
+        option uuid '${NEW_ROOT_UUID}'
+        option enabled '1'
+        option enabled_fsck '1'
+        option fstype 'btrfs'
+        option options 'compress=zstd:${ZSTD_LEVEL}'
+
+config  mount
+        option target '/boot'
+        option label '${LB_PRE}BOOT'
+        option enabled '1'
+        option enabled_fsck '1'
+        option fstype 'vfat'
+
+EOF
+(
+    cd etc/rc.d
+    rm -f S??shortcut-fe
+    if grep "sfe_flow '1'" ../config/turboacc >/dev/null; then
+        if find ../../lib/modules -name 'shortcut-fe-cm.ko'; then
+            ln -sf ../init.d/shortcut-fe S99shortcut-fe
+        fi
+    fi
+)
+# move /etc/config/balance_irq to /etc/balance_irq
+[ -f "./etc/config/balance_irq" ] && mv ./etc/config/balance_irq ./etc/
+sync
+
+echo "Create initial etc snapshot -> .snapshots/etc-000"
+btrfs subvolume snapshot -r etc .snapshots/etc-000
+sync
+
+# remove hardcoded docker soft link
+rm -rf opt/docker
+
+rm -f /mnt/${NEW_ROOT_NAME}/usr/sbin/openwrt-install-amlogic
+rm -f /mnt/${NEW_ROOT_NAME}/usr/sbin/openwrt-update-amlogic
+rm -f /mnt/${NEW_ROOT_NAME}/root/install-to-emmc.sh
+sync
+echo "Copy rootfs data complete ..."
+
+BACKUP_LIST=$(${P2}/usr/sbin/openwrt-backup -p)
+if [[ "${BR_FLAG}" -eq "1" && -n "${BACKUP_LIST}" ]]; then
+    echo -n "Start restoring configuration files ... "
+    (
+        cd /
+        eval tar czf ${NEW_ROOT_MP}/.reserved/openwrt_config.tar.gz "${BACKUP_LIST}" 2>/dev/null
+    )
+    tar xzf ${NEW_ROOT_MP}/.reserved/openwrt_config.tar.gz
+
+    # Restore fstab
+    cp -f .snapshots/etc-000/fstab ./etc/fstab
+    cp -f .snapshots/etc-000/config/fstab ./etc/config/fstab
+    # 还原 luci
+    cp -f .snapshots/etc-000/config/luci ./etc/config/luci
+    # 还原/etc/config/rpcd
+    cp -f .snapshots/etc-000/config/rpcd ./etc/config/rpcd
+
+    sync
+    echo "Restore configuration information complete."
 fi
 
-# 卸载所有挂载点
-echo "Unmounting all partitions..."
-umount -f /mnt/${NEW_ROOT_NAME}
-umount -f ${P1}
-umount -f ${P2}
-losetup -D
+echo "Modify the configuration file ... "
+rm -f "./etc/rc.local.orig" "./etc/first_run.sh" "./etc/part_size"
+rm -f ./etc/bench.log
+cat >>./etc/crontabs/root <<EOF
+37 5 * * * /etc/coremark.sh
+EOF
 
-# 更新boot分区的启动标记（如果需要）
-echo "Updating boot flag..."
-case ${ROOT_NAME} in
-${EMMC_NAME}${PARTITION_NAME}2)
-    # 当前从p2启动，下次从p3启动
-    echo "Setting next boot to ${NEW_ROOT_NAME}"
-    ;;
-${EMMC_NAME}${PARTITION_NAME}3)
-    # 当前从p3启动，下次从p2启动
-    echo "Setting next boot to ${NEW_ROOT_NAME}"
-    ;;
-esac
+sed -e 's/ttyAMA0/ttyAML0/' -i ./etc/inittab
+sed -e 's/ttyS0/tty0/' -i ./etc/inittab
+sss=$(date +%s)
+ddd=$((sss / 86400))
+sed -e "s/:0:0:99999:7:::/:${ddd}:0:99999:7:::/" -i ./etc/shadow
+# Fix the problem of repeatedly adding amule entries after each upgrade
+sed -e "/amule:x:/d" -i ./etc/shadow
+# Fix the problem of repeatedly adding sshd entries after each upgrade of dropbear
+sed -e "/sshd:x:/d" -i ./etc/shadow
+if ! grep "sshd:x:22:sshd" ./etc/group >/dev/null; then
+    echo "sshd:x:22:sshd" >>./etc/group
+fi
+if ! grep "sshd:x:22:22:sshd:" ./etc/passwd >/dev/null; then
+    echo "sshd:x:22:22:sshd:/var/run/sshd:/bin/false" >>./etc/passwd
+fi
+if ! grep "sshd:x:" ./etc/shadow >/dev/null; then
+    echo "sshd:x:${ddd}:0:99999:7:::" >>./etc/shadow
+fi
 
-# 完成提示
-echo "=================================================="
-echo "Update completed successfully!"
-echo "New root partition: ${NEW_ROOT_NAME}"
-echo "New root UUID: ${NEW_ROOT_UUID}"
-echo "Next reboot will boot from: ${NEW_ROOT_NAME}"
-echo "=================================================="
+sed -e "s/option hw_flow '1'/option hw_flow '0'/" -i ./etc/config/turboacc
+(
+    cd etc/rc.d
+    rm -f S??shortcut-fe
+    if grep "sfe_flow '1'" ../config/turboacc >/dev/null; then
+        if find ../../lib/modules -name 'shortcut-fe-cm.ko'; then
+            ln -sf ../init.d/shortcut-fe S99shortcut-fe
+        fi
+    fi
+)
+eval tar czf .reserved/openwrt_config.tar.gz "${BACKUP_LIST}" 2>/dev/null
 
+rm -f ./etc/part_size ./etc/first_run.sh
+if [ -x ./usr/sbin/balethirq.pl ]; then
+    if grep "balethirq.pl" "./etc/rc.local"; then
+        echo "balance irq is enabled"
+    else
+        echo "enable balance irq"
+        sed -e "/exit/i\/usr/sbin/balethirq.pl" -i ./etc/rc.local
+    fi
+fi
+
+# Clean rc.local dockerman/dockerd auto start code
+mv ./etc/rc.local ./etc/rc.local.orig
+cat >"./etc/rc.local" <<EOF
+mv /etc/rc.local.orig /etc/rc.local
+chmod 755 /etc/rc.local
+exec /etc/rc.local
+exit
+EOF
+chmod 755 ./etc/rc.local*
+
+#Mainline U-BOOT detection
+FLASH_MAINLINE_UBOOT=0
+if [[ -n "${MAINLINE_UBOOT}" && -f "${P2}${MAINLINE_UBOOT}" ]]; then
+    cat <<EOF
+----------------------------------------------------------------------------------
+Found an available mainline bootloader (Mainline u-boot), you can flash into EMMC.
+----------------------------------------------------------------------------------
+EOF
+    while :; do
+        if [[ "${AUTO_MAINLINE_UBOOT}" == "yes" ]]; then
+            if [[ "${K510}" -eq "1" ]]; then
+                yn="y"
+            else
+                yn="n"
+            fi
+        elif [[ "${AUTO_MAINLINE_UBOOT}" == "no" ]]; then
+            yn="n"
+        else
+            read -p "Please choose whether to write the mainline bootloader to EMMC?  y/n " yn
+        fi
+
+        case ${yn} in
+        y | Y)
+            FLASH_MAINLINE_UBOOT=1
+            break
+            ;;
+        n | N)
+            FLASH_MAINLINE_UBOOT=0
+            break
+            ;;
+        esac
+    done
+fi
+
+if [[ "${FLASH_MAINLINE_UBOOT}" -eq "1" ]]; then
+    echo -e "Write Mainline bootloader: [ ${MAINLINE_UBOOT} ]"
+    dd if=${P2}${MAINLINE_UBOOT} of=/dev/${EMMC_NAME} bs=1 count=444 conv=fsync
+    dd if=${P2}${MAINLINE_UBOOT} of=/dev/${EMMC_NAME} bs=512 skip=1 seek=1 conv=fsync
+elif [[ -n "${ANDROID_UBOOT}" && -f "${P2}${ANDROID_UBOOT}" ]]; then
+    echo -e "Write Android bootloader: [ ${ANDROID_UBOOT} ]"
+    dd if=${P2}${ANDROID_UBOOT} of=/dev/${EMMC_NAME} bs=1 count=444 conv=fsync
+    dd if=${P2}${ANDROID_UBOOT} of=/dev/${EMMC_NAME} bs=512 skip=1 seek=1 conv=fsync
+else
+    echo "Did not change the original bootloader."
+fi
+
+# move /etc/config/balance_irq to /etc/balance_irq
+[ -f "./etc/config/balance_irq" ] && mv ./etc/config/balance_irq ./etc/
+
+echo "Create etc snapshot -> .snapshots/etc-001"
+btrfs subvolume snapshot -r etc .snapshots/etc-001
+
+cd ${WORK_DIR}
+
+# ===================== BOOT PARTITION PROCESS SWITCH =====================
+fatlabel ${BOOT_PATH} "${LB_PRE}BOOT"
+
+if [[ "${FULL_BOOT_UPDATE}" -eq "1" ]]; then
+    echo "===== FULL UPDATE BOOT PARTITION ENABLED, OVERWRITE ALL BOOT FILES ====="
+    echo "Start copying data， from [ ${P1} ] to [ /boot ] ..."
+    cd /boot
+    echo "Delete the old boot file ..."
+    rm -rf * && sync
+
+    echo "Copy the new boot file ... "
+    (cd ${P1} && tar cf - .) | tar xf - 2>/dev/null
+    sync
+
+    if [ -f ${P1}/uInitrd ]; then
+        i=1
+        max_try=10
+        while [ "${i}" -le "${max_try}" ]; do
+            uInitrd_original=$(md5sum ${P1}/uInitrd | awk '{print $1}')
+            uInitrd_new=$(md5sum uInitrd | awk '{print $1}')
+            if [ "${uInitrd_original}" = "${uInitrd_new}" ]; then
+                break
+            else
+                rm -f uInitrd && sync
+                cp -f ${P1}/uInitrd uInitrd 2>/dev/null && sync
+                let i++
+                continue
+            fi
+        done
+        [ "${i}" -eq "10" ] && error_msg "uInitrd file copy failed."
+    else
+        echo "uInitrd file is missing."
+    fi
+
+    if [ -f ${P1}/zImage ]; then
+        i=1
+        max_try=10
+        while [ "${i}" -le "${max_try}" ]; do
+            zImage_original=$(md5sum ${P1}/zImage | awk '{print $1}')
+            zImage_new=$(md5sum zImage | awk '{print $1}')
+            if [ "${zImage_original}" = "${zImage_new}" ]; then
+                break
+            else
+                rm -f zImage && sync
+                cp -f ${P1}/zImage zImage 2>/dev/null && sync
+                let i++
+                continue
+            fi
+        done
+        [ "${i}" -eq "10" ] && error_msg "zImage file copy failed."
+    else
+        error_msg "zImage file is missing."
+    fi
+
+    if [ ${ROOT_DISK_TYPE} == "EMMC" ]; then
+        rm -f s905_autoscript* aml_autoscript*
+        mv -f boot-emmc.ini boot.ini
+        mv -f boot-emmc.cmd boot.cmd
+        mv -f boot-emmc.scr boot.scr
+    fi
+
+    if [ "${K510}" -eq "1" ]; then
+        if [ -f "u-boot.ext" ]; then
+            cp -vf u-boot.ext u-boot.emmc
+        elif [ -f ${P1}/${UBOOT_OVERLOAD} ]; then
+            cp -vf ${P1}/${UBOOT_OVERLOAD} ${UBOOT_OVERLOAD}
+            cp -vf ${P1}/${UBOOT_OVERLOAD} u-boot.ext
+            cp -vf ${P1}/${UBOOT_OVERLOAD} u-boot.emmc
+            chmod +x u-boot*
+        fi
+    else
+        rm -f u-boot.ext 2>/dev/null
+        rm -f u-boot.emmc 2>/dev/null
+    fi
+    sync
+else
+    echo "===== DEFAULT MODE: SKIP FULL BOOT COPY, PRESERVE ALL EXISTING BOOT FILES ====="
+    echo "Only modify uEnv.txt later, kernel/dtb/boot.bin remain unchanged!"
+fi
+
+# Always update uEnv.txt (core boot args switch new rootfs uuid)
+echo "Update boot parameters in uEnv.txt ... "
+if [ -f /tmp/uEnv.txt ]; then
+    lines=$(wc -l </tmp/uEnv.txt)
+    lines=$((lines - 1))
+    head -n $lines /tmp/uEnv.txt >/boot/uEnv.txt
+    cat >>/boot/uEnv.txt <<EOF
+APPEND=root=UUID=${NEW_ROOT_UUID} rootfstype=btrfs rootflags=compress=zstd:${ZSTD_LEVEL} console=ttyAML0,115200n8 console=tty0 no_console_suspend consoleblank=0 fsck.fix=yes fsck.repair=yes net.ifnames=0 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory swapaccount=1
+EOF
+else
+    cat >/boot/uEnv.txt <<EOF
+LINUX=/zImage
+INITRD=/uInitrd
+FDT=${CUR_FDTFILE}
+APPEND=root=UUID=${NEW_ROOT_UUID} rootfstype=btrfs rootflags=compress=zstd:${ZSTD_LEVEL} console=ttyAML0,115200n8 console=tty0 no_console_suspend consoleblank=0 fsck.fix=yes fsck.repair=yes net.ifnames=0 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory swapaccount=1
+EOF
+fi
+sync
+
+# Replace the UUID for extlinux/extlinux.conf if it exists (only if full boot update enabled)
+[[ "${FULL_BOOT_UPDATE}" -eq "1" && -f "/boot/extlinux/extlinux.conf" ]] && {
+    sed -i -E "s|UUID=[^ ]*|UUID=${NEW_ROOT_UUID}|" /boot/extlinux/extlinux.conf 2>/dev/null
+}
+
+cd $WORK_DIR
+umount -f ${P1} ${P2} 2>/dev/null
+losetup -D 2>/dev/null
+rm -rf ${P1} ${P2} 2>/dev/null
+rm -f ${IMG_NAME} 2>/dev/null
+rm -f sha256sums 2>/dev/null
+sync
+wait
+
+echo ""
+echo "=============================================="
+echo "✅ Upgrade task finished successfully!"
+if [[ "${FULL_BOOT_UPDATE}" -eq "0" ]];then
+    echo "ℹ️ Boot partition untouched, ONLY updated uEnv.txt boot arguments"
+else
+    echo "ℹ️ Completed full boot partition overwrite"
+fi
+if [[ "${BR_FLAG}" -eq "1" ]];then
+    echo "ℹ️ User config backup & restore enabled"
+fi
+echo "System will reboot into new rootfs partition..."
+echo "=============================================="
+sleep 3
+reboot
 exit 0
