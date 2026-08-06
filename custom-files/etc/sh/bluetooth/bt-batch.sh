@@ -46,7 +46,9 @@ default-agent
 scan on
 sleep 10
 pair $MAC
+sleep 3
 trust $MAC
+sleep 2
 scan off
 quit
 EOF
