@@ -451,7 +451,29 @@ for src in ${COPY_SRC}; do
     sync
 done
 
-# ======= REMOVED docker daemon.json generate logic =======
+
+cat >./etc/config/dockerd <<EOF
+config globals 'globals'
+	option data_root '/mnt/mmcblk2p4/docker/'
+	option log_level 'warn'
+	option iptables '1'
+	option auto_start '1'
+	list registry_mirrors 'https://docker.m.daocloud.io'
+	list registry_mirrors 'https://docker.1ms.run'
+	list registry_mirrors 'https://hub-mirror.c.163.com'
+
+config proxies 'proxies'
+
+config dockerman 'dockerman'
+	option socket_path '/var/run/docker.sock'
+	option status_path '/tmp/.docker_action_status'
+	option debug 'false'
+	option debug_path '/tmp/.docker_debug'
+	option remote_endpoint '0'
+	list ac_allowed_interface 'wwan'
+	list ac_allowed_interface 'br-lan'
+
+EOF
 
 cat >./etc/fstab <<EOF
 UUID=${NEW_ROOT_UUID} / btrfs compress=zstd:${ZSTD_LEVEL} 0 1
@@ -501,8 +523,6 @@ echo "Create initial etc snapshot -> .snapshots/etc-000"
 btrfs subvolume snapshot -r etc .snapshots/etc-000
 sync
 
-# remove hardcoded docker soft link
-rm -rf opt/docker
 
 rm -f /mnt/${NEW_ROOT_NAME}/usr/sbin/openwrt-install-amlogic
 rm -f /mnt/${NEW_ROOT_NAME}/usr/sbin/openwrt-update-amlogic
@@ -589,59 +609,6 @@ exit
 EOF
 chmod 755 ./etc/rc.local*
 
-#Mainline U-BOOT detection
-FLASH_MAINLINE_UBOOT=0
-if [[ -n "${MAINLINE_UBOOT}" && -f "${P2}${MAINLINE_UBOOT}" ]]; then
-    cat <<EOF
-----------------------------------------------------------------------------------
-Found an available mainline bootloader (Mainline u-boot), you can flash into EMMC.
-----------------------------------------------------------------------------------
-EOF
-    while :; do
-        if [[ "${AUTO_MAINLINE_UBOOT}" == "yes" ]]; then
-            if [[ "${K510}" -eq "1" ]]; then
-                yn="y"
-            else
-                yn="n"
-            fi
-        elif [[ "${AUTO_MAINLINE_UBOOT}" == "no" ]]; then
-            yn="n"
-        else
-            read -p "Please choose whether to write the mainline bootloader to EMMC?  y/n " yn
-        fi
-
-        case ${yn} in
-        y | Y)
-            FLASH_MAINLINE_UBOOT=1
-            break
-            ;;
-        n | N)
-            FLASH_MAINLINE_UBOOT=0
-            break
-            ;;
-        esac
-    done
-fi
-
-if [[ "${FLASH_MAINLINE_UBOOT}" -eq "1" ]]; then
-    echo -e "Write Mainline bootloader: [ ${MAINLINE_UBOOT} ]"
-    dd if=${P2}${MAINLINE_UBOOT} of=/dev/${EMMC_NAME} bs=1 count=444 conv=fsync
-    dd if=${P2}${MAINLINE_UBOOT} of=/dev/${EMMC_NAME} bs=512 skip=1 seek=1 conv=fsync
-elif [[ -n "${ANDROID_UBOOT}" && -f "${P2}${ANDROID_UBOOT}" ]]; then
-    echo -e "Write Android bootloader: [ ${ANDROID_UBOOT} ]"
-    dd if=${P2}${ANDROID_UBOOT} of=/dev/${EMMC_NAME} bs=1 count=444 conv=fsync
-    dd if=${P2}${ANDROID_UBOOT} of=/dev/${EMMC_NAME} bs=512 skip=1 seek=1 conv=fsync
-else
-    echo "Did not change the original bootloader."
-fi
-
-# move /etc/config/balance_irq to /etc/balance_irq
-[ -f "./etc/config/balance_irq" ] && mv ./etc/config/balance_irq ./etc/
-
-echo "Create etc snapshot -> .snapshots/etc-001"
-btrfs subvolume snapshot -r etc .snapshots/etc-001
-
-cd ${WORK_DIR}
 
 # ===================== BOOT PARTITION PROCESS SWITCH =====================
 fatlabel ${BOOT_PATH} "${LB_PRE}BOOT"
