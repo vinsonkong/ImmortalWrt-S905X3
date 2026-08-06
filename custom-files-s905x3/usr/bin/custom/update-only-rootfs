@@ -398,8 +398,6 @@ if [[ "${?}" -ne "0" ]]; then
     exit 1
 fi
 
-# ======= REMOVED N1 / Octopus Planet unsafe partition repair function =======
-
 echo "Format [ ${NEW_ROOT_PATH} ]"
 NEW_ROOT_UUID=$(uuidgen)
 mkfs.btrfs -f -U ${NEW_ROOT_UUID} -L ${NEW_ROOT_LABEL} -m single ${NEW_ROOT_PATH}
