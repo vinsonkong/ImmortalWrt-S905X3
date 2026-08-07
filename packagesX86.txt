@@ -341,3 +341,10 @@ homebox
 ookla-speedtest
 luci-app-netspeedtest
 luci-i18n-netspeedtest-zh-cn
+
+
+kmod-iwlwifi
+iwlwifi-firmware-ax200
+iw
+hostapd
+wpa-supplicant
