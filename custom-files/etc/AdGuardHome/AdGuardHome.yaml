@@ -158,6 +158,18 @@ filters:
     url: https://raw.githubusercontent.com/217heidai/adblockfilters/main/rules/adblockdns.txt
     name: ‌217heidai/adblockfilters
     id: 1784351551
+  - enabled: true
+    url: https://raw.githubusercontent.com/xinggsf/Adblock-Plus-Rule/master/mv.txt
+    name: 乘风视频广告
+    id: 1786222825
+  - enabled: true
+    url: https://raw.githubusercontent.com/banbendalao/ADgk/master/ADgk.txt
+    name: ADgk 安卓端视频规则‌
+    id: 1786222826
+  - enabled: true
+    url: https://anti-ad.net/adguard.txt
+    name: anti-AD 中文全场景规则
+    id: 1786222829
 whitelist_filters: []
 user_rules:
   - '! - 彻底禁用小米应用商店核心域名 -'
