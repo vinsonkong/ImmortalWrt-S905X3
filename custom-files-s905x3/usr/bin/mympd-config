@@ -1,0 +1,438 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+# myMPD (c) 2018-2026 Juergen Mang <mail@jcgames.de>
+# https://github.com/jcorporation/mympd
+
+CONFIG_DIR="/var/lib/mympd/config"
+MYMPD_BIN="$(command -v mympd)"
+
+while getopts ':c:s:b:' OPTION
+do
+    case "$OPTION" in
+        b) MYMPD_BIN="$OPTARG" ;;
+        c) CONFIG_DIR="$OPTARG" ;;
+        s) MYMPD_SYSTEMD="$OPTARG" ;;
+        *)
+            echo "Usage: $(basename "$0") [-b </usr/bin/mympd>] [-c </var/lib/mympd/config>] [-s <0|1>] [SETTING VALUE ...]"
+            echo "Options"
+            echo "  -b Path to myMPD binary"
+            echo "  -c Path to myMPD config directory, default: /var/lib/mympd/config"
+            echo "  -s 0 = myMPD runs with normal linux user account"
+            echo "     1 = myMPD ist started with systemd private user"
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND - 1))"
+
+if [ -z "$MYMPD_BIN" ] || [ ! -x "$MYMPD_BIN" ]
+then
+    echo "mympd not found"
+    exit 1
+fi
+
+if [ -z "$MYMPD_SYSTEMD" ]
+then
+    if grep "DynamicUser=yes" "/usr/lib/systemd/system/mympd.service" > /dev/null 2>&1
+    then
+        MYMPD_SYSTEMD=1
+    else
+        MYMPD_SYSTEMD=0
+    fi
+fi
+
+# whiptail
+WHIPTAIL=$(command -v whiptail)
+if [ -z "$WHIPTAIL" ]
+then
+    echo "whiptail not found"
+    exit 1
+fi
+
+BACKTITLE="myMPD configuration"
+MENU_WIDTH="40"
+
+export NEWT_COLORS='
+root=,blue
+checkbox=black,lightgray
+actlistbox=white,blue
+roottext=,blue
+disabledentry=gray,
+entry=white,gray'
+
+set_default() {
+    $MYMPD_BIN -d | $MYMPD_BIN -d | awk -F: '/^    /{print toupper($1) $2}' > /tmp/mympd_defaults
+    while read -r KEY VALUE
+    do
+        eval "MYMPD_$KEY=$VALUE"
+    done < /tmp/mympd_defaults
+    rm /tmp/mympd_defaults
+    if ! MYMPD_CA_CERT_STORE=$(curl-config --ca)
+    then
+        MYMPD_CA_CERT_STORE_PATHS="/etc/ssl/certs/ca-certificates.crt \
+            /etc/ssl/certs/ca-bundle.crt \
+            /etc/pki/tls/certs/ca-bundle.crt \
+            /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+        for P in $MYMPD_CA_CERT_STORE_PATHS
+        do
+            if [ -f "$P" ]
+            then
+                MYMPD_CA_CERT_STORE="$P"
+                break
+            fi
+        done
+    fi
+}
+
+read_config() {
+    [ -f "${CONFIG_DIR}/acl" ] && read -r MYMPD_ACL < "${CONFIG_DIR}/acl"
+    [ -f "${CONFIG_DIR}/album_group_tag" ] && read -r MYMPD_ALBUM_GROUP_TAG < "${CONFIG_DIR}/album_group_tag"
+    [ -f "${CONFIG_DIR}/album_mode" ] && read -r MYMPD_ALBUM_MODE < "${CONFIG_DIR}/album_mode"
+    [ -f "${CONFIG_DIR}/album_unknown" ] && read -r MYMPD_ALBUM_UNKNOWN < "${CONFIG_DIR}/album_unknown"
+    [ -f "${CONFIG_DIR}/cache_cover_keep_days" ] && read -r MYMPD_CACHE_COVER_KEEP_DAYS < "${CONFIG_DIR}/cache_cover_keep_days"
+    [ -f "${CONFIG_DIR}/cache_http_keep_days" ] && read -r MYMPD_CACHE_HTTP_KEEP_DAYS < "${CONFIG_DIR}/cache_http_keep_days"
+    [ -f "${CONFIG_DIR}/cache_lyrics_keep_days" ] && read -r MYMPD_CACHE_LYRICS_KEEP_DAYS < "${CONFIG_DIR}/cache_lyrics_keep_days"
+    [ -f "${CONFIG_DIR}/cache_misc_keep_days" ] && read -r MYMPD_CACHE_MISC_KEEP_DAYS < "${CONFIG_DIR}/cache_misc_keep_days"
+    [ -f "${CONFIG_DIR}/cache_thumbs_keep_days" ] && read -r MYMPD_CACHE_THUMBS_KEEP_DAYS < "${CONFIG_DIR}/cache_thumbs_keep_days"
+    [ -f "${CONFIG_DIR}/loglevel" ] && read -r MYMPD_LOGLEVEL < "${CONFIG_DIR}/loglevel"
+    [ -f "${CONFIG_DIR}/mympd_uri" ] && read -r MYMPD_MYMPD_URI < "${CONFIG_DIR}/mympd_uri"
+    [ -f "${CONFIG_DIR}/scriptacl" ] && read -r MYMPD_SCRIPTACL < "${CONFIG_DIR}/scriptacl"
+    [ -f "${CONFIG_DIR}/scripts_external" ] && read -r MYMPD_SCRIPTS_EXTERNAL < "${CONFIG_DIR}/scripts_external"
+    [ -f "${CONFIG_DIR}/stickers" ] && read -r MYMPD_STICKERS < "${CONFIG_DIR}/stickers"
+    [ -f "${CONFIG_DIR}/stickers_pad_int" ] && read -r MYMPD_STICKERS_PAD_INT < "${CONFIG_DIR}/stickers_pad_int"
+    [ -f "${CONFIG_DIR}/http_host" ] && read -r MYMPD_HTTP_HOST < "${CONFIG_DIR}/http_host"
+    [ -f "${CONFIG_DIR}/http" ] && read -r MYMPD_HTTP < "${CONFIG_DIR}/http"
+    [ -f "${CONFIG_DIR}/http_port" ] && read -r MYMPD_HTTP_PORT < "${CONFIG_DIR}/http_port"
+    [ -f "${CONFIG_DIR}/ssl" ] && read -r MYMPD_SSL < "${CONFIG_DIR}/ssl"
+    [ -f "${CONFIG_DIR}/ssl_port" ] && read -r MYMPD_SSL_PORT < "${CONFIG_DIR}/ssl_port"
+    [ -f "${CONFIG_DIR}/ssl_san" ] && read -r MYMPD_SSL_SAN < "${CONFIG_DIR}/ssl_san"
+    [ -f "${CONFIG_DIR}/custom_cert" ] && read -r MYMPD_CUSTOM_CERT < "${CONFIG_DIR}/custom_cert"
+    [ -f "${CONFIG_DIR}/ssl_cert" ] && read -r MYMPD_SSL_CERT < "${CONFIG_DIR}/ssl_cert"
+    [ -f "${CONFIG_DIR}/ssl_key" ] && read -r MYMPD_SSL_KEY < "${CONFIG_DIR}/ssl_key"
+    [ -f "${CONFIG_DIR}/webradiodb" ] && read -r MYMPD_WEBRADIODB < "${CONFIG_DIR}/webradiodb"
+    [ -f "${CONFIG_DIR}/cert_check" ] && read -r MYMPD_CERT_CHECK < "${CONFIG_DIR}/cert_check"
+    [ -f "${CONFIG_DIR}/ca_cert_store" ] && read -r MYMPD_CA_CERT_STORE < "${CONFIG_DIR}/ca_cert_store"
+    [ -f "${CONFIG_DIR}/jukebox_queue_length_album" ] && read -r MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM < "${CONFIG_DIR}/jukebox_queue_length_album"
+    [ -f "${CONFIG_DIR}/jukebox_queue_length_album_min" ] && read -r MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM_MIN < "${CONFIG_DIR}/jukebox_queue_length_album_min"
+    [ -f "${CONFIG_DIR}/jukebox_queue_length_song" ] && read -r MYMPD_JUKEBOX_QUEUE_LENGTH_SONG < "${CONFIG_DIR}/jukebox_queue_length_song"
+    [ -f "${CONFIG_DIR}/jukebox_queue_length_song_min" ] && read -r MYMPD_JUKEBOX_QUEUE_LENGTH_SONG_MIN < "${CONFIG_DIR}/jukebox_queue_length_song_min"
+    [ -f "${CONFIG_DIR}/plist_len_max" ] && read -r MYMPD_PLIST_LEN_MAX < "${CONFIG_DIR}/plist_len_max"
+    [ -f "${CONFIG_DIR}/smartpls_per_tag_value_max" ] && read -r MYMPD_SMARTPLS_PER_TAG_VALUE_MAX < "${CONFIG_DIR}/smartpls_per_tag_value_max"
+    [ -f "${CONFIG_DIR}/state_save" ] && read -r MYMPD_STATE_SAVE < "${CONFIG_DIR}/state_save"
+    [ -f "${CONFIG_DIR}/ssl_send_chain" ] && read -r MYMPD_SSL_SEND_CHAIN < "${CONFIG_DIR}/ssl_send_chain"
+}
+
+apply_config() {
+    if [ "$MYMPD_SYSTEMD" -eq 1 ]
+    then
+        systemd-run -p DynamicUser=yes -p StateDirectory=mympd -p CacheDirectory=mympd \
+            -E MYMPD_ACL="$MYMPD_ACL" \
+            -E MYMPD_ALBUM_GROUP_TAG="$MYMPD_ALBUM_GROUP_TAG" \
+            -E MYMPD_ALBUM_MODE="$MYMPD_ALBUM_MODE" \
+            -E MYMPD_ALBUM_UNKNOWN="$MYMPD_ALBUM_UNKNOWN" \
+            -E MYMPD_CACHE_COVER_KEEP_DAYS="$MYMPD_CACHE_COVER_KEEP_DAYS" \
+            -E MYMPD_CACHE_HTTP_KEEP_DAYS="$MYMPD_CACHE_HTTP_KEEP_DAYS" \
+            -E MYMPD_CACHE_LYRICS_KEEP_DAYS="$MYMPD_CACHE_LYRICS_KEEP_DAYS" \
+            -E MYMPD_CACHE_MISC_KEEP_DAYS="$MYMPD_CACHE_MISC_KEEP_DAYS" \
+            -E MYMPD_CACHE_THUMBS_KEEP_DAYS="$MYMPD_CACHE_THUMBS_KEEP_DAYS" \
+            -E MYMPD_LOGLEVEL="$MYMPD_LOGLEVEL" \
+            -E MYMPD_MYMPD_URI="$MYMPD_MYMPD_URI" \
+            -E MYMPD_SCRIPTACL="$MYMPD_SCRIPTACL" \
+            -E MYMPD_SCRIPTS_EXTERNAL="$MYMPD_SCRIPTS_EXTERNAL" \
+            -E MYMPD_STICKERS="$MYMPD_STICKERS" \
+            -E MYMPD_STICKERS_PAD_INT="$MYMPD_STICKERS_PAD_INT" \
+            -E MYMPD_HTTP_HOST="$MYMPD_HTTP_HOST" \
+            -E MYMPD_HTTP="$MYMPD_HTTP" \
+            -E MYMPD_HTTP_PORT="$MYMPD_HTTP_PORT" \
+            -E MYMPD_SSL="$MYMPD_SSL" \
+            -E MYMPD_SSL_PORT="$MYMPD_SSL_PORT" \
+            -E MYMPD_SSL_SAN="$MYMPD_SSL_SAN" \
+            -E MYMPD_CUSTOM_CERT="$MYMPD_CUSTOM_CERT" \
+            -E MYMPD_SSL_CERT="$MYMPD_SSL_CERT" \
+            -E MYMPD_SSL_KEY="$MYMPD_SSL_KEY" \
+            -E MYMPD_WEBRADIODB="$MYMPD_WEBRADIODB" \
+            -E MYMPD_CERT_CHECK="$MYMPD_CERT_CHECK" \
+            -E MYMPD_CA_CERT_STORE="$MYMPD_CA_CERT_STORE" \
+            -E MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM="$MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM" \
+            -E MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM_MIN="$MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM_MIN" \
+            -E MYMPD_JUKEBOX_QUEUE_LENGTH_SONG="$MYMPD_JUKEBOX_QUEUE_LENGTH_SONG" \
+            -E MYMPD_JUKEBOX_QUEUE_LENGTH_SONG_MIN="$MYMPD_JUKEBOX_QUEUE_LENGTH_SONG_MIN" \
+            -E MYMPD_PLIST_LEN_MAX="$MYMPD_PLIST_LEN_MAX" \
+            -E MYMPD_SMARTPLS_PER_TAG_VALUE_MAX="$MYMPD_SMARTPLS_PER_TAG_VALUE_MAX" \
+            -E MYMPD_STATE_SAVE="$MYMPD_STATE_SAVE" \
+            -E MYMPD_SSL_SEND_CHAIN="$MYMPD_SSL_SEND_CHAIN" \
+            $MYMPD_BIN -c
+    else
+        export MYMPD_ACL
+        export MYMPD_ALBUM_GROUP_TAG
+        export MYMPD_ALBUM_MODE
+        export MYMPD_ALBUM_UNKNOWN
+        export MYMPD_CACHE_COVER_KEEP_DAYS
+        export MYMPD_CACHE_HTTP_KEEP_DAYS
+        export MYMPD_CACHE_LYRICS_KEEP_DAYS
+        export MYMPD_CACHE_MISC_KEEP_DAYS
+        export MYMPD_CACHE_THUMBS_KEEP_DAYS
+        export MYMPD_LOGLEVEL
+        export MYMPD_MYMPD_URI
+        export MYMPD_SCRIPTACL
+        export MYMPD_SCRIPTS_EXTERNAL
+        export MYMPD_STICKERS
+        export MYMPD_STICKERS_PAD_INT
+        export MYMPD_HTTP_HOST
+        export MYMPD_HTTP
+        export MYMPD_HTTP_PORT
+        export MYMPD_SSL
+        export MYMPD_SSL_PORT
+        export MYMPD_SSL_SAN
+        export MYMPD_CUSTOM_CERT
+        export MYMPD_SSL_CERT
+        export MYMPD_SSL_KEY
+        export MYMPD_WEBRADIODB
+        export MYMPD_CERT_CHECK
+        export MYMPD_CA_CERT_STORE
+        export MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM
+        export MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM_MIN
+        export MYMPD_JUKEBOX_QUEUE_LENGTH_SONG
+        export MYMPD_JUKEBOX_QUEUE_LENGTH_SONG_MIN
+        export MYMPD_PLIST_LEN_MAX
+        export MYMPD_SMARTPLS_PER_TAG_VALUE_MAX
+        export MYMPD_STATE_SAVE
+        export MYMPD_SSL_SEND_CHAIN
+        $MYMPD_BIN -c
+    fi
+}
+
+set_pin() {
+    if [ "$MYMPD_SYSTEMD" -eq 1 ]
+    then
+        systemd-run -p DynamicUser=yes -p StateDirectory=mympd -p CacheDirectory=mympd \
+            mympd -p
+    else
+        mympd -p
+    fi
+}
+
+get_input() {
+    if INPUT=$(whiptail --clear --cancel-button Cancel --backtitle "$BACKTITLE" --inputbox "$1" 0 "$MENU_WIDTH" -- "$2" \
+        3>&1 1>&2 2>&3)
+    then
+        printf "%s" "$INPUT"
+    else
+        printf "%s" "$2"
+    fi
+}
+
+toggle_bool() {
+    if [ "$1" = "true" ]
+    then
+        printf "false"
+    else
+        printf "true"
+    fi
+}
+
+menu_webserver() {
+    SELECT=$(whiptail --clear --cancel-button "Back" --backtitle "$BACKTITLE" --menu "Webserver" 0 "$MENU_WIDTH" 0 -- \
+        "Listening IP" "$MYMPD_HTTP_HOST" \
+        "HTTP" "$MYMPD_HTTP" \
+        "ACL" "$MYMPD_ACL" \
+        "Script ACL" "$MYMPD_SCRIPTACL" \
+        "Scripts External" "$MYMPD_SCRIPTS_EXTERNAL" \
+        "HTTP Port" "$MYMPD_HTTP_PORT" \
+        "SSL" "$MYMPD_SSL" \
+        "SSL Port" "$MYMPD_SSL_PORT" \
+        "SAN" "$MYMPD_SSL_SAN" \
+        "Send chain" "$MYMPD_SSL_SEND_CHAIN" \
+        "Custom certificate" "$MYMPD_CUSTOM_CERT" \
+        "Certificate file" "$MYMPD_SSL_CERT" \
+        "Private key file" "$MYMPD_SSL_KEY" \
+        "Enable cert check" "$MYMPD_CERT_CHECK" \
+        "CA certificate store" "$MYMPD_CA_CERT_STORE" \
+        3>&1 1>&2 2>&3)
+    case "$SELECT" in
+        "Listening IP") MYMPD_HTTP_HOST=$(get_input "$SELECT" "$MYMPD_HTTP_HOST") ;;
+        "HTTP") MYMPD_HTTP=$(toggle_bool "$MYMPD_HTTP") ;;
+        "ACL") MYMPD_ACL=$(toggle_bool "$MYMPD_ACL") ;;
+        "Script ACL") MYMPD_SCRIPTACL=$(get_input "$SELECT" "$MYMPD_SCRIPTACL") ;;
+        "Scripts External") MYMPD_SCRIPTS_EXTERNAL=$(toggle_bool "$MYMPD_SCRIPTS_EXTERNAL") ;;
+        "HTTP Port") MYMPD_HTTP_PORT=$(get_input "$SELECT" "$MYMPD_HTTP_PORT") ;;
+        "SSL") MYMPD_SSL=$(toggle_bool "$MYMPD_SSL") ;;
+        "SSL Port") MYMPD_SSL_PORT=$(get_input "$SELECT" "$MYMPD_SSL_PORT") ;;
+        "SAN") MYMPD_SSL_SAN=$(get_input "$SELECT" "$MYMPD_SSL_SAN") ;;
+        "Send chain") MYMPD_SSL_SEND_CHAIN=$(toggle_bool "$MYMPD_SSL_SEND_CHAIN") ;;
+        "Custom certificate") MYMPD_CUSTOM_CERT=$(get_input "$SELECT" "$MYMPD_CUSTOM_CERT") ;;
+        "Certificate file") MYMPD_SSL_CERT=$(get_input "$SELECT" "$MYMPD_SSL_CERT") ;;
+        "Private key file") MYMPD_SSL_KEY=$(get_input "$SELECT" "$MYMPD_SSL_KEY") ;;
+        "Enable cert check") MYMPD_CERT_CHECK=$(toggle_bool "$MYMPD_CERT_CHECK") ;;
+        "CA certificate store") MYMPD_CA_CERT_STORE=$(get_input "$SELECT" "$MYMPD_CA_CERT_STORE") ;;
+        "") return ;;
+    esac
+    menu_webserver
+}
+
+toggle_album_mode() {
+    if [ "$1" = "adv" ]
+    then
+        printf "simple"
+    else
+        printf "adv"
+    fi
+}
+
+select_loglevel() {
+    case "$1" in
+        "0") S_EMERG=1 ;;
+        "1") S_ALERT=1 ;;
+        "2") S_CRITICAL=1 ;;
+        "3") S_ERROR=1 ;;
+        "4") S_WARN=1 ;;
+        "5") S_NOTICE=1 ;;
+        "6") S_INFO=1 ;;
+        "7") S_DEBUG=1 ;;
+    esac
+    if SELECT=$(whiptail --clear --cancel-button "Cancel" --backtitle "$BACKTITLE" --radiolist "Loglevel" 0 "$MENU_WIDTH" 0 -- \
+        "0" "Emerg" "$S_EMERG" \
+        "1" "Alert" "$S_ALERT" \
+        "2" "Critical" "$S_CRITICAL" \
+        "3" "Error" "$S_ERROR" \
+        "4" "Warn" "$S_WARN" \
+        "5" "Notice" "$S_NOTICE" \
+        "6" "Info" "$S_INFO" \
+        "7" "Debug" "$S_DEBUG" \
+        3>&1 1>&2 2>&3)
+    then
+        printf "%s" "$SELECT"
+    else
+        printf "%s" "$1"
+    fi
+}
+
+menu_misc() {
+    SELECT=$(whiptail --clear --cancel-button "Back" --backtitle "$BACKTITLE" --menu "Misc" 0 "$MENU_WIDTH" 0 -- \
+        "Album group tag" "$MYMPD_ALBUM_GROUP_TAG" \
+        "Album mode" "$MYMPD_ALBUM_MODE" \
+        "Album unknown" "$MYMPD_ALBUM_UNKNOWN" \
+        "Cover cache" "$MYMPD_CACHE_COVER_KEEP_DAYS" \
+        "HTTP cache" "$MYMPD_CACHE_HTTP_KEEP_DAYS" \
+        "Lyrics cache" "$MYMPD_CACHE_LYRICS_KEEP_DAYS" \
+        "Misc cache" "$MYMPD_CACHE_MISC_KEEP_DAYS" \
+        "Thumbs cache" "$MYMPD_CACHE_THUMBS_KEEP_DAYS" \
+        "Loglevel" "$MYMPD_LOGLEVEL" \
+        "myMPD URI" "$MYMPD_MYMPD_URI" \
+        "Enable stickers" "$MYMPD_STICKERS" \
+        "Enable sticker padding" "$MYMPD_STICKERS_PAD_INT" \
+        "Enable WebradioDB" "$MYMPD_WEBRADIODB" \
+        "Jukebox album queue length" "$MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM" \
+        "Jukebox album min. queue length" "$MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM_MIN" \
+        "Jukebox song queue length" "$MYMPD_JUKEBOX_QUEUE_LENGTH_SONG" \
+        "Jukebox song min. queue length" "$MYMPD_JUKEBOX_QUEUE_LENGTH_SONG_MIN" \
+        "MPD max. playlist length" "$MYMPD_PLIST_LEN_MAX" \
+        "Max. number of tag values for automatic smartpls creation" "$MYMPD_SMARTPLS_PER_TAG_VALUE_MAX" \
+        "Save myMPD state regularly" "$MYMPD_STATE_SAVE" \
+        3>&1 1>&2 2>&3)
+    case "$SELECT" in
+        "Album group tag") MYMPD_ALBUM_GROUP_TAG=$(get_input "$SELECT" "$MYMPD_ALBUM_GROUP_TAG") ;;
+        "Album mode") MYMPD_ALBUM_MODE=$(toggle_album_mode "$MYMPD_ALBUM_MODE") ;;
+        "Album unknown") MYMPD_ALBUM_UNKNOWN=$(toggle_bool "$MYMPD_ALBUM_UNKNOWN") ;;
+        "Cover cache") MYMPD_CACHE_COVER_KEEP_DAYS=$(get_input "$SELECT" "$MYMPD_CACHE_COVER_KEEP_DAYS") ;;
+        "HTTP cache") MYMPD_CACHE_HTTP_KEEP_DAYS=$(get_input "$SELECT" "$MYMPD_CACHE_HTTP_KEEP_DAYS") ;;
+        "Lyrics cache") MYMPD_CACHE_LYRICS_KEEP_DAYS=$(get_input "$SELECT" "$MYMPD_CACHE_LYRICS_KEEP_DAYS") ;;
+        "Misc cache") MYMPD_CACHE_MISC_KEEP_DAYS=$(get_input "$SELECT" "$MYMPD_CACHE_MISC_KEEP_DAYS") ;;
+        "Thumbs cache") MYMPD_CACHE_THUMBS_KEEP_DAYS=$(get_input "$SELECT" "$MYMPD_CACHE_THUMBS_KEEP_DAYS") ;;
+        "Loglevel") MYMPD_LOGLEVEL=$(select_loglevel "$MYMPD_LOGLEVEL") ;;
+        "myMPD URI") MYMPD_MYMPD_URI=$(get_input "$SELECT" "$MYMPD_MYMPD_URI") ;;
+        "Enable stickers") MYMPD_STICKERS=$(toggle_bool "$MYMPD_STICKERS") ;;
+        "Enable sticker padding") MYMPD_STICKERS_PAD_INT=$(toggle_bool "$MYMPD_STICKERS_PAD_INT") ;;
+        "Enable WebradioDB") MYMPD_WEBRADIODB=$(toggle_bool "$MYMPD_WEBRADIODB") ;;
+        "Jukebox album queue length") MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM=$(get_input "$SELECT" "$MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM") ;;
+        "Jukebox album min. queue length") MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM_MIN=$(get_input "$SELECT" "$MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM_MIN") ;;
+        "Jukebox song queue length") MYMPD_JUKEBOX_QUEUE_LENGTH_SONG=$(get_input "$SELECT" "$MYMPD_JUKEBOX_QUEUE_LENGTH_SONG") ;;
+        "Jukebox song min. queue length") MYMPD_JUKEBOX_QUEUE_LENGTH_SONG_MIN=$(get_input "$SELECT" "$MYMPD_JUKEBOX_QUEUE_LENGTH_SONG_MIN") ;;
+        "MPD max. playlist length") MYMPD_PLIST_LEN_MAX=$(get_input "$SELECT" "$MYMPD_PLIST_LEN_MAX") ;;
+        "Max. number of tag values for automatic smartpls creation") MYMPD_SMARTPLS_PER_TAG_VALUE_MAX=$(get_input "$SELECT" "$MYMPD_SMARTPLS_PER_TAG_VALUE_MAX") ;;
+        "Save myMPD state regularly") MYMPD_STATE_SAVE=$(toggle_bool "$MYMPD_STATE_SAVE") ;;
+        "") return ;;
+    esac
+    menu_misc
+}
+
+menu_main() {
+    SELECT=$(whiptail --clear --notags --cancel-button "Exit" --backtitle "$BACKTITLE" --menu "$BACKTITLE" 0 "$MENU_WIDTH" 0 -- \
+        "W" "Webserver" \
+        "M" "Misc" \
+        "P" "Set PIN" \
+        "R" "Reset to default" \
+        "A" "Apply" \
+        3>&1 1>&2 2>&3)
+    case "$SELECT" in
+        "W") menu_webserver ;;
+        "M") menu_misc ;;
+        "P") set_pin ;;
+        "R") set_default ;;
+        "A") apply_config ;;
+        "") return ;;
+    esac
+    menu_main
+}
+
+parse_options() {
+    while [ "$#" -ge 2 ]
+    do
+        case "$1" in
+            MYMPD_ACL) MYMPD_ACL="$2" ;;
+            MYMPD_ALBUM_GROUP_TAG) MYMPD_ALBUM_GROUP_TAG="$2" ;;
+            MYMPD_ALBUM_MODE) MYMPD_ALBUM_MODE="$2" ;;
+            MYMPD_ALBUM_UNKNOWN) MYMPD_ALBUM_UNKNOWN="$2" ;;
+            MYMPD_CACHE_COVER_KEEP_DAYS) MYMPD_CACHE_COVER_KEEP_DAYS="$2" ;;
+            MYMPD_CACHE_HTTP_KEEP_DAYS) MYMPD_CACHE_HTTP_KEEP_DAYS="$2" ;;
+            MYMPD_CACHE_LYRICS_KEEP_DAYS) MYMPD_CACHE_LYRICS_KEEP_DAYS="$2" ;;
+            MYMPD_CACHE_MISC_KEEP_DAYS) MYMPD_CACHE_MISC_KEEP_DAYS="$2" ;;
+            MYMPD_CACHE_THUMBS_KEEP_DAYS) MYMPD_CACHE_THUMBS_KEEP_DAYS="$2" ;;
+            MYMPD_LOGLEVEL) MYMPD_LOGLEVEL="$2" ;;
+            MYMPD_MYMPD_URI) MYMPD_MYMPD_URI="$2" ;;
+            MYMPD_SCRIPTACL) MYMPD_SCRIPTACL="$2" ;;
+            MYMPD_SCRIPTS_EXTERNAL) MYMPD_SCRIPTS_EXTERNAL="$2" ;;
+            MYMPD_STICKERS) MYMPD_STICKERS="$2" ;;
+            MYMPD_STICKERS_PAD_INT) MYMPD_STICKERS_PAD_INT="$2" ;;
+            MYMPD_HTTP_HOST) MYMPD_HTTP_HOST="$2" ;;
+            MYMPD_HTTP) MYMPD_HTTP="$2" ;;
+            MYMPD_HTTP_PORT) MYMPD_HTTP_PORT="$2" ;;
+            MYMPD_SSL) MYMPD_SSL="$2" ;;
+            MYMPD_SSL_PORT) MYMPD_SSL_PORT="$2" ;;
+            MYMPD_SSL_SAN) MYMPD_SSL_SAN="$2" ;;
+            MYMPD_CUSTOM_CERT) MYMPD_CUSTOM_CERT="$2" ;;
+            MYMPD_SSL_CERT) MYMPD_SSL_CERT="$2" ;;
+            MYMPD_SSL_KEY) MYMPD_SSL_KEY="$2" ;;
+            MYMPD_WEBRADIODB) MYMPD_WEBRADIODB="$2" ;;
+            MYMPD_CERT_CHECK) MYMPD_CERT_CHECK="$2" ;;
+            MYMPD_CA_CERT_STORE) MYMPD_CA_CERT_STORE="$2" ;;
+            MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM) MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM="$2" ;;
+            MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM_MIN) MYMPD_JUKEBOX_QUEUE_LENGTH_ALBUM_MIN="$2" ;;
+            MYMPD_JUKEBOX_QUEUE_LENGTH_SONG) MYMPD_JUKEBOX_QUEUE_LENGTH_SONG="$2" ;;
+            MYMPD_JUKEBOX_QUEUE_LENGTH_SONG_MIN) MYMPD_JUKEBOX_QUEUE_LENGTH_SONG_MIN="$2" ;;
+            MYMPD_PLIST_LEN_MAX) MYMPD_PLIST_LEN_MAX="$2" ;;
+            MYMPD_SMARTPLS_PER_TAG_VALUE_MAX) MYMPD_SMARTPLS_PER_TAG_VALUE_MAX="$2" ;;
+            MYMPD_STATE_SAVE) MYMPD_STATE_SAVE="$2" ;;
+            MYMPD_SSL_SEND_CHAIN) MYMPD_SSL_SEND_CHAIN="$2" ;;
+            *)
+                echo "Invalid configuration setting"
+                exit 1
+                ;;
+        esac
+        shift
+        shift
+    done
+    apply_config
+}
+
+# main
+set_default
+read_config
+if [ "$#" -eq 0 ]
+then
+    menu_main
+else
+    parse_options "$@"
+fi
+exit 0
