@@ -94,6 +94,10 @@ config command
 	option command '/usr/bin/custom/backup-6h'
 
 config command
+	option name '安装istoreos应用商店'
+	option command '/etc/sh/install_istore.sh'
+
+config command
 	option name '蓝牙配对'
 	option command '/etc/sh/bluetooth/pair.sh'
 
@@ -102,6 +106,5 @@ config command
 	option command '/etc/sh/bluetooth/connect.sh'
 
 config command
-	option name '安装istoreos应用商店'
-	option command '/etc/sh/install_istore.sh'
-
+	option name '停止播放及蓝牙'
+	option command '/etc/sh/bluetooth/stop.sh'
