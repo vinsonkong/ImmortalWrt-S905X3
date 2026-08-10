@@ -94,14 +94,6 @@ config command
 	option command '/usr/bin/custom/backup-6h'
 
 config command
-	option name '蓝牙配对'
-	option command '/etc/sh/bluetooth/pair.sh'
-
-config command
-	option name '蓝牙连接'
-	option command '/etc/sh/bluetooth/connect.sh'
-
-config command
 	option name '安装istoreos应用商店'
 	option command '/etc/sh/install_istore.sh'
 
@@ -113,3 +105,14 @@ config command
 	option name '升级固件:boot+rootfs'
 	option command '/usr/bin/custom/update-boot-rootfs'
 
+config command
+	option name '蓝牙配对'
+	option command '/etc/sh/bluetooth/pair.sh'
+
+config command
+	option name '蓝牙连接'
+	option command '/etc/sh/bluetooth/connect.sh'
+
+config command
+	option name '停止播放及蓝牙'
+	option command '/etc/sh/bluetooth/stop.sh'
