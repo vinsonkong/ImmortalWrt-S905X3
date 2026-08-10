@@ -1,5 +1,5 @@
 #!/bin/sh
 
 mpc stop
-bluetooth power off
+bluetoothctl power off
 
