@@ -74,6 +74,13 @@ kmod-vhost-net
 # Wi-Fi 无线核心驱动
 kmod-cfg80211
 kmod-mac80211
+# Intel AX200 无线网卡驱动与固件
+kmod-iwlwifi
+iwlwifi-firmware-ax200
+# MediaTek MT7922 无线网卡驱动与固件
+kmod-mt7921e
+kmod-mt7922-firmware
+mt7922bt-firmware
 
 # === 3. 磁盘管理与文件系统 ===
 block-mount
@@ -133,7 +140,8 @@ comgt
 comgt-ncm
 uqmi
 usb-modeswitch
-wpad-basic
+# Wi-Fi AP/STA 加密认证套件 (已移除冲突的独立 hostapd/wpa-supplicant)
+wpad-basic-mbedtls
 wwan
 mwan3
 luci-app-mwan3
@@ -341,16 +349,3 @@ homebox
 ookla-speedtest
 luci-app-netspeedtest
 luci-i18n-netspeedtest-zh-cn
-
-
-kmod-iwlwifi
-iwlwifi-firmware-ax200
-iw
-hostapd
-wpa-supplicant
-
-kmod-mt7921e
-kmod-mt7922-firmware
-mt7922bt-firmware
-luci-base
-luci-mod-network
