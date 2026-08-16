@@ -348,3 +348,9 @@ iwlwifi-firmware-ax200
 iw
 hostapd
 wpa-supplicant
+
+kmod-mt7921e
+kmod-mt7922-firmware
+mt7922bt-firmware
+luci-base
+luci-mod-network
