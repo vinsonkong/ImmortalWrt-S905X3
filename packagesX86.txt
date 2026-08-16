@@ -334,11 +334,11 @@ kmod-sound-hda-codec-realtek
 alsa-utils
 
 # 百度网盘
-baidusdk
-baidudrive
-luci-app-baidudrive
-luci-i18n-baidudrive-zh-cn
-app-meta-baidudrive
+# baidusdk
+# baidudrive
+# luci-app-baidudrive
+# luci-i18n-baidudrive-zh-cn
+# app-meta-baidudrive
 
 luci-i18n-sqm-zh-cn
 
