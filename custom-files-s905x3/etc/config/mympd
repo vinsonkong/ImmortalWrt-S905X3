@@ -1,0 +1,29 @@
+# Consult documentation at https://jcorporation.github.io/myMPD/020-configuration/
+config mympd main
+    option workdir '/var/lib/mympd'
+    option cachedir '/var/cache/mympd'
+    option mpd_host 'localhost'
+    option mpd_port '6600'
+    option acl ''
+    option http_host '0.0.0.0'
+    option http_port '39386'
+    option loglevel '5'
+
+    # Disable caches
+    option cache_cover_keep_days '0'
+    option cache_http_keep_days '0'
+    option cache_lyrics_keep_days '0'
+    option cache_misc_keep_days '1'
+    option cache_thumbs_keep_days '0'
+
+    # Requires enabled MYMPD_LUA at compilation time
+    option lualibs 'all'
+    option scriptacl '+127.0.0.1'
+
+    # Requires enabled MYMPD_SSL at compilation time
+    option ssl 'false'
+    option ssl_port '8443'
+    option ssl_san ''
+    option custom_cert 'false'
+    option ssl_cert ''
+    option ssl_key ''
