@@ -1,0 +1,11 @@
+
+config mount
+	option remote_path '/x96maxq2'
+	option local_path '/mnt/samba/x96maxq2'
+	option iocharset 'utf8'
+	option workgroup 'WORKGROUP'
+	option server '192.168.2.100'
+	option username 'vinsonkong'
+	option password '14371250kong'
+	option enabled '1'
+
