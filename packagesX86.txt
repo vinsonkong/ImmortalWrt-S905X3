@@ -356,4 +356,11 @@ bluez-utils
 dbus
 dbus-utils
 kmod-bluetooth
+kmod-usb-audio
+kmod-sound-hda-intel
+kmod-sound-core
+kmod-sound-hda-core
+kmod-sound-hda-codec-hdmi
+kmod-sound-hda-codec-realtek
+
 
