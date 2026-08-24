@@ -365,3 +365,7 @@ mpd-full
 mpc
 pulseaudio-daemon-avahi
 pulseaudio-tools
+bluez-libs
+alsa-utils
+alsa-lib
+alsa-ucm-conf
