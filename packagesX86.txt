@@ -331,7 +331,23 @@ kmod-leds-gpio
 # 板载声卡 (HDMI/3.5mm 音频输出)
 kmod-sound-hda-core
 kmod-sound-hda-codec-realtek
+kmod-usb-audio
+kmod-sound-hda-intel
+kmod-sound-core
+kmod-bluetooth
+bluez-daemon
+bluez-utils
+bluez-libs
+dbus
+dbus-utils
 alsa-utils
+alsa-lib
+alsa-ucm-conf
+pulseaudio-daemon-avahi
+pulseaudio-tools
+mpd-full
+mpc
+
 
 # 百度网盘
 # baidusdk
@@ -351,21 +367,4 @@ luci-app-netspeedtest
 luci-i18n-netspeedtest-zh-cn
 
 
-bluez-daemon
-bluez-utils
-dbus
-dbus-utils
-kmod-bluetooth
-kmod-usb-audio
-kmod-sound-hda-intel
-kmod-sound-core
-kmod-sound-hda-core
-kmod-sound-hda-codec-realtek
-mpd-full
-mpc
-pulseaudio-daemon-avahi
-pulseaudio-tools
-bluez-libs
-alsa-utils
-alsa-lib
-alsa-ucm-conf
+
