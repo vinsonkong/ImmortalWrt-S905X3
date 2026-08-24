@@ -349,3 +349,11 @@ homebox
 ookla-speedtest
 luci-app-netspeedtest
 luci-i18n-netspeedtest-zh-cn
+
+
+bluez-daemon
+bluez-utils
+dbus
+dbus-utils
+kmod-bluetooth
+
