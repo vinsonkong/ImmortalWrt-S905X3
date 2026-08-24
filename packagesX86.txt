@@ -361,5 +361,6 @@ kmod-sound-hda-intel
 kmod-sound-core
 kmod-sound-hda-core
 kmod-sound-hda-codec-realtek
-
+mpd-full
+mpc
 
