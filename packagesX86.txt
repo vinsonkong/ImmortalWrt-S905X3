@@ -363,4 +363,5 @@ kmod-sound-hda-core
 kmod-sound-hda-codec-realtek
 mpd-full
 mpc
-
+pulseaudio-daemon-avahi
+pulseaudio-tools
