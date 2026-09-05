@@ -4,59 +4,95 @@ USE_PROCD=1
 START=99
 
 start_service() {
-    config_load /etc/config/mympd
+    config_load mympd
 
-    local tempdir=$(mktemp -d)
-    local configdir=${tempdir}/config
-    local statedir=${tempdir}/state
+    # 1. 正确读取 UCI 配置项 (语法: config_get <变量> <节> <选项>)
+    local workdir cachedir
+    config_get workdir main workdir '/var/lib/mympd'
+    config_get cachedir main cachedir '/var/cache/mympd'
 
-    mkdir -p -m 755 ${configdir} ${statedir}
+    local mpd_host mpd_port http_host http_port loglevel
+    config_get mpd_host main mpd_host 'localhost'
+    config_get mpd_port main mpd_port '6600'
+    config_get http_host main http_host '0.0.0.0'
+    config_get http_port main http_port '39386'
+    config_get loglevel main loglevel '5'
 
-    [ -z "${mpd_host}" ] && mpd_host='localhost'
-    config_get main mpd_host > ${statedir}/mpd_host
-    [ -z "${mpd_port}" ] && mpd_port='6600'
-    config_get main mpd_port > ${statedir}/mpd_port
+    local acl lualibs scriptacl
+    config_get acl main acl ''
+    config_get lualibs main lualibs 'all'
+    config_get scriptacl main scriptacl '+127.0.0.1'
 
-    config_get main acl > ${configdir}/acl
-    config_get main http_host > ${configdir}/http_host
-    config_get main http_port > ${configdir}/http_port
-    config_get main loglevel > ${configdir}/loglevel
+    local cache_cover cache_http cache_lyrics cache_misc cache_thumbs
+    config_get cache_cover main cache_cover_keep_days '0'
+    config_get cache_http main cache_http_keep_days '0'
+    config_get cache_lyrics main cache_lyrics_keep_days '0'
+    config_get cache_misc main cache_misc_keep_days '1'
+    config_get cache_thumbs main cache_thumbs_keep_days '0'
 
-    config_get main cache_cover_keep_days > ${configdir}/cache_cover_keep_days
-    config_get main cache_http_keep_days > ${configdir}/cache_http_keep_days
-    config_get main cache_lyrics_keep_days > ${configdir}/cache_lyrics_keep_days
-    config_get main cache_misc_keep_days > ${configdir}/cache_misc_keep_days
-    config_get main cache_thumbs_keep_days > ${configdir}/cache_thumbs_keep_days
+    local ssl ssl_port ssl_san custom_cert ssl_cert ssl_key
+    config_get ssl main ssl 'false'
+    config_get ssl_port main ssl_port '8443'
+    config_get ssl_san main ssl_san ''
+    config_get custom_cert main custom_cert 'false'
+    config_get ssl_cert main ssl_cert ''
+    config_get ssl_key main ssl_key ''
 
-    config_get main lualibs > ${configdir}/lualibs
-    config_get main scriptacl > ${configdir}/scriptacl
+    # 2. 创建必要的工作目录和缓存目录
+    mkdir -p -m 755 "${workdir}" "${cachedir}"
 
-    config_get main ssl > ${configdir}/ssl
-    config_get main ssl_port > ${configdir}/ssl_port
-    config_get main ssl_san > ${configdir}/ssl_san
-    config_get main custom_cert > ${configdir}/custom_cert
-    config_get main ssl_cert > ${configdir}/ssl_cert
-    config_get main ssl_key > ${configdir}/ssl_key
+    # 3. 生成 myMPD 识别的 JSON 配置文件
+    # 注意: ssl/custom_cert 在 UCI 中是字符串 'true'/'false'，JSON 需要布尔值
+    [ "${ssl}" = "true" ] && ssl_json="true" || ssl_json="false"
+    [ "${custom_cert}" = "true" ] && cert_json="true" || cert_json="false"
 
-    local workdir
-    config_get workdir main workdir
-    [ -z "${workdir}" ] && workdir='/var/lib/mympd'
-    mkdir -p -m 755 ${workdir}
-    cp -f -R ${tempdir}/* ${workdir}/
-    rm -f -R ${tempdir}
-    chown -R mympd:mympd ${workdir}
+    cat > "${workdir}/mympd.json" << EOF
+{
+    "mpd": {
+        "host": "${mpd_host}",
+        "port": ${mpd_port}
+    },
+    "http": {
+        "host": "${http_host}",
+        "port": ${http_port}
+    },
+    "log": {
+        "level": ${loglevel}
+    },
+    "cache": {
+        "cover": { "keep_days": ${cache_cover} },
+        "http": { "keep_days": ${cache_http} },
+        "lyrics": { "keep_days": ${cache_lyrics} },
+        "misc": { "keep_days": ${cache_misc} },
+        "thumbs": { "keep_days": ${cache_thumbs} }
+    },
+    "lua": {
+        "libs": "${lualibs}"
+    },
+    "script_acl": "${scriptacl}",
+    "ssl": {
+        "enabled": ${ssl_json},
+        "port": ${ssl_port},
+        "san": "${ssl_san}",
+        "custom_cert": ${cert_json},
+        "cert": "${ssl_cert}",
+        "key": "${ssl_key}"
+    }
+}
+EOF
 
-    local cachedir
-    config_get cachedir main cachedir
-    [ -z "${cachedir}" ] && cachedir='/var/cache/mympd'
-    mkdir -p -m 755 ${cachedir}
-    chown -R mympd:mympd ${cachedir}
+    # 如果配置了 ACL，单独写入 acl 文件
+    if [ -n "${acl}" ]; then
+        echo "${acl}" > "${workdir}/acl"
+    fi
 
+    # 4. 使用 procd 启动服务实例
     procd_open_instance mympd
+    procd_set_param command /usr/bin/mympd -w "${workdir}" -a "${cachedir}"
     procd_set_param file /etc/config/mympd
-    procd_set_param user mympd
-    procd_set_param command /usr/bin/mympd -w ${workdir} -a ${cachedir}
     procd_set_param stdout 1
     procd_set_param stderr 1
-    procd_close_instance mympd
+    # 如需以非 root 用户运行，取消下面注释并确保目录权限正确
+    # procd_set_param user mympd
+    procd_close_instance
 }
