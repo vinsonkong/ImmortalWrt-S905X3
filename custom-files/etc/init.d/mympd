@@ -40,6 +40,7 @@ start_service() {
 
     # 2. 创建必要的工作目录和缓存目录
     mkdir -p -m 755 "${workdir}" "${cachedir}"
+    ln -s /usr/lib/libFLAC.so /usr/lib/libFLAC.so.8
 
     # 3. 生成 myMPD 识别的 JSON 配置文件
     # 注意: ssl/custom_cert 在 UCI 中是字符串 'true'/'false'，JSON 需要布尔值
