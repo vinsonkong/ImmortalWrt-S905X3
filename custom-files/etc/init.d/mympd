@@ -6,7 +6,7 @@ START=99
 start_service() {
     config_load mympd
 
-    # 1. 正确读取 UCI 配置项 (语法: config_get <变量> <节> <选项>)
+    # 1. 正确读取 UCI 配置项
     local workdir cachedir
     config_get workdir main workdir '/var/lib/mympd'
     config_get cachedir main cachedir '/var/cache/mympd'
@@ -40,54 +40,29 @@ start_service() {
 
     # 2. 创建必要的工作目录和缓存目录
     mkdir -p -m 755 "${workdir}" "${cachedir}"
-    ln -s /usr/lib/libFLAC.so /usr/lib/libFLAC.so.8
 
-    # 3. 生成 myMPD 识别的 JSON 配置文件
-    # 注意: ssl/custom_cert 在 UCI 中是字符串 'true'/'false'，JSON 需要布尔值
-    [ "${ssl}" = "true" ] && ssl_json="true" || ssl_json="false"
-    [ "${custom_cert}" = "true" ] && cert_json="true" || cert_json="false"
+    # 3. 创建 myMPD 配置目录 (myMPD 从 ${workdir}/config/ 读取独立配置文件)
+    mkdir -p -m 755 "${workdir}/config"
 
-    cat > "${workdir}/mympd.json" << EOF
-{
-    "mpd": {
-        "host": "${mpd_host}",
-        "port": ${mpd_port}
-    },
-    "http": {
-        "host": "${http_host}",
-        "port": ${http_port}
-    },
-    "log": {
-        "level": ${loglevel}
-    },
-    "cache": {
-        "cover": { "keep_days": ${cache_cover} },
-        "http": { "keep_days": ${cache_http} },
-        "lyrics": { "keep_days": ${cache_lyrics} },
-        "misc": { "keep_days": ${cache_misc} },
-        "thumbs": { "keep_days": ${cache_thumbs} }
-    },
-    "lua": {
-        "libs": "${lualibs}"
-    },
-    "script_acl": "${scriptacl}",
-    "ssl": {
-        "enabled": ${ssl_json},
-        "port": ${ssl_port},
-        "san": "${ssl_san}",
-        "custom_cert": ${cert_json},
-        "cert": "${ssl_cert}",
-        "key": "${ssl_key}"
-    }
-}
-EOF
+    # 4. 写入 myMPD 配置项到 ${workdir}/config/ 目录
+    # myMPD 的 mympd_config_read() 会读取这些文件
+    echo "${http_host}"        > "${workdir}/config/http_host"
+    echo "${http_port}"        > "${workdir}/config/http_port"
+    echo "${loglevel}"         > "${workdir}/config/loglevel"
+    echo "${scriptacl}"        > "${workdir}/config/scriptacl"
+    echo "${cache_cover}"      > "${workdir}/config/cache_cover_keep_days"
+    echo "${cache_http}"       > "${workdir}/config/cache_http_keep_days"
+    echo "${cache_lyrics}"     > "${workdir}/config/cache_lyrics_keep_days"
+    echo "${cache_misc}"       > "${workdir}/config/cache_misc_keep_days"
+    echo "${cache_thumbs}"     > "${workdir}/config/cache_thumbs_keep_days"
+    echo "${ssl}"              > "${workdir}/config/ssl"
+    echo "${ssl_port}"         > "${workdir}/config/ssl_port"
+    echo "${ssl_san}"          > "${workdir}/config/ssl_san"
+    echo "${custom_cert}"      > "${workdir}/config/custom_cert"
+    echo "${ssl_cert}"         > "${workdir}/config/ssl_cert"
+    echo "${ssl_key}"          > "${workdir}/config/ssl_key"
 
-    # 如果配置了 ACL，单独写入 acl 文件
-    if [ -n "${acl}" ]; then
-        echo "${acl}" > "${workdir}/acl"
-    fi
-
-    # 4. 使用 procd 启动服务实例
+    # 5. 使用 procd 启动服务实例
     procd_open_instance mympd
     procd_set_param command /usr/bin/mympd -w "${workdir}" -a "${cachedir}"
     procd_set_param file /etc/config/mympd
